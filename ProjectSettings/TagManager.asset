@@ -1,0 +1,43 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!78 &1
+TagManager:
+  serializedVersion: 2
+  tags: []
+  layers:
+  - Default
+  - TransparentFX
+  - Ignore Raycast
+  - 
+  - Water
+  - UI
+  - 
+  - 
+  - SideCamera1
+  - SideCamera2
+  - SideCamera3
+  - interactables
+  - SideCamera4
+  - KTANE UI
+  - KTANE VR
+  - KTANE VR
+  - 
+  - SideCamera5
+  - SideCamera6
+  - CameraWallCamera7
+  - CameraWallCamera8
+  - CameraWallCamera9
+  - CameraWallCamera10
+  - CameraWallCamera11
+  - CameraWallCamera12
+  - CameraWallCamera13
+  - CameraWallCamera14
+  - CameraWallCamera15
+  - CameraWallCamera16
+  - CameraWallCamera17
+  - CameraWallCamera18
+  - 
+  m_SortingLayers:
+  - name: Default
+    uniqueID: 0
+    locked: 0

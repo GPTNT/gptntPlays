@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width">
+		<title>Twitch Plays: KTANE reference</title>
+		<script>
+			function el(tagName, className, ...args)
+			{
+				const element = document.createElement(tagName);
+				if (className) element.className = className;
+				for (const arg of args)
+				{
+					if (arg instanceof HTMLElement)
+						element.appendChild(arg);
+					else if (typeof arg !== "object")
+						element.appendChild(document.createTextNode(arg));
+					else
+						for (const attr in arg)
+						{
+							if (typeof arg[attr] === 'function')
+								element[attr] = arg[attr];
+							else if (arg[attr] !== undefined && arg[attr] !== null)
+								element.setAttribute(attr, arg[attr]);
+						}
+				}
+				return element;
+			}
+
+			fetch("documentation.xml").then(response => {
+				if (!response.ok)
+					throw Error(`Failed to get resource: ${response.status}`);
+
+				return response.text();
+			})
+			.then(text => {					
+				const parser = new DOMParser();
+				const xmlDoc = parser.parseFromString(text, "text/xml");
+				parseDocumentation(xmlDoc.getElementsByTagName("members")[0]);
+
+				addTitlePopups();
+			})
+			.catch(console.error);
+
+			const restrictionDescriptions = {
+				Streamer: "Can only be used by the streamer.",
+				SuperUser: "Can only be used by super users.",
+				Admin: "Can only be used by admins.",
+				ScoringManager: "Can only be used by scoring managers.",
+				Mod: "Can only be used by moderators.",
+				Defuser: "Can only be used by whitelisted users.",
+
+				ElevatorOnly: "Can only be used in the elevator.",
+				ElevatorDisallowed: "Cannot be used in the elevator.",
+				SolvedAllowed: "Can be still used when the module is solved.",
+			};
+
+			function parseArguments(element, args) {
+				element.innerHTML = element.textContent.replace(/[\[(](.+?)[)\]]/g, (match, argument) => {
+					return `<i class="argument" title="${ (args.hasOwnProperty(argument) ? args[argument] + " " : "") + (match.startsWith("[") ? "Required argument." : "Optional argument.") }">${match}</i>`;
+				});
+
+				return element;
+			}
+
+			function parseDocumentation(members) {
+				const content = document.getElementsByClassName("content")[0];
+				const sidebar = document.getElementsByClassName("sidebar")[0];
+				let section;
+				let sidebarList;
+				let commandPrefix = "";
+
+				for (let i = 0; i < members.children.length; i++) {
+					const member = members.children[i];
+					const name = member.getAttribute("name");
+					const match = name.match(/([TM]):(.+)Commands/);
+
+					if (match === null) {
+						continue;
+					}
+
+					if (match[1] == "T") {
+						const properName = match[2].toUpperCase() == match[2] ? match[2] : match[2].replace(/[A-Z]*(?=[A-Z])/g, "$& ");
+						content.appendChild(
+							el("div", "section",
+								{ id: match[2] },
+								el("h2", null, properName),
+								el("span", null, member.getElementsByTagName("summary")[0].textContent)
+							)
+						);
+
+						const colgroup = el("colgroup", null, 
+							el("col", null, { width: "10%" }),
+							el("col", null, { width: "25%" })
+						);
+
+						const headerRow = el("tr");
+						const headers = ["Command", "Usage", "Description"];
+						for (let header of headers)
+							headerRow.appendChild(el("th", null, header));
+
+						section = el("table", null, colgroup, headerRow);
+						content.appendChild(section);
+
+						const prefixTags = member.getElementsByTagName("prefix");
+						commandPrefix = prefixTags.length == 1 ? prefixTags[0].textContent : "";
+
+						sidebar.appendChild(el("a", null, { href: `#${match[2]}` }, properName));
+						sidebarList = el("ul");
+						sidebar.appendChild(sidebarList);
+					} else if (match[1] == "M") {
+						const commandName = member.getElementsByTagName("name")[0].textContent;
+						const restrictionTags = member.getElementsByTagName("restriction");
+						const restrictions = restrictionTags.length == 1 ? restrictionTags[0].textContent : "";
+
+						const argTags = member.getElementsByTagName("argument");
+						const args = {};
+						for (const argTag of argTags) {
+							args[argTag.getAttribute("name")] = argTag.textContent;
+						}
+
+						section.appendChild(
+							el("tr", null,
+								{ id: `${match[2]}-${commandName}` },
+								el("td", null, commandName),
+								el("td", null, parseArguments(el("pre", null, member.getElementsByTagName("syntax")[0].textContent.split(/\\n/g).map(command => "!" + commandPrefix + command).join("\n") ), args)),
+								el("td", null, 
+									parseArguments(el("span", null, member.getElementsByTagName("summary")[0].textContent), args),
+									...(restrictions == "" ? [] : restrictions.split(", ").flatMap(restriction => [" ", el("span", `restriction ${restriction}`, restriction, { title: restrictionDescriptions[restriction] || "" })]))
+								)
+							)
+						);
+
+						sidebarList.appendChild(el("li", null, el("a", null, { href: `#${match[2]}-${commandName}` }, commandName)));
+					}
+				}
+			}
+
+			function addTitlePopups() {
+				const titleElements = document.querySelectorAll("[title]");
+				for (const titleElement of titleElements) {
+					titleElement.addEventListener("click", event => {
+						toggleTooltip(titleElement);
+						event.stopPropagation();
+					});
+				}
+
+				document.addEventListener("click", () => {
+					for (const anyTooltip of document.querySelectorAll(".tooltip"))
+						anyTooltip.remove();
+				});
+			}
+
+			function toggleTooltip(element) {
+				const tooltips = element.getElementsByClassName("tooltip");
+				if (tooltips.length == 1) {
+					tooltips[0].remove();
+					element.style.position = "";
+				} else {
+					for (const anyTooltip of document.querySelectorAll(".tooltip"))
+						anyTooltip.remove();
+
+					element.appendChild(el("span", "tooltip", element.getAttribute("title")));
+					element.style.position = "relative";
+				}
+			}
+		</script>
+		<style>
+			body {
+				display: grid;
+				grid-template-columns: auto 1fr;
+				grid-gap: 8px;
+				background: lightgray;
+				margin: 8px;
+			}
+
+			.sidebar, .content {
+				background: white;
+				padding: 10px;
+			}
+
+			.section {
+				margin: 15px 0;
+			}
+
+			table {
+				border-collapse: collapse;
+				width: 100%;
+			}
+
+			table, td, th {
+				border: 1px solid black;
+			}
+
+			td, th {
+				padding: 2.5px 5px;
+			}
+
+			td:nth-child(3) {
+				white-space: pre-line;
+			}
+
+			h2 {
+				margin: 0;
+			}
+
+			pre {
+				white-space: pre-wrap;
+				margin: 0;
+				font-family: monospace, monospace;
+			}
+
+			ul {
+				margin-top: 0;
+				padding-left: 25px;
+			}
+
+			i.argument {
+				cursor: help;
+			}
+
+			span.restriction {
+				text-decoration: 2px underline;
+				cursor: help;
+			}
+
+			span.Streamer { text-decoration-color: purple }
+			span.SuperUser { text-decoration-color: red }
+			span.Admin { text-decoration-color: orange }
+			span.Mod { text-decoration-color: yellow }
+			span.Defuser { text-decoration-color: green }
+
+			span.ElevatorOnly { text-decoration-color: blue }
+			span.ElevatorDisallowed { text-decoration-color: cyan }
+			span.SolvedAllowed { text-decoration-color: limegreen }
+
+			span.Example { text-decoration-color: grey }
+
+			a {
+				color: black;
+				transition: color 0.1s;
+			}
+
+			a:hover {
+				color: blue;
+			}
+
+			.tooltip {
+				font-style: normal;
+				font-family: serif;
+
+				position: absolute;
+				top: 20px;
+				left: 0px;
+				z-index: 1;
+				width: max-content;
+
+				background: white;
+				border: 2px solid lightgray;
+				padding: 3px;
+				border-radius: 5px;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="sidebar">
+			<h2>TP: KTANE</h2>
+		</div>
+		<div class="content">
+			<h2>Legend</h2>
+			<div>Hover over arguments and modifiers for more for more infomation. Tapping or clicking works too.</div>
+			<ul>
+				<li><i class="argument" title="Information about the required argument would be here. Required argument.">[required argument]</i></li>
+				<li><i class="argument" title="Information about the optional argument would be here. Optional argument.">(optional argument)</i></li>
+				<li><span class="restriction Example" title="Some modification to when a command can be used.">Modifier</span></li>
+			</ul>
+		</div>
+	</body>
+</html>
