@@ -87,15 +87,12 @@ public class TwitchBomb : MonoBehaviour
 		EdgeworkID = EdgeworkWindowTransform.Find("ID").GetComponent<Image>();
 		EdgeworkIDText = EdgeworkWindowTransform.Find("ID").Find("IDText").GetComponent<Text>();
 		EdgeworkText = EdgeworkWindowTransform.Find("Header").Find("HeaderText").GetComponent<Text>();
+		EdgeworkWindowTransform.gameObject.SetActive(false);
+		EdgeworkHighlightTransform.gameObject.SetActive(false);
+		EdgeworkID.gameObject.SetActive(false);
+		EdgeworkIDText.gameObject.SetActive(false);
+		EdgeworkText.gameObject.SetActive(false);
 
-		if (TwitchPlaySettings.data.EnableEdgeworkCameras)
-		{
-			EdgeworkWindowTransform.gameObject.SetActive(false);
-			EdgeworkHighlightTransform.gameObject.SetActive(false);
-			EdgeworkID.gameObject.SetActive(false);
-			EdgeworkIDText.gameObject.SetActive(false);
-			EdgeworkText.gameObject.SetActive(false);
-		}
 	}
 
 	private void Start()
@@ -106,8 +103,8 @@ public class TwitchBomb : MonoBehaviour
 			_edgeworkCode = "edgework" + (BombID + 1);
 		}
 
-		EdgeworkIDText.text = string.Format("!{0}", _edgeworkCode);
-		EdgeworkText.text = TwitchPlaySettings.data.BlankBombEdgework;
+		//EdgeworkIDText.text = string.Format("!{0}", _edgeworkCode);
+		//EdgeworkText.text = TwitchPlaySettings.data.BlankBombEdgework;
 
 		CanvasGroup.alpha = BombID == 0 ? 1 : 0;
 	}

@@ -27,7 +27,7 @@ public class MysteryWidgetShim : ComponentSolverShim
 		} while (mystified == null);
 		Covers.Add(mystified);
 
-		ModuleCameras.Instance.SetupEdgeworkCameras();
+		//ModuleCameras.Instance.SetupEdgeworkCameras();
 	}
 
 	public static void ClearUnused()
@@ -40,7 +40,7 @@ public class MysteryWidgetShim : ComponentSolverShim
 			if (j == null)
 			{
 				Covers.Remove(j);
-				ModuleCameras.Instance.SetupEdgeworkCameras();
+				//ModuleCameras.Instance.SetupEdgeworkCameras();
 			}
 		}
 	}
