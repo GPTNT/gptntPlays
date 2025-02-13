@@ -674,7 +674,7 @@ public class ModuleCameras : MonoBehaviour
 
 		_currentBomb = bomb;
 
-		SetBombUIVisibility(_currentBomb != null);
+		SetBombUIVisibility(false);
 
 		if (_currentBomb == null)
 			return;
