@@ -210,7 +210,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!1 &1043788937336166
 GameObject:
   m_ObjectHideFlags: 1
@@ -5645,8 +5645,6 @@ MonoBehaviour:
   m_Script: {fileID: -1033608847, guid: 366880d94a4406540983fc80e2e0edb0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  messagePrefab: {fileID: 114000012089106560, guid: e10d34a7a56337b4ea2b48779d780807,
-    type: 2}
   canvasGroupMultiDecker: {fileID: 225129366150916298}
   canvasGroupUnsupported: {fileID: 225786798170740212}
   idTextMultiDecker: {fileID: 114906445961636792}
@@ -6270,8 +6268,6 @@ MonoBehaviour:
   m_Script: {fileID: -1695754852, guid: 366880d94a4406540983fc80e2e0edb0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  MessagePrefab: {fileID: 114000012089106560, guid: e10d34a7a56337b4ea2b48779d780807,
-    type: 2}
   HighlightGroup: {fileID: 225486279343163890}
   MessageScrollContents: {fileID: 1171642883591608}
   MainWindowTransform: {fileID: 224297855726343294}
