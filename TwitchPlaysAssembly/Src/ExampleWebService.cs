@@ -61,14 +61,39 @@ public class ExampleWebService : MonoBehaviour
         workerThread.Start(this);
     }
 
-    void Update()
-    {
-        if(actions.Count > 0)
-        {
-            Action action = actions.Dequeue();
-            action();
-        }
-    }
+	TwitchBomb bomb;
+	
+	void Update()
+	{
+		if (actions.Count > 0)
+		{
+			Action action = actions.Dequeue();
+			action();
+		}
+		// Flip 180 degrees
+		if (Input.GetKeyDown(KeyCode.F))
+		{
+			bomb = GameObject.FindObjectOfType<TwitchBomb>();
+			StartCoroutine(BombCommands.TurnBomb(bomb));
+		}
+		//// Flip left
+		//if (Input.GetKeyDown(KeyCode.G))
+		//{
+		//	BombCommands.Edgework(bomb, "left", "bot", true);
+		//}
+		//if (Input.GetKeyDown(KeyCode.H))
+		//{
+		//	BombCommands.Edgework(bomb, "right", "bot", true);
+		//}
+		//if (Input.GetKeyDown(KeyCode.J))
+		//{
+		//	BombCommands.Edgework(bomb, "top", "bot", true);
+		//}
+		//if (Input.GetKeyDown(KeyCode.K))
+		//{
+		//	BombCommands.Edgework(bomb, "bottom", "bot", true);
+		//}
+	}
 
     void OnDestroy()
     {
