@@ -15,7 +15,7 @@
     <DocumentationFile>..\docs\documentation.xml</DocumentationFile>
   </PropertyGroup>
   <PropertyGroup>
-    <GameFolder Condition="'$(GameFolder)' == ''">C:\GPTNT\Keep Talking and Nobody Explodes\</GameFolder>
+    <GameFolder Condition="'$(GameFolder)' == ''">"C:\Users\ka2023\Downloads\Keep_Talking_and_Nobody_Explodes_1.9.24_-_StandaloneWindows64_Default\Keep Talking and Nobody Explodes\</GameFolder>
     <Copy>copy</Copy>
     <Copy Condition=" '$(OS)' != 'Windows_NT' ">cp</Copy>
   </PropertyGroup>
