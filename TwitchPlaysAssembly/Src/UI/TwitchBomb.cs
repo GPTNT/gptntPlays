@@ -413,7 +413,7 @@ public class TwitchBomb : MonoBehaviour
 			yield return returnToFace.Current;
 		}
 
-		TwitchGame.ModuleCameras?.Show();
+		//TwitchGame.ModuleCameras?.Show();
 	}
 
 	const string WidgetQueryTwofactor = "twofactor";
@@ -681,8 +681,36 @@ public class TwitchBomb : MonoBehaviour
 			RotateByLocalQuaternion(currentRotation);
 			yield return null;
 		}
-		Quaternion target = Quaternion.Euler(targetPitch, 0, 0) * Quaternion.Euler(0, targetYSpin, 0);
-		RotateByLocalQuaternion(target);
+		//Quaternion target = Quaternion.Euler(targetPitch, 0, 0) * Quaternion.Euler(0, targetYSpin, 0);
+		//RotateByLocalQuaternion(target);
+	}
+
+	public IEnumerator DoFreeYRotatePub(float initialYSpin, float initialPitch, float targetYSpin, float targetPitch, float duration)
+	{
+		if (Bomb.GetComponent<FloatingHoldable>() == null)
+			yield break;
+
+		if (!HeldFrontFace)
+		{
+			initialPitch *= -1;
+			initialYSpin *= -1;
+			targetPitch *= -1;
+			targetYSpin *= -1;
+		}
+
+		float initialTime = Time.time;
+		while (Time.time - initialTime < duration)
+		{
+			float lerp = (Time.time - initialTime) / duration;
+			float currentYSpin = Mathf.SmoothStep(initialYSpin, targetYSpin, lerp);
+			float currentPitch = Mathf.SmoothStep(initialPitch, targetPitch, lerp);
+
+			Quaternion currentRotation = Quaternion.Euler(currentPitch, 0, 0) * Quaternion.Euler(0, currentYSpin, 0);
+			RotateByLocalQuaternion(currentRotation);
+			yield return null;
+		}
+		//Quaternion target = Quaternion.Euler(targetPitch, 0, 0) * Quaternion.Euler(0, targetYSpin, 0);
+		//RotateByLocalQuaternion(target);
 	}
 
 	private void HandleStrikeChanges()

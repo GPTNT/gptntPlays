@@ -465,17 +465,17 @@ static class GameCommands
 	[Command(@"edgework((?: 45|-45)|(?: top right| right top| right bottom| bottom right| bottom left| left bottom| left top| top left| left| top| right| bottom| tr| rt| tl| lt| br| rb| bl| lb| t| r| b| l))?"), ElevatorDisallowed]
 	public static IEnumerator Edgework([Group(1)] string edge, string user, bool isWhisper)
 	{
-		if (TwitchPlaySettings.data.EnableEdgeworkCommand || TwitchPlaySettings.data.AnarchyMode)
+		//if (TwitchPlaySettings.data.EnableEdgeworkCommand || TwitchPlaySettings.data.AnarchyMode)
 			return TwitchGame.Instance.Bombs[TwitchGame.Instance._currentBomb == -1 ? 0 : TwitchGame.Instance._currentBomb].ShowEdgework(edge);
-		else
-		{
-			string edgework = TwitchGame.Instance.Bombs.Count == 1 ?
-				TwitchGame.Instance.Bombs[0].EdgeworkText.text :
-				TwitchGame.Instance.Bombs.Select(bomb => $"{bomb.BombID} = {bomb.EdgeworkText.text}").Join(" //// ");
+		//else
+		//{
+		//	string edgework = TwitchGame.Instance.Bombs.Count == 1 ?
+		//		TwitchGame.Instance.Bombs[0].EdgeworkText.text :
+		//		TwitchGame.Instance.Bombs.Select(bomb => $"{bomb.BombID} = {bomb.EdgeworkText.text}").Join(" //// ");
 
-			IRCConnection.SendMessage(TwitchPlaySettings.data.BombEdgework, user, !isWhisper, edgework);
-			return null;
-		}
+		//	IRCConnection.SendMessage(TwitchPlaySettings.data.BombEdgework, user, !isWhisper, edgework);
+		//	return null;
+		//}
 	}
 	/// <name>Edgework for a module</name>
 	/// <syntax>edgework (module-id)\nedgework 1</syntax>

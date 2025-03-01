@@ -62,7 +62,9 @@ public class ExampleWebService : MonoBehaviour
     }
 
 	TwitchBomb bomb;
-	
+
+
+
 	void Update()
 	{
 		if (actions.Count > 0)
@@ -76,23 +78,33 @@ public class ExampleWebService : MonoBehaviour
 			bomb = GameObject.FindObjectOfType<TwitchBomb>();
 			StartCoroutine(BombCommands.TurnBomb(bomb));
 		}
-		//// Flip left
-		//if (Input.GetKeyDown(KeyCode.G))
-		//{
-		//	BombCommands.Edgework(bomb, "left", "bot", true);
-		//}
-		//if (Input.GetKeyDown(KeyCode.H))
-		//{
-		//	BombCommands.Edgework(bomb, "right", "bot", true);
-		//}
-		//if (Input.GetKeyDown(KeyCode.J))
-		//{
-		//	BombCommands.Edgework(bomb, "top", "bot", true);
-		//}
-		//if (Input.GetKeyDown(KeyCode.K))
-		//{
-		//	BombCommands.Edgework(bomb, "bottom", "bot", true);
-		//}
+
+		if (Input.GetKeyDown(KeyCode.Z))
+		{
+			InputInterceptor.DisableInput();
+		}
+		// Flip left
+		if (Input.GetKeyDown(KeyCode.G))
+		{
+			bomb = GameObject.FindObjectOfType<TwitchBomb>();
+			StartCoroutine(bomb.HoldBomb());
+		}
+		if (Input.GetKeyDown(KeyCode.H))
+		{
+			StartCoroutine(GameCommands.Edgework("top", "user", true));
+		}
+		if (Input.GetKeyDown(KeyCode.J))
+		{
+			StartCoroutine(GameCommands.Edgework("right", "user", true));
+		}
+		if (Input.GetKeyDown(KeyCode.K))
+		{
+			StartCoroutine(GameCommands.Edgework("left", "user", true));
+		}
+		if (Input.GetKeyDown(KeyCode.L))
+		{
+			StartCoroutine(GameCommands.Edgework("bottom", "user", true));
+		}
 	}
 
     void OnDestroy()

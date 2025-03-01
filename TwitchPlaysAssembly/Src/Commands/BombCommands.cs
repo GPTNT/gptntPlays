@@ -54,7 +54,7 @@ public static class BombCommands
 	public static IEnumerator Edgework(TwitchBomb bomb, [Group(1)] string edge, string user, bool isWhisper)
 	{
 		if (TwitchPlaySettings.data.EnableEdgeworkCommand || TwitchPlaySettings.data.AnarchyMode)
-			return null;
+			return bomb.ShowEdgework(edge);
 		else
 		{
 			IRCConnection.SendMessage(string.Format(TwitchPlaySettings.data.BombEdgework, bomb.EdgeworkText.text), user, !isWhisper);
