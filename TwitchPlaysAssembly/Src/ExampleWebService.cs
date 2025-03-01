@@ -79,28 +79,44 @@ public class ExampleWebService : MonoBehaviour
 			StartCoroutine(BombCommands.TurnBomb(bomb));
 		}
 
+		// Disabling mouse input ensures correct functioning of other commands- should be used before any other
 		if (Input.GetKeyDown(KeyCode.Z))
 		{
 			InputInterceptor.DisableInput();
 		}
-		// Flip left
-		if (Input.GetKeyDown(KeyCode.G))
+
+
+		// Can potentially use FloatingHoldable.HoldStateEnum.Held, i.e. if user sends click and bomb is not held, then assume action is to hold bomb
+
+		// Pick up the bomb when it is on the table
+		if (Input.GetKeyDown(KeyCode.X))
 		{
 			bomb = GameObject.FindObjectOfType<TwitchBomb>();
 			StartCoroutine(bomb.HoldBomb());
 		}
+		// Drop bomb onto table
+		if (Input.GetKeyDown(KeyCode.C))
+		{
+			bomb = GameObject.FindObjectOfType<TwitchBomb>();
+			StartCoroutine(bomb.LetGoBomb());
+		}
+
+		// View top of bomb
 		if (Input.GetKeyDown(KeyCode.H))
 		{
 			StartCoroutine(GameCommands.Edgework("top", "user", true));
 		}
+		// View right side of bomb
 		if (Input.GetKeyDown(KeyCode.J))
 		{
 			StartCoroutine(GameCommands.Edgework("right", "user", true));
 		}
+		// View left of bomb
 		if (Input.GetKeyDown(KeyCode.K))
 		{
 			StartCoroutine(GameCommands.Edgework("left", "user", true));
 		}
+		// View bottom of bomb
 		if (Input.GetKeyDown(KeyCode.L))
 		{
 			StartCoroutine(GameCommands.Edgework("bottom", "user", true));
