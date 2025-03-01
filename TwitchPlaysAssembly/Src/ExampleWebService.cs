@@ -5,6 +5,7 @@ using System.Threading;
 using System;
 using System.Linq;
 using System.Collections;
+using System.Net.Configuration;
 
 public class ExampleWebService : MonoBehaviour
 {
@@ -101,6 +102,23 @@ public class ExampleWebService : MonoBehaviour
 			StartCoroutine(bomb.LetGoBomb());
 		}
 
+		// Finds a twitch module, assumes it is a wire and then cuts the first wire
+		if (Input.GetKeyDown(KeyCode.V))
+		{
+			TwitchModule module = GameObject.FindObjectOfType<TwitchModule>();
+			WireSetComponentSolver solver = new WireSetComponentSolver(module);
+			StartCoroutine(solver.RespondToCommandInternal("cut 1"));
+		}
+
+		// Finds a twitch module and focuses onto it
+		if (Input.GetKeyDown(KeyCode.B))
+		{
+			bomb = GameObject.FindObjectOfType<TwitchBomb>();
+			TwitchModule module = GameObject.FindObjectOfType<TwitchModule>();
+			StartCoroutine(bomb.Focus(module.Selectable, module.FocusDistance, module.FrontFace, true));
+		}
+
+
 		// View top of bomb
 		if (Input.GetKeyDown(KeyCode.H))
 		{
@@ -121,6 +139,7 @@ public class ExampleWebService : MonoBehaviour
 		{
 			StartCoroutine(GameCommands.Edgework("bottom", "user", true));
 		}
+
 	}
 
     void OnDestroy()
