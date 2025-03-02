@@ -6,6 +6,7 @@ using System;
 using System.Linq;
 using System.Collections;
 using System.Net.Configuration;
+using Assets.Scripts.Platform.PS4.IO;
 
 public class ExampleWebService : MonoBehaviour
 {
@@ -110,6 +111,12 @@ public class ExampleWebService : MonoBehaviour
 			StartCoroutine(solver.RespondToCommandInternal("cut 1"));
 		}
 
+		if (Input.GetKeyDown(KeyCode.M))
+		{
+			TwitchModule module = GameObject.FindObjectOfType<TwitchModule>();
+			module.Selectable.HandleInteract();
+		}
+
 		// Finds a twitch module and focuses onto it
 		if (Input.GetKeyDown(KeyCode.B))
 		{
@@ -119,20 +126,26 @@ public class ExampleWebService : MonoBehaviour
 		}
 
 
-		// View top of bomb
+
+		// rotate 90 degrees up
+		if (Input.GetKeyDown(KeyCode.G))
+		{
+			HandleRotation90("up");
+		}
+		// rotate 90 degrees down
 		if (Input.GetKeyDown(KeyCode.H))
 		{
-			StartCoroutine(GameCommands.Edgework("top", "user", true));
+			HandleRotation90("down");
 		}
-		// View right side of bomb
+		// rotate 90 degrees right
 		if (Input.GetKeyDown(KeyCode.J))
 		{
-			StartCoroutine(GameCommands.Edgework("right", "user", true));
+			HandleRotation90("right");
 		}
-		// View left of bomb
+		// rotate 90 degrees left
 		if (Input.GetKeyDown(KeyCode.K))
 		{
-			StartCoroutine(GameCommands.Edgework("left", "user", true));
+			HandleRotation90("left");
 		}
 		// View bottom of bomb
 		if (Input.GetKeyDown(KeyCode.L))
@@ -229,6 +242,69 @@ public class ExampleWebService : MonoBehaviour
 
         return hierarchy; // Return the entire hierarchy as a string
     }
+
+	private void HandleClick(Vector2 coords)
+	{
+		bomb = GameObject.FindObjectOfType<TwitchBomb>();
+		var holdable = bomb.Bomb.GetComponent<FloatingHoldable>();
+		var holdState = holdable.HoldState;
+		// If the bomb is not already held, assume the user's action is to pick up the bomb.
+		if (holdState != FloatingHoldable.HoldStateEnum.Held)
+		{
+			StartCoroutine(bomb.HoldBomb());
+		}
+		// Otherwise
+		// use coords to send a raycast onto the bomb, then find which module the user has clicked on
+		// If the module is not highlighted assume the user action is to focus
+		
+		// Otherwise
+		// Depending on the module either send click to specific solver or check which selectable the click is related to then send click with this as input.
+
+
+
+		// MAYBE we can ignore this and just dig straight to the selectable?
+	}
+
+	float x_val = 0f;
+	float z_val = 0f;
+	private void HandleRotation90(string direction)
+	{
+		float duration = 0.3f;
+		bomb = GameObject.FindObjectOfType<TwitchBomb>();
+
+		if (direction.Equals("right"))
+		{
+			z_val += 90;
+			bomb.RotateByLocalQuaternion(Quaternion.Euler(0, 0, z_val));
+		}
+		if (direction.Equals("left"))
+		{
+			z_val -= 90;
+			bomb.RotateByLocalQuaternion(Quaternion.Euler(0, 0, z_val));
+		}
+
+		if (direction.Equals("up"))
+		{
+			x_val -= 90;
+			if (Math.Abs(x_val) % 180f == 0)
+			{
+				x_val = 0f;
+				z_val += 180f;
+			}
+			bomb.RotateByLocalQuaternion(Quaternion.Euler(x_val, 0, z_val));
+		}
+
+		if (direction.Equals("down"))
+		{
+			x_val += 90;
+			if (Math.Abs(x_val) % 180f == 0)
+			{
+				x_val = 0;
+				z_val += 180f;
+			}
+			bomb.RotateByLocalQuaternion(Quaternion.Euler(x_val, 0, z_val));
+		}
+	}
 
     private string HandleStartMission(HttpListenerRequest request)
     {
