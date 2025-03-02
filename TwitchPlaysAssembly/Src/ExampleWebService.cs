@@ -269,7 +269,6 @@ public class ExampleWebService : MonoBehaviour
 	float z_val = 0f;
 	private void HandleRotation90(string direction)
 	{
-		float duration = 0.3f;
 		bomb = GameObject.FindObjectOfType<TwitchBomb>();
 
 		if (direction.Equals("right"))
@@ -306,7 +305,14 @@ public class ExampleWebService : MonoBehaviour
 		}
 	}
 
-    private string HandleStartMission(HttpListenerRequest request)
+		private void HandleRotation180()
+	{
+		z_val += 180f;
+		bomb = GameObject.FindObjectOfType<TwitchBomb>();
+		bomb.RotateByLocalQuaternion(Quaternion.Euler(x_val, 0, z_val));
+	}
+
+	private string HandleStartMission(HttpListenerRequest request)
     {
         string seed = request.QueryString.Get("seed");
         int timeLimit = int.Parse(request.QueryString.Get("timeLimit"));
