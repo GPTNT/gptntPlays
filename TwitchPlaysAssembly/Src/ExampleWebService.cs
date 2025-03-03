@@ -5,6 +5,8 @@ using System.Threading;
 using System;
 using System.Linq;
 using System.Collections;
+using System.Net.Configuration;
+using Assets.Scripts.Platform.PS4.IO;
 
 public class ExampleWebService : MonoBehaviour
 {
@@ -62,7 +64,9 @@ public class ExampleWebService : MonoBehaviour
     }
 
 	TwitchBomb bomb;
-	
+
+
+
 	void Update()
 	{
 		if (actions.Count > 0)
@@ -70,29 +74,105 @@ public class ExampleWebService : MonoBehaviour
 			Action action = actions.Dequeue();
 			action();
 		}
+
+		// A list of all bomb components in order, including empties and the timer
+		if (Input.GetKeyDown(KeyCode.Space))
+		{
+			TwitchGame game = FindObjectOfType<TwitchGame>();
+			bomb = GameObject.FindObjectOfType<TwitchBomb>();
+			string mystr = "HERE WE GO:\n";
+			foreach (var component in bomb.Bomb.BombComponents)
+			{
+				mystr += component.name;
+				mystr += "\n";
+			}
+			throw new Exception(mystr);
+		}
+
+		if (Input.GetMouseButtonDown(1))
+		{
+			throw new Exception(Input.mousePosition.ToString());
+		}
+
 		// Flip 180 degrees
 		if (Input.GetKeyDown(KeyCode.F))
 		{
 			bomb = GameObject.FindObjectOfType<TwitchBomb>();
 			StartCoroutine(BombCommands.TurnBomb(bomb));
 		}
-		//// Flip left
-		//if (Input.GetKeyDown(KeyCode.G))
-		//{
-		//	BombCommands.Edgework(bomb, "left", "bot", true);
-		//}
-		//if (Input.GetKeyDown(KeyCode.H))
-		//{
-		//	BombCommands.Edgework(bomb, "right", "bot", true);
-		//}
-		//if (Input.GetKeyDown(KeyCode.J))
-		//{
-		//	BombCommands.Edgework(bomb, "top", "bot", true);
-		//}
-		//if (Input.GetKeyDown(KeyCode.K))
-		//{
-		//	BombCommands.Edgework(bomb, "bottom", "bot", true);
-		//}
+
+		// Disabling mouse input ensures correct functioning of other commands- should be used before any other
+		if (Input.GetKeyDown(KeyCode.Z))
+		{
+			InputInterceptor.DisableInput();
+		}
+
+
+		// Can potentially use FloatingHoldable.HoldStateEnum.Held, i.e. if user sends click and bomb is not held, then assume action is to hold bomb
+
+		// Pick up the bomb when it is on the table
+		if (Input.GetKeyDown(KeyCode.X))
+		{
+			bomb = GameObject.FindObjectOfType<TwitchBomb>();
+			StartCoroutine(bomb.HoldBomb());
+		}
+		// Drop bomb onto table
+		if (Input.GetKeyDown(KeyCode.C))
+		{
+			bomb = GameObject.FindObjectOfType<TwitchBomb>();
+			StartCoroutine(bomb.LetGoBomb());
+		}
+
+		// Finds a twitch module, assumes it is a wire and then cuts the first wire
+		if (Input.GetKeyDown(KeyCode.V))
+		{
+			TwitchModule module = GameObject.FindObjectOfType<TwitchModule>();
+			WireSetComponentSolver solver = new WireSetComponentSolver(module);
+			StartCoroutine(solver.RespondToCommandInternal("cut 1"));
+		}
+
+		if (Input.GetKeyDown(KeyCode.M))
+		{
+			TwitchModule module = GameObject.FindObjectOfType<TwitchModule>();
+			module.Selectable.HandleInteract();
+		}
+
+		// Finds a twitch module and focuses onto it
+		if (Input.GetKeyDown(KeyCode.B))
+		{
+			bomb = GameObject.FindObjectOfType<TwitchBomb>();
+			TwitchModule module = GameObject.FindObjectOfType<TwitchModule>();
+			StartCoroutine(bomb.Focus(module.Selectable, module.FocusDistance, module.FrontFace, true));
+		}
+
+
+
+		// rotate 90 degrees up
+		if (Input.GetKeyDown(KeyCode.G))
+		{
+			HandleRotation90("up");
+		}
+		// rotate 90 degrees down
+		if (Input.GetKeyDown(KeyCode.H))
+		{
+			HandleRotation90("down");
+		}
+		// rotate 90 degrees right
+		if (Input.GetKeyDown(KeyCode.J))
+		{
+			HandleRotation90("right");
+		}
+		// rotate 90 degrees left
+		if (Input.GetKeyDown(KeyCode.K))
+		{
+			HandleRotation90("left");
+		}
+		// View bottom of bomb
+		if (Input.GetKeyDown(KeyCode.L))
+		{
+			StartCoroutine(GameCommands.Edgework("bottom", "user", true));
+		}
+
 	}
 
     void OnDestroy()
@@ -183,7 +263,84 @@ public class ExampleWebService : MonoBehaviour
         return hierarchy; // Return the entire hierarchy as a string
     }
 
-    private string HandleStartMission(HttpListenerRequest request)
+	//Not yet implemented
+	private int TranslateCoordsToIndex(Vector2 coords)
+	{
+		return 0;
+	}
+
+	private void HandleClick(Vector2 coords)
+	{
+		bomb = GameObject.FindObjectOfType<TwitchBomb>();
+		var holdable = bomb.Bomb.GetComponent<FloatingHoldable>();
+		var holdState = holdable.HoldState;
+		// If the bomb is not already held, assume the user's action is to pick up the bomb.
+		if (holdState != FloatingHoldable.HoldStateEnum.Held)
+		{
+			StartCoroutine(bomb.HoldBomb());
+		}
+		// Otherwise
+		// use coords to send a raycast onto the bomb, then find which module the user has clicked on
+		// If the module is not highlighted assume the user action is to focus
+
+
+
+		// Otherwise
+		// Depending on the module either send click to specific solver or check which selectable the click is related to then send click with this as input.
+
+
+
+		// MAYBE we can ignore this and just dig straight to the selectable?
+	}
+
+	float x_val = 0f;
+	float z_val = 0f;
+	private void HandleRotation90(string direction)
+	{
+		bomb = GameObject.FindObjectOfType<TwitchBomb>();
+
+		if (direction.Equals("right"))
+		{
+			z_val += 90;
+			bomb.RotateByLocalQuaternion(Quaternion.Euler(0, 0, z_val));
+		}
+		if (direction.Equals("left"))
+		{
+			z_val -= 90;
+			bomb.RotateByLocalQuaternion(Quaternion.Euler(0, 0, z_val));
+		}
+
+		if (direction.Equals("up"))
+		{
+			x_val -= 90;
+			if (Math.Abs(x_val) % 180f == 0)
+			{
+				x_val = 0f;
+				z_val += 180f;
+			}
+			bomb.RotateByLocalQuaternion(Quaternion.Euler(x_val, 0, z_val));
+		}
+
+		if (direction.Equals("down"))
+		{
+			x_val += 90;
+			if (Math.Abs(x_val) % 180f == 0)
+			{
+				x_val = 0;
+				z_val += 180f;
+			}
+			bomb.RotateByLocalQuaternion(Quaternion.Euler(x_val, 0, z_val));
+		}
+	}
+
+		private void HandleRotation180()
+	{
+		z_val += 180f;
+		bomb = GameObject.FindObjectOfType<TwitchBomb>();
+		bomb.RotateByLocalQuaternion(Quaternion.Euler(x_val, 0, z_val));
+	}
+
+	private string HandleStartMission(HttpListenerRequest request)
     {
         string seed = request.QueryString.Get("seed");
         int timeLimit = int.Parse(request.QueryString.Get("timeLimit"));

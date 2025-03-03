@@ -520,8 +520,8 @@ public class TwitchGame : MonoBehaviour
 		while (BombActive)
 		{
 			if (TwitchPlaySettings.data.EnableAutomaticEdgework)
-				//foreach (TwitchBomb bomb in Bombs)
-					//bomb.FillEdgework();
+				foreach (TwitchBomb bomb in Bombs)
+					bomb.FillEdgework();
 			yield return new WaitForSeconds(0.1f);
 		}
 	}

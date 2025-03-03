@@ -28,12 +28,12 @@ public class TwitchPlaySettingsData
 	public bool EnableRetryButton = true;
 	public bool EnableWhiteList = false;
 	public bool EnableInteractiveMode = false;
-	public bool EnableAutomaticEdgework = false;
+	public bool EnableAutomaticEdgework = true;
 	public bool EnableEdgeworkCommand = true;
 	public bool EnableBossAutoViewPin = true;
 	public bool EnableAutomaticCameraWall = true;
-	public bool EnableEdgeworkCameras = false;
-	public bool EnableModuleCameraLights = false;
+	public bool EnableEdgeworkCameras = true;
+	public bool EnableModuleCameraLights = true;
 	public float ModuleCameraLightIntensity = 0.5f;
 	public bool EnableLastModuleZoom = true;
 	public string RepositoryUrl = "https://ktane.timwi.de/";
