@@ -74,6 +74,26 @@ public class ExampleWebService : MonoBehaviour
 			Action action = actions.Dequeue();
 			action();
 		}
+
+		// A list of all bomb components in order, including empties and the timer
+		if (Input.GetKeyDown(KeyCode.Space))
+		{
+			TwitchGame game = FindObjectOfType<TwitchGame>();
+			bomb = GameObject.FindObjectOfType<TwitchBomb>();
+			string mystr = "HERE WE GO:\n";
+			foreach (var component in bomb.Bomb.BombComponents)
+			{
+				mystr += component.name;
+				mystr += "\n";
+			}
+			throw new Exception(mystr);
+		}
+
+		if (Input.GetMouseButtonDown(1))
+		{
+			throw new Exception(Input.mousePosition.ToString());
+		}
+
 		// Flip 180 degrees
 		if (Input.GetKeyDown(KeyCode.F))
 		{
@@ -243,6 +263,12 @@ public class ExampleWebService : MonoBehaviour
         return hierarchy; // Return the entire hierarchy as a string
     }
 
+	//Not yet implemented
+	private int TranslateCoordsToIndex(Vector2 coords)
+	{
+		return 0;
+	}
+
 	private void HandleClick(Vector2 coords)
 	{
 		bomb = GameObject.FindObjectOfType<TwitchBomb>();
@@ -256,7 +282,9 @@ public class ExampleWebService : MonoBehaviour
 		// Otherwise
 		// use coords to send a raycast onto the bomb, then find which module the user has clicked on
 		// If the module is not highlighted assume the user action is to focus
-		
+
+
+
 		// Otherwise
 		// Depending on the module either send click to specific solver or check which selectable the click is related to then send click with this as input.
 

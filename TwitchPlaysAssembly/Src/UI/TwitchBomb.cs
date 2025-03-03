@@ -59,7 +59,7 @@ public class TwitchBomb : MonoBehaviour
 
 	private bool _flipEnabled = true;
 
-	private int _focusCount = 0;
+	public int _focusCount = 0;
 	private int _focusSelectCount = 0;
 
 	public string BombName
