@@ -107,6 +107,7 @@ public class TwitchBomb : MonoBehaviour
 		//EdgeworkText.text = TwitchPlaySettings.data.BlankBombEdgework;
 
 		CanvasGroup.alpha = BombID == 0 ? 1 : 0;
+		FindObjectOfType<ExampleWebService>().bombStarted = true;
 	}
 
 	private void Update()
@@ -577,6 +578,7 @@ public class TwitchBomb : MonoBehaviour
 		KTInputManager.Instance.SelectableManager.HandleFaceSelection();
 	}
 
+
 	public static void RotateCameraByLocalQuaternion(GameObject gameObj, Quaternion localQuaternion)
 	{
 		Transform twitchPlaysCameraTransform = gameObj?.transform.Find("TwitchPlayModuleCamera");
@@ -623,6 +625,41 @@ public class TwitchBomb : MonoBehaviour
 	}
 
 	private static IEnumerator ForceHeldRotation(bool? frontFace, float duration)
+	{
+		var sm = KTInputManager.Instance.SelectableManager;
+		var baseTransform = sm.GetBaseHeldObjectTransform();
+
+		float oldZSpin = sm.GetZSpin();
+		float targetZSpin = frontFace != null ? ((bool) frontFace ? 0.0f : 180.0f) : oldZSpin;
+
+		float initialTime = Time.time;
+		while (Time.time - initialTime < duration)
+		{
+			float lerp = (Time.time - initialTime) / duration;
+			float currentZSpin = Mathf.SmoothStep(oldZSpin, targetZSpin, lerp);
+
+			Vector3 heldObjectTiltEulerAngles = sm.GetHeldObjectTiltEulerAngles();
+			heldObjectTiltEulerAngles.x = Mathf.Clamp(heldObjectTiltEulerAngles.x, -95f, 95f);
+			heldObjectTiltEulerAngles.z -= sm.GetZSpin() - currentZSpin;
+
+			sm.SetZSpin(currentZSpin);
+			sm.SetControlsRotation(baseTransform.rotation * Quaternion.Euler(heldObjectTiltEulerAngles));
+			sm.SetHeldObjectTiltEulerAngles(heldObjectTiltEulerAngles);
+			sm.HandleFaceSelection();
+			yield return null;
+		}
+
+		Vector3 heldObjectTileEulerAnglesFinal = sm.GetHeldObjectTiltEulerAngles();
+		heldObjectTileEulerAnglesFinal.x = Mathf.Clamp(heldObjectTileEulerAnglesFinal.x, -95f, 95f);
+		heldObjectTileEulerAnglesFinal.z -= sm.GetZSpin() - targetZSpin;
+
+		sm.SetZSpin(targetZSpin);
+		sm.SetControlsRotation(baseTransform.rotation * Quaternion.Euler(heldObjectTileEulerAnglesFinal));
+		sm.SetHeldObjectTiltEulerAngles(heldObjectTileEulerAnglesFinal);
+		sm.HandleFaceSelection();
+	}
+
+	public IEnumerator MyForceHeldRotation(bool? frontFace, float duration)
 	{
 		var sm = KTInputManager.Instance.SelectableManager;
 		var baseTransform = sm.GetBaseHeldObjectTransform();

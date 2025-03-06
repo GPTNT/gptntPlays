@@ -7,6 +7,9 @@ using System.Linq;
 using System.Collections;
 using System.Net.Configuration;
 using Assets.Scripts.Platform.PS4.IO;
+using Assets.Scripts.Missions;
+using System.ComponentModel;
+using Assets.Scripts.Input;
 
 public class ExampleWebService : MonoBehaviour
 {
@@ -23,30 +26,34 @@ public class ExampleWebService : MonoBehaviour
     Worker workerObject;
     Queue<Action> actions;
 
-    public int timeStepSize = 250; // in-game milliseconds
+    public int timeStepSize = 250;
+	float bombRotationX = 0f;
+	float bombRotationZ = 0f;
+	public bool bombStarted = false;
+	// in-game milliseconds
 
-    //public int TimeLimitSecs = 300;
-    //public int NumStrikesBeforeExplosion = 3;
-    //public int TimeBeforeNeedyActivationSecs = 150;
-    //public bool FrontFaceOnly = true;
-    //public int OptionalWidgetCount = 3;
+	//public int TimeLimitSecs = 300;
+	//public int NumStrikesBeforeExplosion = 3;
+	//public int TimeBeforeNeedyActivationSecs = 150;
+	//public bool FrontFaceOnly = true;
+	//public int OptionalWidgetCount = 3;
 
-    // [SerializeField] private List<KMComponentPool.ComponentTypeEnum> Modules = new List<KMComponentPool.ComponentTypeEnum>();
+	// [SerializeField] private List<KMComponentPool.ComponentTypeEnum> Modules = new List<KMComponentPool.ComponentTypeEnum>();
 
-    //private void OnValidate()
-    //{
-    //    if (Modules.Count > 11)
-    //    {
-    //        Modules = Modules.GetRange(0, 11);
-    //    }
+	//private void OnValidate()
+	//{
+	//    if (Modules.Count > 11)
+	//    {
+	//        Modules = Modules.GetRange(0, 11);
+	//    }
 
-    //    if (Modules.Count < 1)
-    //    {
-    //        Modules = Modules.GetRange(0, 1);
-    //    }
-    //}
+	//    if (Modules.Count < 1)
+	//    {
+	//        Modules = Modules.GetRange(0, 1);
+	//    }
+	//}
 
-    void Awake()
+	void Awake()
     {
         actions = new Queue<Action>();
         bombInfo = GetComponent<KMBombInfo>();
@@ -64,11 +71,20 @@ public class ExampleWebService : MonoBehaviour
     }
 
 	TwitchBomb bomb;
+	bool StartingFace;
 
 
 
 	void Update()
 	{
+		if (bombStarted)
+		{
+			bombStarted = false;
+			bombRotationZ = 0;
+			bombRotationX = 0;
+			StartingFace = KTInputManager.Instance.SelectableManager.GetActiveFace() == FaceEnum.Front;
+		}
+
 		if (actions.Count > 0)
 		{
 			Action action = actions.Dequeue();
@@ -80,14 +96,65 @@ public class ExampleWebService : MonoBehaviour
 		{
 			TwitchGame game = FindObjectOfType<TwitchGame>();
 			bomb = GameObject.FindObjectOfType<TwitchBomb>();
-			string mystr = "HERE WE GO:\n";
+			List<TwitchModule> modules = new List<TwitchModule>();
+			int modulesIndex = 0;
 			foreach (var component in bomb.Bomb.BombComponents)
 			{
-				mystr += component.name;
+				if (component.ComponentType.EqualsAny(ComponentTypeEnum.Empty, ComponentTypeEnum.Timer))
+				{
+					TwitchModule emptyModule = new TwitchModule();
+					emptyModule.BombComponent = component;
+					modules.Add(emptyModule);
+				}
+				else
+				{
+					modules.Add(game.Modules[modulesIndex]);
+					modulesIndex++;
+				}
+
+			}
+			string mystr = "";
+			foreach (var comp in bomb.Bomb.Faces)
+			{
+				mystr += comp.name;
+
+
 				mystr += "\n";
 			}
 			throw new Exception(mystr);
 		}
+
+		if (Input.GetKeyDown(KeyCode.P))
+		{
+			TwitchGame game = FindObjectOfType<TwitchGame>();
+			bomb = GameObject.FindObjectOfType<TwitchBomb>();
+			List<TwitchModule> modules = new List<TwitchModule>();
+			int modulesIndex = 0;
+			foreach (var component in bomb.Bomb.BombComponents)
+			{
+				if (component.ComponentType.EqualsAny(ComponentTypeEnum.Empty, ComponentTypeEnum.Timer))
+				{
+					TwitchModule emptyModule = new TwitchModule();
+					emptyModule.BombComponent = component;
+					modules.Add(emptyModule);
+				}
+				else
+				{
+					modules.Add(game.Modules[modulesIndex]);
+					modulesIndex++;
+				}
+
+			}
+			BombGenerator gen = FindObjectOfType<BombGenerator>();
+			string mystr = "";
+			{
+
+			}
+			mystr += "END";
+			throw new Exception(mystr);
+		}
+
+
 
 		if (Input.GetMouseButtonDown(1))
 		{
@@ -97,14 +164,20 @@ public class ExampleWebService : MonoBehaviour
 		// Flip 180 degrees
 		if (Input.GetKeyDown(KeyCode.F))
 		{
-			bomb = GameObject.FindObjectOfType<TwitchBomb>();
-			StartCoroutine(BombCommands.TurnBomb(bomb));
+			HandleRotation180();
 		}
 
 		// Disabling mouse input ensures correct functioning of other commands- should be used before any other
 		if (Input.GetKeyDown(KeyCode.Z))
 		{
-			InputInterceptor.DisableInput();
+
+			throw new Exception($"Initial rotation: {bombRotationZ}");
+
+		}
+
+		if (Input.GetKeyDown(KeyCode.Backslash))
+		{
+			InputInterceptor.EnableInput();
 		}
 
 
@@ -166,11 +239,6 @@ public class ExampleWebService : MonoBehaviour
 		if (Input.GetKeyDown(KeyCode.K))
 		{
 			HandleRotation90("left");
-		}
-		// View bottom of bomb
-		if (Input.GetKeyDown(KeyCode.L))
-		{
-			StartCoroutine(GameCommands.Edgework("bottom", "user", true));
 		}
 
 	}
@@ -263,81 +331,99 @@ public class ExampleWebService : MonoBehaviour
         return hierarchy; // Return the entire hierarchy as a string
     }
 
-	//Not yet implemented
-	private int TranslateCoordsToIndex(Vector2 coords)
-	{
-		return 0;
-	}
-
-	private void HandleClick(Vector2 coords)
-	{
-		bomb = GameObject.FindObjectOfType<TwitchBomb>();
-		var holdable = bomb.Bomb.GetComponent<FloatingHoldable>();
-		var holdState = holdable.HoldState;
-		// If the bomb is not already held, assume the user's action is to pick up the bomb.
-		if (holdState != FloatingHoldable.HoldStateEnum.Held)
-		{
-			StartCoroutine(bomb.HoldBomb());
-		}
-		// Otherwise
-		// use coords to send a raycast onto the bomb, then find which module the user has clicked on
-		// If the module is not highlighted assume the user action is to focus
-
-
-
-		// Otherwise
-		// Depending on the module either send click to specific solver or check which selectable the click is related to then send click with this as input.
-
-
-
-		// MAYBE we can ignore this and just dig straight to the selectable?
-	}
-
-	float x_val = 0f;
-	float z_val = 0f;
 	private void HandleRotation90(string direction)
 	{
 		bomb = GameObject.FindObjectOfType<TwitchBomb>();
 
 		if (direction.Equals("right"))
 		{
-			z_val += 90;
-			bomb.RotateByLocalQuaternion(Quaternion.Euler(0, 0, z_val));
+			InputInterceptor.DisableInput();
+			bombRotationZ += 90;
+			if (bombRotationZ > 180)
+			{
+				bombRotationZ = -90;
+			}
+			bomb.RotateByLocalQuaternion(Quaternion.Euler(0, 0, bombRotationZ));
 		}
 		if (direction.Equals("left"))
 		{
-			z_val -= 90;
-			bomb.RotateByLocalQuaternion(Quaternion.Euler(0, 0, z_val));
+			InputInterceptor.DisableInput();
+			bombRotationZ -= 90;
+			if (bombRotationZ < -90)
+			{
+				bombRotationZ = 180;
+			}
+			bomb.RotateByLocalQuaternion(Quaternion.Euler(0, 0, bombRotationZ));
 		}
 
 		if (direction.Equals("up"))
 		{
-			x_val -= 90;
-			if (Math.Abs(x_val) % 180f == 0)
+			if (bombRotationX != -90)
 			{
-				x_val = 0f;
-				z_val += 180f;
+				bombRotationX -= 90;
+				bomb.RotateByLocalQuaternion(Quaternion.Euler(bombRotationX, 0, bombRotationZ));
 			}
-			bomb.RotateByLocalQuaternion(Quaternion.Euler(x_val, 0, z_val));
 		}
 
 		if (direction.Equals("down"))
 		{
-			x_val += 90;
-			if (Math.Abs(x_val) % 180f == 0)
+			if (bombRotationX != 90)
 			{
-				x_val = 0;
-				z_val += 180f;
+				bombRotationX += 90;
+				bomb.RotateByLocalQuaternion(Quaternion.Euler(bombRotationX, 0, bombRotationZ));
 			}
-			bomb.RotateByLocalQuaternion(Quaternion.Euler(x_val, 0, z_val));
+		}
+
+		if(bombRotationZ == 0)
+		{
+			StartCoroutine(bomb.MyForceHeldRotation(StartingFace, 0f));
+			InputInterceptor.EnableInput();
+			throw new Exception($"on starting face, rotation: {bombRotationZ}");
+		}
+		else if(bombRotationZ == 180)
+		{
+			StartCoroutine(bomb.MyForceHeldRotation(!StartingFace, 0f));
+			InputInterceptor.EnableInput();
+			throw new Exception($"not on starting face: {bombRotationZ}");
+
 		}
 	}
 
 		private void HandleRotation180()
 	{
-		z_val += 180f;
+		InputInterceptor.DisableInput();
+		if(bombRotationZ == 0)
+		{
+			bombRotationZ = 180;
+		} 
+		else if(bombRotationZ == 180)
+		{
+			bombRotationZ = 0;
+		}
+		else if (bombRotationZ == 90)
+		{
+			bombRotationZ = -90;
+		}
+		else
+		{
+			bombRotationZ = 90;
+		}
 		bomb = GameObject.FindObjectOfType<TwitchBomb>();
-		bomb.RotateByLocalQuaternion(Quaternion.Euler(x_val, 0, z_val));
+		bomb.RotateByLocalQuaternion(Quaternion.Euler(bombRotationX, 0, bombRotationZ));
+
+		if (bombRotationZ == 0)
+		{
+			StartCoroutine(bomb.MyForceHeldRotation(StartingFace, 0f));
+			InputInterceptor.EnableInput();
+			throw new Exception($"on starting face, rotation: {bombRotationZ}");
+		}
+		else if (bombRotationZ == 180)
+		{
+			StartCoroutine(bomb.MyForceHeldRotation(!StartingFace, 0f));
+			InputInterceptor.EnableInput();
+			throw new Exception($"not on starting face: {bombRotationZ}");
+
+		}
 	}
 
 	private string HandleStartMission(HttpListenerRequest request)
