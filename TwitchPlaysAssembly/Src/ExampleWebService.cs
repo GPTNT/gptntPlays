@@ -72,6 +72,20 @@ public class ExampleWebService : MonoBehaviour
 
 	TwitchBomb bomb;
 	bool StartingFace;
+	bool onFrontFace = true;
+	bool onBackFace = false;
+	bool onLeftSide = false;
+	bool onRightSide = false;
+	bool onTopFromFront = false;
+	bool onTopFromBack = false;
+	bool onTopFromLeftSide = false;
+	bool onTopFromRightSide = false;
+	bool onBottomFromBack = false;
+	bool onBottomFromFront = false;
+	bool onBottomFromLeftSide = false;
+	bool onBottomFromRightSide = false;
+	bool inMiddle = true;
+
 
 
 
@@ -83,6 +97,19 @@ public class ExampleWebService : MonoBehaviour
 			bombRotationZ = 0;
 			bombRotationX = 0;
 			StartingFace = KTInputManager.Instance.SelectableManager.GetActiveFace() == FaceEnum.Front;
+			onFrontFace = true;
+			onBackFace = false;
+			onLeftSide = false;
+			onRightSide = false;
+			onTopFromFront = false;
+			onTopFromBack = false;
+			onTopFromLeftSide = false;
+			onTopFromRightSide = false;
+			onBottomFromFront = false;
+			onBottomFromBack = false;
+			onBottomFromLeftSide = false;
+			onBottomFromRightSide = false;
+			inMiddle = true;
 		}
 
 		if (actions.Count > 0)
@@ -164,7 +191,7 @@ public class ExampleWebService : MonoBehaviour
 		// Flip 180 degrees
 		if (Input.GetKeyDown(KeyCode.F))
 		{
-			HandleRotation180();
+			Rotation180();
 		}
 
 		// Disabling mouse input ensures correct functioning of other commands- should be used before any other
@@ -223,22 +250,22 @@ public class ExampleWebService : MonoBehaviour
 		// rotate 90 degrees up
 		if (Input.GetKeyDown(KeyCode.G))
 		{
-			HandleRotation90("up");
+			Rotation90("up");
 		}
 		// rotate 90 degrees down
 		if (Input.GetKeyDown(KeyCode.H))
 		{
-			HandleRotation90("down");
+			Rotation90("down");
 		}
 		// rotate 90 degrees right
 		if (Input.GetKeyDown(KeyCode.J))
 		{
-			HandleRotation90("right");
+			Rotation90("left");
 		}
 		// rotate 90 degrees left
 		if (Input.GetKeyDown(KeyCode.K))
 		{
-			HandleRotation90("left");
+			Rotation90("right");
 		}
 
 	}
@@ -298,6 +325,9 @@ public class ExampleWebService : MonoBehaviour
             case "/timestep":
                 responseString = HandleTimeStep(request);
                 break;
+			case "/rotation":
+				responseString = HandleRotation(request);
+				break;
             case "/selectables":
                 responseString = HandleBombChildren();
                 break;
@@ -331,100 +361,367 @@ public class ExampleWebService : MonoBehaviour
         return hierarchy; // Return the entire hierarchy as a string
     }
 
-	private void HandleRotation90(string direction)
+	private void Rotation90(string direction)
 	{
 		bomb = GameObject.FindObjectOfType<TwitchBomb>();
 
 		if (direction.Equals("right"))
-		{
+		{	
 			InputInterceptor.DisableInput();
-			bombRotationZ += 90;
-			if (bombRotationZ > 180)
+			if (bombRotationZ == 180)
+			{
+				bomb.RotateByLocalQuaternion(Quaternion.Euler(-bombRotationX, 0, 0));
+
+			}
+			else
+			{
+				bomb.RotateByLocalQuaternion(Quaternion.Euler(-bombRotationX, 0, -bombRotationZ));
+
+			}
+			StartCoroutine(bomb.MyForceHeldRotation(StartingFace, 0f));
+			if (onFrontFace)
+			{
+				bombRotationZ = 90;
+			}
+			else if (onBackFace)
 			{
 				bombRotationZ = -90;
 			}
-			bomb.RotateByLocalQuaternion(Quaternion.Euler(0, 0, bombRotationZ));
+			else if (onLeftSide)
+			{
+				bombRotationZ = 0;
+			}
+			else if (onRightSide)
+			{
+				bombRotationZ = 180;
+			}
+			bomb.RotateByLocalQuaternion(Quaternion.Euler(bombRotationX, 0, bombRotationZ));
+			alignFace90R();
 		}
 		if (direction.Equals("left"))
 		{
 			InputInterceptor.DisableInput();
-			bombRotationZ -= 90;
-			if (bombRotationZ < -90)
+			if (bombRotationZ == 180)
+			{
+				bomb.RotateByLocalQuaternion(Quaternion.Euler(-bombRotationX, 0, 0));
+
+			}
+			else
+			{
+				bomb.RotateByLocalQuaternion(Quaternion.Euler(-bombRotationX, 0, -bombRotationZ));
+
+			}
+			StartCoroutine(bomb.MyForceHeldRotation(StartingFace, 0f));
+			if (onFrontFace)
+			{
+				bombRotationZ = -90;
+			}
+			else if (onBackFace)
+			{
+				bombRotationZ = 90;
+			}
+			else if (onLeftSide)
 			{
 				bombRotationZ = 180;
 			}
-			bomb.RotateByLocalQuaternion(Quaternion.Euler(0, 0, bombRotationZ));
+			else if (onRightSide)
+			{
+				bombRotationZ = 0;
+			}
+			bomb.RotateByLocalQuaternion(Quaternion.Euler(bombRotationX, 0, bombRotationZ));
+			alignFace90L();
 		}
 
 		if (direction.Equals("up"))
 		{
-			if (bombRotationX != -90)
+			if (bombRotationX < 90)
 			{
-				bombRotationX -= 90;
+				InputInterceptor.DisableInput();
+				if (bombRotationZ == 180)
+				{
+					bomb.RotateByLocalQuaternion(Quaternion.Euler(-bombRotationX, 0, 0));
+
+				}
+				else
+				{
+					bomb.RotateByLocalQuaternion(Quaternion.Euler(-bombRotationX, 0, -bombRotationZ));
+
+				}
+				StartCoroutine(bomb.MyForceHeldRotation(StartingFace, 0f));
+
+
+				bombRotationX += 90;
 				bomb.RotateByLocalQuaternion(Quaternion.Euler(bombRotationX, 0, bombRotationZ));
+
 			}
 		}
 
 		if (direction.Equals("down"))
 		{
-			if (bombRotationX != 90)
+			if (bombRotationX > -90)
 			{
-				bombRotationX += 90;
+				InputInterceptor.DisableInput();
+				if (bombRotationZ == 180)
+				{
+					bomb.RotateByLocalQuaternion(Quaternion.Euler(-bombRotationX, 0, 0));
+
+				}
+				else
+				{
+					bomb.RotateByLocalQuaternion(Quaternion.Euler(-bombRotationX, 0, -bombRotationZ));
+
+				}
+				StartCoroutine(bomb.MyForceHeldRotation(StartingFace, 0f));
+
+
+				bombRotationX -= 90;
 				bomb.RotateByLocalQuaternion(Quaternion.Euler(bombRotationX, 0, bombRotationZ));
 			}
 		}
 
-		if(bombRotationZ == 0)
+		if (bombRotationX == 0)
 		{
-			StartCoroutine(bomb.MyForceHeldRotation(StartingFace, 0f));
-			InputInterceptor.EnableInput();
-			throw new Exception($"on starting face, rotation: {bombRotationZ}");
+			if (bombRotationZ % 360 == 0)
+			{
+				StartCoroutine(bomb.MyForceHeldRotation(StartingFace, 0f));
+				InputInterceptor.EnableInput();
+			}
+			else if (bombRotationZ % 180 == 0)
+			{
+				StartCoroutine(bomb.MyForceHeldRotation(!StartingFace, 0f));
+				InputInterceptor.EnableInput();
+			}
 		}
-		else if(bombRotationZ == 180)
-		{
-			StartCoroutine(bomb.MyForceHeldRotation(!StartingFace, 0f));
-			InputInterceptor.EnableInput();
-			throw new Exception($"not on starting face: {bombRotationZ}");
-
-		}
+		//throw new Exception($"X rotation: {bombRotationX}\n Z rotation: {bombRotationZ}");
+		throw new Exception($"X: {bombRotationX}\n Z:{bombRotationZ}");
 	}
 
-		private void HandleRotation180()
+		private void Rotation180()
 	{
+		bomb = GameObject.FindObjectOfType<TwitchBomb>();
+
 		InputInterceptor.DisableInput();
-		if(bombRotationZ == 0)
+		if (bombRotationZ == 180)
 		{
-			bombRotationZ = 180;
-		} 
-		else if(bombRotationZ == 180)
-		{
-			bombRotationZ = 0;
-		}
-		else if (bombRotationZ == 90)
-		{
-			bombRotationZ = -90;
+			bomb.RotateByLocalQuaternion(Quaternion.Euler(-bombRotationX, 0, 0));
+
 		}
 		else
 		{
+			bomb.RotateByLocalQuaternion(Quaternion.Euler(-bombRotationX, 0, -bombRotationZ));
+
+		}
+		StartCoroutine(bomb.MyForceHeldRotation(StartingFace, 0f));
+
+		if (onFrontFace)
+		{
+			bombRotationZ = 180;
+		}
+		else if (onBackFace)
+		{
+			bombRotationZ = 0;
+		}
+		else if (onLeftSide)
+		{
 			bombRotationZ = 90;
 		}
-		bomb = GameObject.FindObjectOfType<TwitchBomb>();
+		else if (onRightSide)
+		{
+			bombRotationZ = -90;
+		}
 		bomb.RotateByLocalQuaternion(Quaternion.Euler(bombRotationX, 0, bombRotationZ));
 
-		if (bombRotationZ == 0)
+		if (bombRotationX == 0)
 		{
-			StartCoroutine(bomb.MyForceHeldRotation(StartingFace, 0f));
-			InputInterceptor.EnableInput();
-			throw new Exception($"on starting face, rotation: {bombRotationZ}");
+			if (bombRotationZ % 360 == 0)
+			{
+				StartCoroutine(bomb.MyForceHeldRotation(StartingFace, 0f));
+				InputInterceptor.EnableInput();
+			}
+			else if (bombRotationZ % 180 == 0)
+			{
+				StartCoroutine(bomb.MyForceHeldRotation(!StartingFace, 0f));
+				InputInterceptor.EnableInput();
+			}
 		}
-		else if (bombRotationZ == 180)
-		{
-			StartCoroutine(bomb.MyForceHeldRotation(!StartingFace, 0f));
-			InputInterceptor.EnableInput();
-			throw new Exception($"not on starting face: {bombRotationZ}");
+		alignFace180();
+	}
 
+	private void alignFace180()
+	{
+		if (onFrontFace)
+		{
+			onFrontFace = false;
+			onBackFace = true;
+		}
+		else if (onBackFace)
+		{
+			onBackFace = false;
+			onFrontFace = true;
+		}
+		else if (onLeftSide)
+		{
+			onLeftSide = false;
+			onRightSide = true;
+		}
+		else if (onRightSide)
+		{
+			onRightSide = false;
+			onLeftSide = true;
 		}
 	}
+
+
+	private void alignFace90L()
+	{
+		if (onFrontFace)
+		{
+			onFrontFace = false;
+			onLeftSide = true;
+		}
+		else if (onBackFace)
+		{
+			onBackFace = false;
+			onRightSide = true;
+		}
+		else if (onLeftSide)
+		{
+			onLeftSide = false;
+			onBackFace = true;
+		}
+		else if (onRightSide)
+		{
+			onRightSide = false;
+			onFrontFace = true;
+		}
+	}
+
+	private void alignFace90R()
+	{
+		if (onFrontFace)
+		{
+			onFrontFace = false;
+			onRightSide = true;
+		}
+		else if (onBackFace)
+		{
+			onBackFace = false;
+			onLeftSide = true;
+		}
+		else if (onLeftSide)
+		{
+			onLeftSide = false;
+			onFrontFace = true;
+		}
+		else if (onRightSide)
+		{
+			onRightSide = false;
+			onBackFace = true;
+		}
+	}
+
+	private void alignFace90U()
+	{
+		if (inMiddle && onFrontFace)
+		{
+			inMiddle = false;
+			onTopFromFront = true;
+		}
+
+		else if (inMiddle && onBackFace)
+		{
+			inMiddle = false;
+			onTopFromBack = true;
+		}
+
+		//else if (inMiddle && onLeftSideFromFront)
+		//{
+		//	inMiddle=false;
+		//	onTopFromLeftSide = true;
+		//}
+
+		//else if (inMiddle && onRightSide)
+		//{
+		//	inMiddle=false;
+		//	onTopFromRightSide = true;
+		//}
+
+		else if (onBottomFromBack)
+		{
+			onBottomFromBack = false;
+			inMiddle = true;
+		}
+		else if (onBottomFromFront)
+		{
+			onBottomFromFront = false;
+			inMiddle = true;
+		}
+		else if (onBottomFromLeftSide)
+		{
+			onBottomFromLeftSide = false;
+			inMiddle = true;
+		}
+
+		else if (onTopFromRightSide)
+		{
+			onBottomFromRightSide = false;
+			inMiddle = true;
+		}
+	}
+
+	private void alignFace90D()
+	{
+		if (inMiddle && onFrontFace)
+		{
+			inMiddle = false;
+			onBottomFromFront = true;
+		}
+		else if (inMiddle && onBackFace)
+		{
+			inMiddle = false;
+			onBottomFromBack = true;
+		}
+
+		//else if (inMiddle && onLeftSide)
+		//{
+		//	inMiddle = false;
+		//	onBottomFromLeftSide = true;
+		//}
+
+		//else if (inMiddle && onRightSide)
+		//{
+		//	inMiddle = false;
+		//	onBottomFromRightSide = true;
+		//}
+
+		else if (onTopFromFront)
+		{
+			onTopFromFront = false;
+			inMiddle = true;
+		}
+
+		else if (onTopFromLeftSide)
+		{
+			onTopFromLeftSide = false;
+			inMiddle = true;
+		}
+
+		else if (onTopFromRightSide)
+		{
+			onTopFromRightSide = false;
+			inMiddle = true;
+		}
+
+		else if (onTopFromBack)
+		{
+			onTopFromBack = false;
+			inMiddle = true;
+		}
+	}
+
+
+
+
 
 	private string HandleStartMission(HttpListenerRequest request)
     {
@@ -441,6 +738,40 @@ public class ExampleWebService : MonoBehaviour
 
         return StartMission(seed, timeLimit, numStrikes, needyTime, isFront, optWidgets, components);
     }
+
+	private string HandleRotation(HttpListenerRequest request)
+	{
+		string direction = request.QueryString.Get("direction");
+		if (direction.Equals("flip"))
+		{
+			Rotation180();
+			return "flipped bomb 180 degrees";
+		}
+		else if (direction.Equals("left"))
+		{
+			Rotation90(direction);
+			return "flipped bomb left by 90 degrees";
+		} 
+		else if (direction.Equals("right"))
+		{
+			Rotation90(direction);
+			return "flipped bomb right by 90 degrees";
+		} 
+		else if (direction.Equals("up"))
+		{
+			Rotation90(direction);
+			return "flipped bomb up by 90 degrees";
+		}
+		else if (direction.Equals("down"))
+		{
+			Rotation90(direction);
+			return "flipped bomb down by 90 degrees";
+		}
+		else
+		{
+			return "invalid direction. Valid directions: left, right, up, down, flip";
+		}
+	}
 
     private string HandleCauseStrike(HttpListenerRequest request)
     {
@@ -641,9 +972,9 @@ public class ExampleWebService : MonoBehaviour
     {   
         //yield return new WaitForSecondsRealtime(1); // to test the time out 
         yield return new WaitForEndOfFrame();
-        //byte[] img = ScreenCapture.CaptureScreenshotAsTexture().EncodeToPNG();
-        //callback(img);
-    }
+		//byte[] img = ScreenCapture.CaptureScreenshotAsTexture().EncodeToPNG();
+		//callback(img);
+	}
 
 
     public class Worker
