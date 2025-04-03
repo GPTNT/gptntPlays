@@ -10,6 +10,7 @@ using Assets.Scripts.Platform.PS4.IO;
 using Assets.Scripts.Missions;
 using System.ComponentModel;
 using Assets.Scripts.Input;
+// using Org.BouncyCastle.Asn1.X509;
 
 public class ExampleWebService : MonoBehaviour
 {
@@ -930,7 +931,11 @@ public class ExampleWebService : MonoBehaviour
         string time = bombInfo.GetFormattedTime();
         int strikes = bombInfo.GetStrikes();
         modules = GetListAsHTML(bombInfo.GetModuleNames());
-        solvableModules = GetListAsHTML(bombInfo.GetSolvableModuleNames());
+		TwitchModule mod = GameObject.FindObjectOfType<TwitchModule>();
+		ComponentSolver Solver = ComponentSolverFactory.CreateSolver(mod);
+		var ModInfo = Solver.ModInfo;
+		string id = ModInfo.moduleID;
+		solvableModules = GetListAsHTML(bombInfo.GetSolvableModuleNames());
         solvedModules = GetListAsHTML(bombInfo.GetSolvedModuleNames());
         
         string responseString = string.Format(
@@ -938,10 +943,11 @@ public class ExampleWebService : MonoBehaviour
             + "<span>Time: {0}</span><br>"
             + "<span>Strikes: {1}</span><br>"
             + "<span>Modules: {2}</span><br>"
-            + "<span>Solvable Modules: {3}</span><br>"
+			+ "<span>IDs: {6}</span><br>"
+			+ "<span>Solvable Modules: {3}</span><br>"
             + "<span>Solved Modules: {4}</span><br>"
             + "<span>State: {5}</span><br>"
-            + "</BODY></HTML>", time, strikes, modules, solvableModules, solvedModules, bombState);
+            + "</BODY></HTML>", time, strikes, modules, solvableModules, solvedModules, bombState, id);
 
         return responseString;
     }
