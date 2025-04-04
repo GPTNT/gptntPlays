@@ -6,10 +6,10 @@ using UnityEngine;
 /*
 *	Script to segment objects in a scene
 *	Usage: Attach this script to a GameObject in the scene
-*	Then start the Capture corroutine with a list of GameObjects to segment
+*	Then start the Capture corroutine with a list of GameObjects to segment and a callback to specify what to do with the bytes
 *	Example:
 * 	StartCoroutine(segmentation.Capture(cubes , (bytes) => {
-*				System.IO.File.WriteAllBytes("Assets/segmentation.png", bytes);;
+*				System.IO.File.WriteAllBytes("Assets/segmentation.png", bytes);
 *			}));
 */
 
@@ -21,7 +21,8 @@ public class Segmentation : MonoBehaviour {
 	private GameObject duplicate = null;
 	private RenderTexture renderTexture;
 	private Shader shader;
-	private Renderer[] renderers;
+    // each element in renderers has an array of renderers for the children of an object
+    private List<Renderer[]> renderers; 
 
 	private void Start() {
 		renderTexture = new RenderTexture(Screen.width, Screen.height, 24);
@@ -33,7 +34,7 @@ public class Segmentation : MonoBehaviour {
 		Segment(objects);
 		yield return new WaitForEndOfFrame();
 		byte[] bytes = RenderTextureToPNGBytes(renderTexture);
-		// callback?.Invoke(bytes); TODO: Figure out why this is not working
+		// callback.?Invoke(bytes); //TODO: Figure out why this is not working
 		callback.Invoke(bytes);
 	}
 
@@ -42,8 +43,12 @@ public class Segmentation : MonoBehaviour {
 
 		// Resets the property block for all renderers
 		if (renderers != null){
-			foreach (Renderer r in renderers) {
-			r.SetPropertyBlock(null);
+			foreach (Renderer[] list in renderers)
+			{
+				foreach (Renderer r in list)
+				{
+					r.SetPropertyBlock(null);
+				}
 			}
 		}
 
@@ -51,24 +56,26 @@ public class Segmentation : MonoBehaviour {
 
 		float hue = 0f;
 		// Sets a unique color for each object
-		foreach (Renderer r in renderers) {
+		foreach (Renderer[] ls in renderers) {
 			propertyBlock.SetColor ("_ObjectColor", Color.HSVToRGB(hue, 1, 1));
-			hue += 1f/renderers.Length;
-			r.SetPropertyBlock (propertyBlock);
+			hue += 1f/renderers.Count;
+			foreach(Renderer renderer in ls)
+			{
+                renderer.SetPropertyBlock(propertyBlock);
+            }
+			
 		}
 		
 	}
 
 	// Helper function to get all renderers from a list of game objects
-	private Renderer[] GetRenderers(GameObject[] objects) {
-		List<Renderer> renderers = new List<Renderer>();
+	private List<Renderer[]> GetRenderers(GameObject[] objects) {
+		List<Renderer[]> renderers = new List<Renderer[]>();
 		foreach (GameObject obj in objects) {
-			Renderer renderer = obj.GetComponent<Renderer>();
-			if (renderer != null) {
-				renderers.Add(renderer);
-			}
+			Renderer[] child = obj.GetComponentsInChildren<Renderer>();
+			renderers.Add(child);
 		}
-		return renderers.ToArray();
+		return renderers;
 	}
 
 	// Convert a RenderTexture to a Texture2D
