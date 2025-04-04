@@ -10,6 +10,7 @@ using Assets.Scripts.Platform.PS4.IO;
 using Assets.Scripts.Missions;
 using System.ComponentModel;
 using Assets.Scripts.Input;
+using System.IO;
 // using Org.BouncyCastle.Asn1.X509;
 
 public class ExampleWebService : MonoBehaviour
@@ -31,6 +32,27 @@ public class ExampleWebService : MonoBehaviour
 	float bombRotationX = 0f;
 	float bombRotationZ = 0f;
 	public bool bombStarted = false;
+
+
+	TwitchBomb bomb;
+	bool StartingFace;
+	bool onFrontFace = true;
+	bool onBackFace = false;
+	bool onLeftSide = false;
+	bool onRightSide = false;
+	bool onTopFromFront = false;
+	bool onTopFromBack = false;
+	bool onTopFromLeftSide = false;
+	bool onTopFromRightSide = false;
+	bool onBottomFromBack = false;
+	bool onBottomFromFront = false;
+	bool onBottomFromLeftSide = false;
+	bool onBottomFromRightSide = false;
+	bool inMiddle = true;
+	private string destinationLogPath;
+    public string sourceLogPath = @".\logs\ktane.log";
+	private string lastRead = "";
+
 	// in-game milliseconds
 
 	//public int TimeLimitSecs = 300;
@@ -69,26 +91,15 @@ public class ExampleWebService : MonoBehaviour
         workerThread = new Thread(workerObject.DoWork);
         // Start the worker thread.
         workerThread.Start(this);
-    }
-
-	TwitchBomb bomb;
-	bool StartingFace;
-	bool onFrontFace = true;
-	bool onBackFace = false;
-	bool onLeftSide = false;
-	bool onRightSide = false;
-	bool onTopFromFront = false;
-	bool onTopFromBack = false;
-	bool onTopFromLeftSide = false;
-	bool onTopFromRightSide = false;
-	bool onBottomFromBack = false;
-	bool onBottomFromFront = false;
-	bool onBottomFromLeftSide = false;
-	bool onBottomFromRightSide = false;
-	bool inMiddle = true;
+	}
 
 
-
+	void Start()
+	{
+		string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+		destinationLogPath = $@".\{timestamp}mirrored_log.txt";
+	InvokeRepeating(nameof(CopyLogContents), 1f, 0.25f);
+	}
 
 	void Update()
 	{
@@ -275,7 +286,7 @@ public class ExampleWebService : MonoBehaviour
     {
         workerThread.Abort();
         workerObject.Stop();
-    }
+	}
 
     // This example requires the System and System.Net namespaces.
     public void SimpleListenerExample(HttpListener listener)
@@ -1013,4 +1024,27 @@ public class ExampleWebService : MonoBehaviour
             listener.Stop();
         }
     }
+	void CopyLogContents()
+	{
+		try
+		{
+			if (File.Exists(sourceLogPath))
+			{
+				using (FileStream fs = new FileStream(sourceLogPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+				using (StreamReader reader = new StreamReader(fs))
+				{
+					string currentContents = reader.ReadToEnd();
+					if (currentContents != lastRead)
+					{
+						File.WriteAllText(destinationLogPath, currentContents);
+						lastRead = currentContents;
+					}
+				}
+			}
+		}
+		catch (IOException ex)
+		{
+			Debug.LogWarning("Failed to read log: " + ex.Message);
+		}
+	}
 }
