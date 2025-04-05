@@ -24,6 +24,7 @@ public class ExampleWebService : MonoBehaviour
     string bombState;
     GameObject spawn;
     KMMission mission;
+	Segmentation segmentation;
 
     Thread workerThread;
     Worker workerObject;
@@ -71,6 +72,7 @@ public class ExampleWebService : MonoBehaviour
         workerThread = new Thread(workerObject.DoWork);
         // Start the worker thread.
         workerThread.Start(this);
+		segmentation = GetComponent<Segmentation>();
     }
 
 	TwitchBomb bomb;
@@ -299,8 +301,23 @@ public class ExampleWebService : MonoBehaviour
 		#endregion
 		if (Input.GetKeyDown(KeyCode.T))
 		{
-			PrintActiveSelectable();
+			SegmentationSelectables(GetActiveSelectables().ToArray<Selectable>());
 		}
+	}
+
+	private void SegmentationSelectables(Selectable[] activeSelectables)
+	{
+		string path = Path.Combine(Application.persistentDataPath, "segmentation.png");
+		GameObject[] objects = new GameObject[activeSelectables.Length];
+		for (int i = 0; i < activeSelectables.Length; i++)
+		{
+			objects[i] = activeSelectables[i].gameObject;
+			Log(objects[i].name);
+		}
+
+		StartCoroutine(segmentation.Capture(objects, (bytes) => {
+			File.WriteAllBytes(path, bytes);
+			}));
 	}
 
 	private void PrintActiveSelectable()
