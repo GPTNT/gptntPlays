@@ -11,6 +11,7 @@ using Assets.Scripts.Missions;
 using System.ComponentModel;
 using Assets.Scripts.Input;
 using System.IO;
+using System.Text;
 // using Org.BouncyCastle.Asn1.X509;
 
 public class ExampleWebService : MonoBehaviour
@@ -117,7 +118,6 @@ public class ExampleWebService : MonoBehaviour
 			bombRotationZ = 0;
 			bombRotationX = 0;
 			StartingFace = KTInputManager.Instance.SelectableManager.GetActiveFace() == FaceEnum.Front;
-			//KTInputManager.Instance.SelectableManager.getcurrent then print it 
 			onFrontFace = true;
 			onBackFace = false;
 			onLeftSide = false;
@@ -299,8 +299,52 @@ public class ExampleWebService : MonoBehaviour
 		#endregion
 		if (Input.GetKeyDown(KeyCode.T))
 		{
-			Log("Testing testing");
+			PrintActiveSelectable();
 		}
+	}
+
+	private void PrintActiveSelectable()
+	{
+		Log("Selectables: ");
+		foreach(Selectable selectable in GetActiveSelectables())
+		{
+			Log(selectable.name);
+		}
+	}
+
+	private List<Selectable> GetActiveSelectables()
+	{
+		List<Selectable> activeSelectables = new List<Selectable>();
+		SelectableManager selectableManager = KTInputManager.Instance.SelectableManager;
+		string parentName = selectableManager.GetCurrentParent().gameObject.name;
+		bomb = FindObjectOfType<TwitchBomb>();
+		if (parentName.Equals("FacilityRoom(Clone)")) // Level 1
+		{
+			activeSelectables.Add(bomb.Bomb.GetComponent<Selectable>());
+		}
+		else if (parentName.Equals("FrontFace") || parentName.Equals("RearFace")) // Level 2
+		{
+			foreach (BombComponent component in bomb.Bomb.BombComponents)
+			{
+				if (!component.ComponentType.EqualsAny(ComponentTypeEnum.Empty, ComponentTypeEnum.Timer))
+				{
+					activeSelectables.Add(component.GetComponent<Selectable>());
+				}
+			}
+		}
+		else // level 3 
+		{
+			// assume that it is a module and print its selectables
+			Selectable parent = selectableManager.GetCurrentParent();
+			Selectable[] children = parent.gameObject.GetComponentsInChildren<Selectable>();
+			Selectable[] childrenWithoutHead = new Selectable[children.Length - 1];
+			Array.Copy(children, 1, childrenWithoutHead, 0, children.Length - 1);
+			foreach (Selectable selectable in childrenWithoutHead)
+			{
+				activeSelectables.Add(selectable);
+			}
+		}
+		return activeSelectables;
 	}
 
 	private void Log(string message)
@@ -309,7 +353,6 @@ public class ExampleWebService : MonoBehaviour
 		StreamWriter writer = new StreamWriter(path, true);
 		writer.WriteLine(message);
 		writer.Close();
-		throw new Exception(Application.persistentDataPath);
 	}
 
 	void OnDestroy()
