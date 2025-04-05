@@ -10,6 +10,7 @@ using Assets.Scripts.Platform.PS4.IO;
 using Assets.Scripts.Missions;
 using System.ComponentModel;
 using Assets.Scripts.Input;
+using System.IO;
 // using Org.BouncyCastle.Asn1.X509;
 
 public class ExampleWebService : MonoBehaviour
@@ -105,6 +106,7 @@ public class ExampleWebService : MonoBehaviour
 	H: rotate down
  	J: rotate left
 	K: rotate right
+	T: Testing different things -Kareem
 	*/
 
 	void Update()
@@ -115,6 +117,7 @@ public class ExampleWebService : MonoBehaviour
 			bombRotationZ = 0;
 			bombRotationX = 0;
 			StartingFace = KTInputManager.Instance.SelectableManager.GetActiveFace() == FaceEnum.Front;
+			//KTInputManager.Instance.SelectableManager.getcurrent then print it 
 			onFrontFace = true;
 			onBackFace = false;
 			onLeftSide = false;
@@ -294,7 +297,19 @@ public class ExampleWebService : MonoBehaviour
 			Debug.Log(children);
 		}
 		#endregion
+		if (Input.GetKeyDown(KeyCode.T))
+		{
+			Log("Testing testing");
+		}
+	}
 
+	private void Log(string message)
+	{
+		string path = Path.Combine(Application.persistentDataPath, "gptntlogs.log");
+		StreamWriter writer = new StreamWriter(path, true);
+		writer.WriteLine(message);
+		writer.Close();
+		throw new Exception(Application.persistentDataPath);
 	}
 
 	void OnDestroy()
