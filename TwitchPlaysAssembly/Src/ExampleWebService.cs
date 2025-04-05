@@ -88,7 +88,24 @@ public class ExampleWebService : MonoBehaviour
 	bool inMiddle = true;
 
 
-
+	/*
+	Keys and what they do:
+	Space: Throws an exception with all the bomb components
+	P: ???
+	Left Click: prints mouse position
+	F: Rotate 180
+	Z: Bomb initial rotation
+	backslash: Enable inputs
+	X: Hold bomb
+	C: Let go Bomb
+	V: Finds a twitch module, assumes it is a wire and then cuts the first wire
+	M: interact with the first module it finds
+	B: ???
+	G: rotate up 
+	H: rotate down
+ 	J: rotate left
+	K: rotate right
+	*/
 
 	void Update()
 	{
@@ -118,6 +135,8 @@ public class ExampleWebService : MonoBehaviour
 			Action action = actions.Dequeue();
 			action();
 		}
+
+		 #region debug with clicking a key 
 
 		// A list of all bomb components in order, including empties and the timer
 		if (Input.GetKeyDown(KeyCode.Space))
@@ -269,9 +288,16 @@ public class ExampleWebService : MonoBehaviour
 			Rotation90("right");
 		}
 
+		if (Input.GetKeyDown(KeyCode.R))
+		{
+			string children = HandleBombChildren();
+			Debug.Log(children);
+		}
+		#endregion
+
 	}
 
-    void OnDestroy()
+	void OnDestroy()
     {
         workerThread.Abort();
         workerObject.Stop();
@@ -343,8 +369,8 @@ public class ExampleWebService : MonoBehaviour
 
     private string HandleBombChildren()
     {
-        KMBomb bomb = GameObject.FindObjectOfType<KMBomb>();
-        return GetHierarchyString(bomb.gameObject);
+		bomb = GameObject.FindObjectOfType<TwitchBomb>();
+		return GetHierarchyString(bomb.gameObject);
     }
 
     string GetHierarchyString(GameObject obj, int level = 0)
