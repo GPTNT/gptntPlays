@@ -753,7 +753,7 @@ public class ExampleWebService : MonoBehaviour
 
 	private string HandleRotation(HttpListenerRequest request)
 	{
-		string direction = request.QueryString.Get("direction");
+		string direction = request.QueryString.Get("action");
 		if (direction.Equals("flip"))
 		{
 			Rotation180();
