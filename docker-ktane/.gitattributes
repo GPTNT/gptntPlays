@@ -1,0 +1,2 @@
+*.sh text eol=lf
+unity3d/** text eol=lf

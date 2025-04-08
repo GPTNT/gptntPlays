@@ -1,0 +1,27 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<PlayerSettings xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <InvertTiltControls>false</InvertTiltControls>
+  <TouchpadInvert>false</TouchpadInvert>
+  <RumbleEnabled>true</RumbleEnabled>
+  <MusicVolume>100</MusicVolume>
+  <SFXVolume>100</SFXVolume>
+  <AntiAliasing>4</AntiAliasing>
+  <VRModeRequested>true</VRModeRequested>
+  <SecondScreenMode>InteractiveManual</SecondScreenMode>
+  <VSync>1</VSync>
+  <AccessibilitySettings>
+    <AccessibilityVeto>
+      <ComponentTypeEnum>Empty</ComponentTypeEnum>
+      <ComponentTypeEnum>Empty</ComponentTypeEnum>
+      <ComponentTypeEnum>Empty</ComponentTypeEnum>
+    </AccessibilityVeto>
+    <UnlockAllMissions>true</UnlockAllMissions>
+  </AccessibilitySettings>
+  <UseModsAlways>true</UseModsAlways>
+  <SkipTitleScreen>true</SkipTitleScreen>
+  <UseParallelModLoading>false</UseParallelModLoading>
+  <LockMouseToWindow>true</LockMouseToWindow>
+  <ShowLeaderBoards>true</ShowLeaderBoards>
+  <ShowScanline>true</ShowScanline>
+  <ShowRotationUI>true</ShowRotationUI>
+</PlayerSettings>
