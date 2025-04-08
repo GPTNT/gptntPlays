@@ -15,7 +15,7 @@
     <DocumentationFile>..\docs\documentation.xml</DocumentationFile>
   </PropertyGroup>
   <PropertyGroup>
-    <GameFolder Condition="'$(GameFolder)' == ''">C:\GPTNT\Keep Talking and Nobody Explodes\</GameFolder>
+    <GameFolder Condition="'$(GameFolder)' == ''">C:\Users\szymo\Desktop\KeepTalkingandNobodyExplodes\</GameFolder>
     <Copy>copy</Copy>
     <Copy Condition=" '$(OS)' != 'Windows_NT' ">cp</Copy>
   </PropertyGroup>
@@ -29,6 +29,10 @@
     </Reference>
     <Reference Include="Assembly-CSharp">
       <HintPath>$(GameFolder)\ktane_Data\Managed\Assembly-CSharp.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+      <Reference Include="ffmpeg_run">
+      <HintPath>..\Assets\ffmpeg_run.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="KMFramework">

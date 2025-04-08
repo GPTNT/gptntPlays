@@ -10,6 +10,7 @@ using Assets.Scripts.Platform.PS4.IO;
 using Assets.Scripts.Missions;
 using System.ComponentModel;
 using Assets.Scripts.Input;
+using System.Runtime.InteropServices;
 
 public class ExampleWebService : MonoBehaviour
 {
@@ -52,6 +53,43 @@ public class ExampleWebService : MonoBehaviour
 	//        Modules = Modules.GetRange(0, 1);
 	//    }
 	//}
+
+
+	// FFMPeg Streaming imports
+	private Texture2D output_texture;
+	private bool ffmpeg_running;
+
+	[DllImport("ffmpeg_run")]
+	public static extern void start_ffmpeg();
+
+	[DllImport("ffmpeg_run")]
+	public static extern void close_ffmpeg();
+
+	[DllImport("ffmpeg_run")]
+	public static extern void add_frame_ffmpeg(byte[] frame);
+
+	void Start()
+	{
+		// Framerate cap for streaming :)
+		QualitySettings.vSyncCount = 0;  // VSync must be disabled
+		Application.targetFrameRate = 70;
+
+		output_texture = new Texture2D(480, 360);
+		ffmpeg_running = false;
+		Camera.onPostRender += OnPostRenderCallback;
+	}
+
+	void OnPostRenderCallback(Camera cam)
+	{
+		// Only read from the the main game camera
+		// I.e. Dont put frames from the segmentation camera into the stream!
+		if (cam == Camera.main)
+		{
+			Rect read_target_area = new Rect(0, 0, 480, 360);
+			output_texture.ReadPixels(read_target_area, 0, 0, false);
+			add_frame_ffmpeg(output_texture.GetRawTextureData());
+		}
+	}
 
 	void Awake()
     {
@@ -116,6 +154,20 @@ public class ExampleWebService : MonoBehaviour
 		{
 			Action action = actions.Dequeue();
 			action();
+		}
+
+		// Start / Stop FFMpeg stream
+		if (Input.GetKeyDown(KeyCode.O) && !ffmpeg_running)
+		{
+			start_ffmpeg();
+			Debug.Log("FFMPEG STARTED");
+			throw new Exception("FFMPEG STARTED");
+		}
+		if (Input.GetKeyDown(KeyCode.P) && ffmpeg_running)
+		{
+			close_ffmpeg();
+			Debug.Log("FFMPEG CLOSED");
+			throw new Exception("FFMPEG CLOSED");
 		}
 
 		// A list of all bomb components in order, including empties and the timer
@@ -274,6 +326,12 @@ public class ExampleWebService : MonoBehaviour
     {
         workerThread.Abort();
         workerObject.Stop();
+
+		// Stop any running ffmpeg streams
+		if (ffmpeg_running)
+		{
+			close_ffmpeg();
+		}
     }
 
     // This example requires the System and System.Net namespaces.
