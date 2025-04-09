@@ -16,7 +16,7 @@
 
 ### Run:
 ```sh
-docker run -p 5900:5900 -p 8084:8084 -p 8085:8085 docker-ktane
+docker run --rm -p 1235:1235 docker-ktane
 ```
 
 
@@ -24,12 +24,12 @@ docker run -p 5900:5900 -p 8084:8084 -p 8085:8085 docker-ktane
 
 ### Normal mod request:
 ```
-localhost:8084/<command>?<var1>=1&<var2>=2
+localhost:1235/<command>?<var1>=1&<var2>=2
 ```
 
 ### Click on coordinates
 ```
-localhost:8084/click?x=500&y=500
+localhost:1235/click?x=500&y=500
 ```
 
 
