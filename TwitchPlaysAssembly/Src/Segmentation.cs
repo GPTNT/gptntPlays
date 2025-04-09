@@ -12,7 +12,6 @@ using UnityEngine;
 *				System.IO.File.WriteAllBytes("Assets/segmentation.png", bytes);
 *			}));
 */
-
 public class Segmentation : MonoBehaviour
 {
 
@@ -25,17 +24,23 @@ public class Segmentation : MonoBehaviour
 	private int segmentationLayer = 31;
 	private int defaultLayer = 11;
 	// each element in renderers has an array of renderers for the children of an object
-	private List<Renderer[]> renderers;
+	private List<Renderer[]> renderersWithChildren;
+	private List<GameObject> objectsOnSegmentationLayer;
+	private TwitchBomb bomb;
 
 	private void Start()
 	{
 		renderTexture = new RenderTexture(Screen.width, Screen.height, 24);
-		//shader = Shader.Find("Hidden/SegmentationShader");
+		if (!shader) GptntDebug.Log("Shader is null");
 	}
 
-	public IEnumerator Capture(GameObject[] objects, Action<byte[]> callback)
+	public IEnumerator Capture(GameObject[] objects, TwitchBomb bomb, Action<byte[]> callback)
 	{
+		// TODO: Make sure the bomb is also put on the layer. 
+		if (objects.Length == 0) yield return null;
 		propertyBlock = new MaterialPropertyBlock();
+		objectsOnSegmentationLayer = new List<GameObject>();
+		this.bomb = bomb;
 		Segment(objects);
 		yield return new WaitForEndOfFrame();
 		byte[] bytes = RenderTextureToPNGBytes(renderTexture);
@@ -46,15 +51,16 @@ public class Segmentation : MonoBehaviour
 	public void Segment(GameObject[] objects)
 	{
 		DuplicateCamera();
-		ChangeObjectsLayer(objects, segmentationLayer);
-		renderers = GetRenderers(objects);
+		objects = tryGetVennWires(objects);
+		SetObjectsToSegmentationLayer(objects);
+		renderersWithChildren = GetRenderers(objects);
 
 		float hue = 0f;
 		// Sets a unique color for each object
-		foreach (Renderer[] ls in renderers)
+		foreach (Renderer[] ls in renderersWithChildren)
 		{
 			propertyBlock.SetColor("_ObjectColor", Color.HSVToRGB(hue, 1, 1));
-			hue += 1f / renderers.Count;
+			hue += 1f / renderersWithChildren.Count;
 			foreach (Renderer renderer in ls)
 			{
 				renderer.SetPropertyBlock(propertyBlock);
@@ -64,26 +70,32 @@ public class Segmentation : MonoBehaviour
 
 	private void ResetObjects()
 	{
-		foreach (Renderer[] list in renderers)
+		foreach (Renderer[] list in renderersWithChildren)
 		{
 			foreach (Renderer r in list)
 			{
 				r.SetPropertyBlock(null);
-				SetLayerRecursively(r.gameObject, defaultLayer);
+			}
+			foreach (var obj in objectsOnSegmentationLayer)
+			{
+				obj.layer = defaultLayer;
 			}
 		}
 	}
 
-	private void ChangeObjectsLayer(GameObject[] objects, int layer)
+	private void SetObjectsToSegmentationLayer(GameObject[] objects)
 	{
 		foreach (var obj in objects)
 		{
-			SetLayerRecursively(obj, layer);
+			GptntDebug.Log("Putting this on segmentation layer: " + obj.name);
+			SetLayerRecursively(obj, segmentationLayer);
 		}
+		bomb.gameObject.layer = segmentationLayer;
 	}
 	private void SetLayerRecursively(GameObject obj, int layer)
 	{
 		obj.layer = layer;
+		if(layer == segmentationLayer) objectsOnSegmentationLayer.Add(obj);
 
 		foreach (Transform child in obj.transform)
 		{
@@ -101,6 +113,25 @@ public class Segmentation : MonoBehaviour
 			renderers.Add(child);
 		}
 		return renderers;
+	}
+
+	// Check if VennWires since the venn wires module selectables dont have a renderer under them
+	private GameObject[] tryGetVennWires(GameObject[] objects)
+	{
+		// Checks if the objects are the wires themselves and the not the whole module
+		if (!objects[0].name.StartsWith("VennWire") || objects[0].name.StartsWith("VennWiresComponent")) return objects;
+
+		List<GameObject> vennObjects = new List<GameObject>();
+		Transform venn = KTInputManager.Instance.SelectableManager.GetCurrentParent().transform;
+		int childCount = venn.childCount;
+		venn = venn.GetChild(childCount - 2);
+		childCount = venn.childCount;
+		for (int i = childCount - 1; i > childCount - 7; i--)
+		{
+			Transform child = venn.GetChild(i);
+			vennObjects.Add(child.gameObject);
+		}
+		return vennObjects.ToArray();
 	}
 
 	// Convert a RenderTexture to a Texture2D

@@ -25,6 +25,7 @@ public class ExampleWebService : MonoBehaviour
     GameObject spawn;
     KMMission mission;
 	Segmentation segmentation;
+	GptntActions gptntActions;
 
     Thread workerThread;
     Worker workerObject;
@@ -73,6 +74,7 @@ public class ExampleWebService : MonoBehaviour
         // Start the worker thread.
         workerThread.Start(this);
 		segmentation = GetComponent<Segmentation>();
+		gptntActions = GetComponent<GptntActions>();
     }
 
 	TwitchBomb bomb;
@@ -301,31 +303,55 @@ public class ExampleWebService : MonoBehaviour
 		#endregion
 		if (Input.GetKeyDown(KeyCode.T))
 		{
-			SegmentationSelectables(GetActiveSelectables().ToArray<Selectable>());
+			//SegmentSelectables(GetActiveSelectables().ToArray<Selectable>());
+			//PrintActiveSelectables();
+			Vector2 mouseInput = new Vector2(
+				Input.mousePosition.x / Screen.width,
+				Input.mousePosition.y / Screen.height
+				);
+			TestZoomIn();
+			//gptntActions.SendAction(mouseInput.x, mouseInput.y);
+
 		}
 	}
 
-	private void SegmentationSelectables(Selectable[] activeSelectables)
+	private void TestZoomIn()
+	{
+		Selectable selectable = GetActiveSelectables()[2];
+		GptntDebug.Log("Parent Selectable: " + selectable.Parent.name);
+		GptntDebug.Log("Current Selectable: " + selectable.name);
+		KTInputManager.Instance.SelectableManager.Select(selectable, false);
+		GptntDebug.Log("IS IT TRUE? " + selectable.FocusOnInteraction.ToString());
+		GptntDebug.Log("Plz be true? " + (selectable.FocusOnInteraction && KTInputManager.Instance.SelectableManager.GetCurrentFloatingHoldable() != null).ToString());
+		selectable.HandleSelect(false);
+		selectable.HandleInteract();
+		selectable.OnFocus();
+		GptntDebug.Log("Current: " + KTInputManager.Instance.SelectableManager.GetCurrentSelectable());
+	}
+
+	private void SegmentSelectables(Selectable[] activeSelectables)
 	{
 		string path = Path.Combine(Application.persistentDataPath, "segmentation.png");
 		GameObject[] objects = new GameObject[activeSelectables.Length];
 		for (int i = 0; i < activeSelectables.Length; i++)
 		{
 			objects[i] = activeSelectables[i].gameObject;
-			Log(objects[i].name);
 		}
 
-		StartCoroutine(segmentation.Capture(objects, (bytes) => {
+		StartCoroutine(segmentation.Capture(objects, bomb, (bytes) => {
 			File.WriteAllBytes(path, bytes);
 			}));
+		//VennSnippableWire wire = new VennSnippableWire();
 	}
 
-	private void PrintActiveSelectable()
+	private void PrintActiveSelectables()
 	{
-		Log("Selectables: ");
+		GptntDebug.Log("Selectables: ");
 		foreach(Selectable selectable in GetActiveSelectables())
 		{
-			Log(selectable.name);
+			string selectableName = selectable.name;
+			GptntDebug.Log(selectableName);
+
 		}
 	}
 
@@ -337,9 +363,9 @@ public class ExampleWebService : MonoBehaviour
 		bomb = FindObjectOfType<TwitchBomb>();
 		if (parentName.Equals("FacilityRoom(Clone)")) // Level 1
 		{
-			activeSelectables.Add(bomb.Bomb.GetComponent<Selectable>());
+			//activeSelectables.Add(bomb.Bomb.GetComponent<Selectable>());
 		}
-		else if (parentName.Equals("FrontFace") || parentName.Equals("RearFace")) // Level 2
+		else if (parentName.Equals("FrontFace") || parentName.Equals("RearFace")) // Level 2 
 		{
 			foreach (BombComponent component in bomb.Bomb.BombComponents)
 			{
@@ -351,7 +377,7 @@ public class ExampleWebService : MonoBehaviour
 		}
 		else // level 3 
 		{
-			// assume that it is a module and print its selectables
+			// assume that it is a module and get its selectables
 			Selectable parent = selectableManager.GetCurrentParent();
 			Selectable[] children = parent.gameObject.GetComponentsInChildren<Selectable>();
 			Selectable[] childrenWithoutHead = new Selectable[children.Length - 1];
@@ -364,13 +390,6 @@ public class ExampleWebService : MonoBehaviour
 		return activeSelectables;
 	}
 
-	private void Log(string message)
-	{
-		string path = Path.Combine(Application.persistentDataPath, "gptntlogs.log");
-		StreamWriter writer = new StreamWriter(path, true);
-		writer.WriteLine(message);
-		writer.Close();
-	}
 
 	void OnDestroy()
     {

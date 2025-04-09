@@ -2,7 +2,7 @@
 
 
 
-Shader "Hidden/SegmentationShader" {
+Shader "Gptnt/SegmentationShader" {
 
 	Properties {
 		_MainTex ("", 2D) = "white" {}
