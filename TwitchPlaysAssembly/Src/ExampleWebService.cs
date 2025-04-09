@@ -11,6 +11,7 @@ using Assets.Scripts.Missions;
 using System.ComponentModel;
 using Assets.Scripts.Input;
 using System.IO;
+using System.Text;
 // using Org.BouncyCastle.Asn1.X509;
 
 public class ExampleWebService : MonoBehaviour
@@ -23,6 +24,8 @@ public class ExampleWebService : MonoBehaviour
     string bombState;
     GameObject spawn;
     KMMission mission;
+	Segmentation segmentation;
+	GptntActions gptntActions;
 
     Thread workerThread;
     Worker workerObject;
@@ -91,15 +94,48 @@ public class ExampleWebService : MonoBehaviour
         workerThread = new Thread(workerObject.DoWork);
         // Start the worker thread.
         workerThread.Start(this);
-	}
+		segmentation = GetComponent<Segmentation>();
+		gptntActions = GetComponent<GptntActions>();
+    }
+
+	TwitchBomb bomb;
+	bool StartingFace;
+	bool onFrontFace = true;
+	bool onBackFace = false;
+	bool onLeftSide = false;
+	bool onRightSide = false;
+	bool onTopFromFront = false;
+	bool onTopFromBack = false;
+	bool onTopFromLeftSide = false;
+	bool onTopFromRightSide = false;
+	bool onBottomFromBack = false;
+	bool onBottomFromFront = false;
+	bool onBottomFromLeftSide = false;
+	bool onBottomFromRightSide = false;
+	bool inMiddle = true;
 
 
-	void Start()
-	{
-		string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-		destinationLogPath = $@".\{timestamp}mirrored_log.txt";
-	InvokeRepeating(nameof(CopyLogContents), 1f, 0.25f);
-	}
+	/*
+	Keys and what they do:
+	Space: Throws an exception with all the bomb components
+	P: ???
+	Left Click: prints mouse position
+	F: Rotate 180
+	Z: Bomb initial rotation
+	backslash: Enable inputs
+	X: Hold bomb
+	C: Let go Bomb
+	V: Finds a twitch module, assumes it is a wire and then cuts the first wire
+	M: interact with the first module it finds
+	B: ???
+	G: rotate up 
+	H: rotate down
+ 	J: rotate left
+	K: rotate right
+	T: Take a screeenshot
+  U: Testing -Kareem
+	Y: Testing -Kareem 
+	*/
 
 	void Update()
 	{
@@ -129,6 +165,8 @@ public class ExampleWebService : MonoBehaviour
 			Action action = actions.Dequeue();
 			action();
 		}
+
+		 #region debug with clicking a key 
 
 		// A list of all bomb components in order, including empties and the timer
 		if (Input.GetKeyDown(KeyCode.Space))
@@ -280,16 +318,108 @@ public class ExampleWebService : MonoBehaviour
 			Rotation90("right");
 		}
 
-		if (Input.GetKeyDown(KeyCode.T))
+		if (Input.GetKeyDown(KeyCode.R))
+		{
+			string children = HandleBombChildren();
+			Debug.Log(children);
+		}
+		#endregion
+		if (Input.GetKeyDown(KeyCode.U))
+		{
+			Vector2 mouseInput = new Vector2(
+				Input.mousePosition.x / Screen.width,
+				Input.mousePosition.y / Screen.height
+				);
+			gptntActions.SendAction(mouseInput.x, mouseInput.y);
+		}
+		if (Input.GetKeyDown(KeyCode.Y))
+		{
+			TestSelectCurrent();
+		}
+    if (Input.GetKeyDown(KeyCode.T))
 		{
 			StartCoroutine(GetScreenshotViaScreenCapture((bytes) => {
 				System.IO.File.WriteAllBytes("screenshot.png", bytes);
 			}));
 		}
-
+	}
+	private void TestSelectCurrent()
+	{
+		Selectable selectable = GetActiveSelectables()[0];
+		FloatingHoldable floating = KTInputManager.Instance.SelectableManager.GetCurrentFloatingHoldable();
+		GptntDebug.Log("Selectable: " + selectable.name + "\nFloating: " + floating.name);
+		floating.Focus(selectable.transform, selectable.FocusDistance, true, false, 1f);
+		floating.OnFocusChild(selectable.gameObject);
+		KTInputManager.Instance.SelectableManager.UnlockSelection();
+		KTInputManager.Instance.EnableInteraction();
+		KTInputManager.Instance.SelectableManager.HandleInteract();
+		selectable.HandleInteract();
+		KTInputManager.Instance.SelectableManager.Select(selectable.Children[0], false);
+		KTInputManager.Instance.Select(selectable.Children[0]);
 	}
 
-    void OnDestroy()
+	private void SegmentSelectables(Selectable[] activeSelectables)
+	{
+		string path = Path.Combine(Application.persistentDataPath, "segmentation.png");
+		GameObject[] objects = new GameObject[activeSelectables.Length];
+		for (int i = 0; i < activeSelectables.Length; i++)
+		{
+			objects[i] = activeSelectables[i].gameObject;
+		}
+
+		StartCoroutine(segmentation.Capture(objects, bomb, (bytes) => {
+			File.WriteAllBytes(path, bytes);
+			}));
+	}
+
+	private void PrintActiveSelectables()
+	{
+		GptntDebug.Log("Selectables: ");
+		foreach(Selectable selectable in GetActiveSelectables())
+		{
+			string selectableName = selectable.name;
+			GptntDebug.Log(selectableName);
+
+		}
+	}
+
+	private List<Selectable> GetActiveSelectables()
+	{
+		List<Selectable> activeSelectables = new List<Selectable>();
+		SelectableManager selectableManager = KTInputManager.Instance.SelectableManager;
+		string parentName = selectableManager.GetCurrentParent().gameObject.name;
+		bomb = FindObjectOfType<TwitchBomb>();
+		if (parentName.Equals("FacilityRoom(Clone)")) // Level 1
+		{
+			//activeSelectables.Add(bomb.Bomb.GetComponent<Selectable>());
+		}
+		else if (parentName.Equals("FrontFace") || parentName.Equals("RearFace")) // Level 2 
+		{
+			foreach (BombComponent component in bomb.Bomb.BombComponents)
+			{
+				if (!component.ComponentType.EqualsAny(ComponentTypeEnum.Empty, ComponentTypeEnum.Timer))
+				{
+					activeSelectables.Add(component.GetComponent<Selectable>());
+				}
+			}
+		}
+		else // level 3 
+		{
+			// assume that it is a module and get its selectables
+			Selectable parent = selectableManager.GetCurrentParent();
+			Selectable[] children = parent.gameObject.GetComponentsInChildren<Selectable>();
+			Selectable[] childrenWithoutHead = new Selectable[children.Length - 1];
+			Array.Copy(children, 1, childrenWithoutHead, 0, children.Length - 1);
+			foreach (Selectable selectable in childrenWithoutHead)
+			{
+				activeSelectables.Add(selectable);
+			}
+		}
+		return activeSelectables;
+	}
+
+
+	void OnDestroy()
     {
         workerThread.Abort();
         workerObject.Stop();
@@ -361,8 +491,8 @@ public class ExampleWebService : MonoBehaviour
 
     private string HandleBombChildren()
     {
-        KMBomb bomb = GameObject.FindObjectOfType<KMBomb>();
-        return GetHierarchyString(bomb.gameObject);
+		bomb = GameObject.FindObjectOfType<TwitchBomb>();
+		return GetHierarchyString(bomb.gameObject);
     }
 
     string GetHierarchyString(GameObject obj, int level = 0)

@@ -36,7 +36,7 @@ TagManager:
   - CameraWallCamera16
   - CameraWallCamera17
   - CameraWallCamera18
-  - 
+  - Segmentation
   m_SortingLayers:
   - name: Default
     uniqueID: 0
