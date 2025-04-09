@@ -15,7 +15,7 @@ using System.IO;
 
 public class ExampleWebService : MonoBehaviour
 {
-    KMBombInfo bombInfo;
+	KMBombInfo bombInfo;
     KMGameCommands gameCommands;
     string modules;
     string solvableModules;
@@ -1027,8 +1027,12 @@ public class ExampleWebService : MonoBehaviour
 	}
 
 	public class Worker
-    {
-        ExampleWebService service;
+	{
+		
+
+
+ 
+		ExampleWebService service;
         HttpListener listener;
 
         public Worker(ExampleWebService s)
@@ -1039,10 +1043,15 @@ public class ExampleWebService : MonoBehaviour
         // This method will be called when the thread is started. 
         public void DoWork()
         {
-            // Create a listener.
-            listener = new HttpListener();
+			string port = Environment.GetEnvironmentVariable("port");
+			if (port == "" || port is null)
+			{
+				port = "8085";
+			}
+				// Create a listener.
+				listener = new HttpListener();
             // Add the prefixes.
-            foreach (string s in new string[] { "http://localhost:8085/" })
+            foreach (string s in new string[] { $"http://localhost:{port}/" })
             {
                 listener.Prefixes.Add(s);
             }
