@@ -282,7 +282,7 @@ public class ExampleWebService : MonoBehaviour
 
 		if (Input.GetKeyDown(KeyCode.T))
 		{
-			StartCoroutine(GetScreenshot((bytes) => {
+			StartCoroutine(GetScreenshotViaScreenCapture((bytes) => {
 				System.IO.File.WriteAllBytes("screenshot.png", bytes);
 			}));
 		}
@@ -801,7 +801,7 @@ public class ExampleWebService : MonoBehaviour
     private string HandleScreenshot(HttpListenerResponse response)
     {
         byte[] imageBytes = null;
-        StartCoroutine(GetScreenshot((img) => imageBytes = img));
+        StartCoroutine(GetScreenshotViaScreenCapture((img) => imageBytes = img));
         var stopwatch = new System.Diagnostics.Stopwatch();
         stopwatch.Start();
 
@@ -992,7 +992,15 @@ public class ExampleWebService : MonoBehaviour
         return listString;
     }
 
-    protected IEnumerator GetScreenshot(System.Action<byte[]> callback)
+	protected IEnumerator GetScreenshotViaScreenCapture(System.Action<byte[]> callback)
+	{
+		yield return new WaitForSecondsRealtime(1); // to test the time out 
+		yield return new WaitForEndOfFrame();
+		byte[] img = ScreenCapture.CaptureScreenshotAsTexture().EncodeToPNG();
+		callback(img);
+	}
+	
+	protected IEnumerator GetScreenshotViaRenderTexture(System.Action<byte[]> callback)
     {
 		RenderTexture renderTexture = new RenderTexture(Screen.width, Screen.height, 24);
 		RenderTexture oldTexture = Camera.main.targetTexture;
