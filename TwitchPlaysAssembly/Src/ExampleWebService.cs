@@ -269,6 +269,13 @@ public class ExampleWebService : MonoBehaviour
 			Rotation90("right");
 		}
 
+		if (Input.GetKeyDown(KeyCode.T))
+		{
+			StartCoroutine(GetScreenshot((bytes) => {
+				System.IO.File.WriteAllBytes("screenshot.png", bytes);
+			}));
+		}
+
 	}
 
     void OnDestroy()
@@ -975,15 +982,34 @@ public class ExampleWebService : MonoBehaviour
     }
 
     protected IEnumerator GetScreenshot(System.Action<byte[]> callback)
-    {   
-        //yield return new WaitForSecondsRealtime(1); // to test the time out 
-        yield return new WaitForEndOfFrame();
-		//byte[] img = ScreenCapture.CaptureScreenshotAsTexture().EncodeToPNG();
-		//callback(img);
+    {
+		RenderTexture renderTexture = new RenderTexture(Screen.width, Screen.height, 24);
+		RenderTexture oldTexture = Camera.main.targetTexture;
+		Camera.main.targetTexture = renderTexture;
+		yield return new WaitForEndOfFrame();
+		byte[] img = RenderTextureToPNGBytes(renderTexture); 
+		callback(img);
+		//GptntDebug.Log( "Remove line 988 if null: " + oldTexture); TODO: Test this out
+		//Camera.main.targetTexture = null;
+		Camera.main.targetTexture = oldTexture;
+	}
+	private Texture2D ConvertRenderTextureToTexture2D(RenderTexture rt)
+	{
+		Texture2D tex = new Texture2D(rt.width, rt.height, TextureFormat.RGB24, false);
+		RenderTexture.active = rt;
+		tex.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0);
+		tex.Apply();
+		RenderTexture.active = null;
+		return tex;
 	}
 
+	private byte[] RenderTextureToPNGBytes(RenderTexture rt)
+	{
+		byte[] bytes = ConvertRenderTextureToTexture2D(rt).EncodeToPNG();
+		return bytes;
+	}
 
-    public class Worker
+	public class Worker
     {
         ExampleWebService service;
         HttpListener listener;
