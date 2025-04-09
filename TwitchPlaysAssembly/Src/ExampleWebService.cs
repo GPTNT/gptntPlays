@@ -112,6 +112,7 @@ public class ExampleWebService : MonoBehaviour
  	J: rotate left
 	K: rotate right
 	T: Testing different things -Kareem
+	Y: Testing -Kareem 
 	*/
 
 	void Update()
@@ -303,30 +304,51 @@ public class ExampleWebService : MonoBehaviour
 		#endregion
 		if (Input.GetKeyDown(KeyCode.T))
 		{
-			//SegmentSelectables(GetActiveSelectables().ToArray<Selectable>());
-			//PrintActiveSelectables();
 			Vector2 mouseInput = new Vector2(
 				Input.mousePosition.x / Screen.width,
 				Input.mousePosition.y / Screen.height
 				);
-			TestZoomIn();
-			//gptntActions.SendAction(mouseInput.x, mouseInput.y);
-
+			gptntActions.SendAction(mouseInput.x, mouseInput.y);
+		}
+		if (Input.GetKeyDown(KeyCode.Y))
+		{
+			TestSelectCurrent();
 		}
 	}
-
-	private void TestZoomIn()
+	private void TestSelectCurrent()
 	{
-		Selectable selectable = GetActiveSelectables()[2];
-		GptntDebug.Log("Parent Selectable: " + selectable.Parent.name);
-		GptntDebug.Log("Current Selectable: " + selectable.name);
-		KTInputManager.Instance.SelectableManager.Select(selectable, false);
-		GptntDebug.Log("IS IT TRUE? " + selectable.FocusOnInteraction.ToString());
-		GptntDebug.Log("Plz be true? " + (selectable.FocusOnInteraction && KTInputManager.Instance.SelectableManager.GetCurrentFloatingHoldable() != null).ToString());
-		selectable.HandleSelect(false);
+		Selectable selectable = GetActiveSelectables()[0];
+		FloatingHoldable floating = KTInputManager.Instance.SelectableManager.GetCurrentFloatingHoldable();
+		GptntDebug.Log("Selectable: " + selectable.name + "\nFloating: " + floating.name);
+		floating.Focus(selectable.transform, selectable.FocusDistance, true, false, 1f);
+		floating.OnFocusChild(selectable.gameObject);
+		KTInputManager.Instance.SelectableManager.UnlockSelection();
+		KTInputManager.Instance.EnableInteraction();
+		KTInputManager.Instance.SelectableManager.HandleInteract();
 		selectable.HandleInteract();
-		selectable.OnFocus();
-		GptntDebug.Log("Current: " + KTInputManager.Instance.SelectableManager.GetCurrentSelectable());
+		KTInputManager.Instance.SelectableManager.Select(selectable.Children[0], false);
+		KTInputManager.Instance.Select(selectable.Children[0]);
+	}
+
+	private void TestSelectChild()
+	{
+		//Selectable selectable = GetActiveSelectables()[2];
+		//GptntDebug.Log("Parent Selectable: " + selectable.Parent.name);
+		//GptntDebug.Log("Current Selectable: " + selectable.name);
+		//KTInputManager.Instance.SelectableManager.Select(selectable, false);
+		//GptntDebug.Log("IS IT TRUE? " + selectable.FocusOnInteraction.ToString());
+		//GptntDebug.Log("Plz be true? " + (selectable.FocusOnInteraction && KTInputManager.Instance.SelectableManager.GetCurrentFloatingHoldable() != null).ToString());
+		//selectable.HandleSelect(false);
+		//selectable.HandleInteract();
+		//selectable.OnFocus();
+		//GptntDebug.Log("Current: " + KTInputManager.Instance.SelectableManager.GetCurrentSelectable());
+
+		Selectable selectable = GetActiveSelectables()[1];
+		Selectable parent = selectable.Parent;
+		GptntDebug.Log("Selectable: " + selectable.name + "\nParent: " + parent.name);
+
+		selectable.HandleInteract();
+		GptntDebug.Log("Done Handle Select on child");
 	}
 
 	private void SegmentSelectables(Selectable[] activeSelectables)
