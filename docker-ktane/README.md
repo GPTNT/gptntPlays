@@ -16,7 +16,7 @@
 
 ### Run:
 ```sh
-docker run -p 1235:1235 docker-ktane
+docker run --rm -p 1235:1235 docker-ktane
 ```
 
 
