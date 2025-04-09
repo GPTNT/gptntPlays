@@ -15,6 +15,7 @@ GameObject:
   - component: {fileID: 114641751890309950}
   - component: {fileID: 114679433292821144}
   - component: {fileID: 114644498815997642}
+  - component: {fileID: 114569536059629964}
   m_Layer: 0
   m_Name: ExampleWebService
   m_TagString: Untagged
@@ -92,6 +93,18 @@ Prefab:
   m_ParentPrefab: {fileID: 0}
   m_RootGameObject: {fileID: 161788}
   m_IsPrefabParent: 1
+--- !u!114 &114569536059629964
+MonoBehaviour:
+  m_ObjectHideFlags: 1
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 161788}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8d80adc0701bd425c86cf04ca2d9ca84, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  shader: {fileID: 4800000, guid: da01d6839a720493093d1917dc450dc1, type: 3}
 --- !u!114 &114641751890309950
 MonoBehaviour:
   m_ObjectHideFlags: 1

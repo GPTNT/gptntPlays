@@ -25,26 +25,42 @@ public class GptntActions : MonoBehaviour
 		if (Physics.Raycast(ray, out RaycastHit hit, Mathf.Infinity, layerMask))
 		{
 			GptntDebug.Log("First hit: " + hit.collider.gameObject.name);
-			//PrintChildrenRecursive(hit.collider.transform.parent.gameObject);
 			Selectable selectable = hit.collider.transform.parent.gameObject.GetComponent<Selectable>();
+			if (!selectable)
+			{
+				selectable = hit.collider.gameObject.GetComponent<SelectableArea>().Selectable;
+			}
+
+			if (!selectable)
+			{
+				GptntDebug.Log("Selectable not found!");
+				PrintChildrenRecursive(hit.collider.transform.parent.gameObject);
+			}
 
 			if (selectable.FocusOnInteraction)
 			{
 				GptntDebug.Log("The selectable can be focused: " + selectable.name);
 				FloatingHoldable floating = KTInputManager.Instance.SelectableManager.GetCurrentFloatingHoldable();
-				floating.Focus(selectable.transform, selectable.FocusDistance, true, false, 0f);
-				floating.OnFocusChild(selectable.gameObject);
+
 				KTInputManager.Instance.SelectableManager.UnlockSelection();
 				KTInputManager.Instance.EnableInteraction();
-				GptntDebug.Log("Selected the Child: " + selectable.Children[0]);
-				KTInputManager.Instance.SelectableManager.Select(selectable.Children[0], false);
-				KTInputManager.Instance.Select(selectable.Children[0]);
+
+				GptntDebug.Log("Selected in Selectable Manager: " + selectable.Children[0]);
+
+				KTInputManager.Instance.SelectableManager.Select(selectable, false);
+				KTInputManager.Instance.SelectableManager.HandleFaceSelection();
+
+				floating.Focus(selectable.transform, selectable.FocusDistance, true, false, 0f);
+				floating.OnFocusChild(selectable.gameObject);
+
 				selectable.HandleInteract();
 				KTInputManager.Instance.SelectableManager.HandleInteract();
 			}
 			else
 			{
-				GptntDebug.Log("Not focusable: " + selectable.name);
+				GptntDebug.Log("Not focusable: " + selectable.name + "\nInteracting: " + selectable.name);
+				selectable.HandleInteract();
+				//if (selectable.HasInteractEnded) selectable.OnInteractEnded();
 			}
 			//GameObject module = hit.collider.transform.parent.gameObject;
 			//if (module.GetComponent<BombComponent>())

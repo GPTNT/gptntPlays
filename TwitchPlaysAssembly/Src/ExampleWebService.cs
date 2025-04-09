@@ -5,14 +5,9 @@ using System.Threading;
 using System;
 using System.Linq;
 using System.Collections;
-using System.Net.Configuration;
-using Assets.Scripts.Platform.PS4.IO;
 using Assets.Scripts.Missions;
-using System.ComponentModel;
 using Assets.Scripts.Input;
 using System.IO;
-using System.Text;
-// using Org.BouncyCastle.Asn1.X509;
 
 public class ExampleWebService : MonoBehaviour
 {
@@ -112,7 +107,8 @@ public class ExampleWebService : MonoBehaviour
  	J: rotate left
 	K: rotate right
 	T: Testing different things -Kareem
-	Y: Testing -Kareem 
+	Y: Testing -Kareem
+	O: Save Observations
 	*/
 
 	void Update()
@@ -313,6 +309,15 @@ public class ExampleWebService : MonoBehaviour
 		if (Input.GetKeyDown(KeyCode.Y))
 		{
 			TestSelectCurrent();
+		}
+
+		if (Input.GetKeyDown(KeyCode.O))
+		{
+			string path = Path.Combine(Application.persistentDataPath, "screenshot.png");
+			StartCoroutine(GetScreenshotViaRenderTexture((bytes) => {
+				File.WriteAllBytes(path, bytes);
+			}));
+			SegmentSelectables(GetActiveSelectables().ToArray());
 		}
 	}
 	private void TestSelectCurrent()
@@ -1117,15 +1122,39 @@ public class ExampleWebService : MonoBehaviour
     }
 
     protected IEnumerator GetScreenshot(System.Action<byte[]> callback)
-    {   
-        //yield return new WaitForSecondsRealtime(1); // to test the time out 
-        yield return new WaitForEndOfFrame();
-		//byte[] img = ScreenCapture.CaptureScreenshotAsTexture().EncodeToPNG();
-		//callback(img);
+    {
+		return GetScreenshotViaRenderTexture(callback);
+	}
+	protected IEnumerator GetScreenshotViaRenderTexture(System.Action<byte[]> callback)
+	{
+		RenderTexture renderTexture = new RenderTexture(Screen.width, Screen.height, 24);
+		RenderTexture oldTexture = Camera.main.targetTexture;
+		Camera.main.targetTexture = renderTexture;
+		yield return new WaitForEndOfFrame();
+		byte[] img = RenderTextureToPNGBytes(renderTexture);
+		callback(img);
+		//GptntConsole.WriteLine( "Remove line 988 if null: " + oldTexture); TODO: Test this out
+		//Camera.main.targetTexture = null;
+		Camera.main.targetTexture = oldTexture;
+	}
+	private Texture2D ConvertRenderTextureToTexture2D(RenderTexture rt)
+	{
+		Texture2D tex = new Texture2D(rt.width, rt.height, TextureFormat.RGB24, false);
+		RenderTexture.active = rt;
+		tex.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0);
+		tex.Apply();
+		RenderTexture.active = null;
+		return tex;
+	}
+
+	private byte[] RenderTextureToPNGBytes(RenderTexture rt)
+	{
+		byte[] bytes = ConvertRenderTextureToTexture2D(rt).EncodeToPNG();
+		return bytes;
 	}
 
 
-    public class Worker
+	public class Worker
     {
         ExampleWebService service;
         HttpListener listener;
