@@ -1,0 +1,48 @@
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# install packages
+RUN apt-get update && apt-get install -y \
+    xvfb \
+    xdotool \
+    python3 \
+    python3-pip \
+    libglu1-mesa \
+    libxcursor1 \
+    libnss3 \
+    libxrandr2 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxss1 \
+    libxext6 \
+    libxfixes3 \
+    libxrender1 \
+    libsm6 \
+    libice6 \
+    libx11-6 \
+    && rm -rf /var/lib/apt/lists/*
+
+# python
+RUN pip3 install flask requests flask-cors
+
+# vnc, request handler, ktane mod
+EXPOSE 5900 8084 8085
+
+# add XML settings files in correct location
+COPY ./unity3d /root/.config/unity3d
+
+# copy this directory to /app/ in container
+RUN mkdir /app
+WORKDIR /app
+COPY . /app
+
+# remove the unity3d files from /app/, since we already copied them to ~/.config
+RUN rm -rf /app/unity3d
+
+# run that shi
+RUN chmod +x /app/start.sh
+RUN chmod +x /app/ktane/ktane.x86_64
+
+# start Xxfb, xfce4, and x11vnc
+CMD ["/app/start.sh"]

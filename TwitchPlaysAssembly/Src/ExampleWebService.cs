@@ -35,6 +35,27 @@ public class ExampleWebService : MonoBehaviour
 	float bombRotationX = 0f;
 	float bombRotationZ = 0f;
 	public bool bombStarted = false;
+
+
+	TwitchBomb bomb;
+	bool StartingFace;
+	bool onFrontFace = true;
+	bool onBackFace = false;
+	bool onLeftSide = false;
+	bool onRightSide = false;
+	bool onTopFromFront = false;
+	bool onTopFromBack = false;
+	bool onTopFromLeftSide = false;
+	bool onTopFromRightSide = false;
+	bool onBottomFromBack = false;
+	bool onBottomFromFront = false;
+	bool onBottomFromLeftSide = false;
+	bool onBottomFromRightSide = false;
+	bool inMiddle = true;
+	private string destinationLogPath;
+    public string sourceLogPath = @".\logs\ktane.log";
+	private string lastRead = "";
+
 	// in-game milliseconds
 
 	//public int TimeLimitSecs = 300;
@@ -111,7 +132,8 @@ public class ExampleWebService : MonoBehaviour
 	H: rotate down
  	J: rotate left
 	K: rotate right
-	T: Testing different things -Kareem
+	T: Take a screeenshot
+  U: Testing -Kareem
 	Y: Testing -Kareem 
 	*/
 
@@ -302,7 +324,7 @@ public class ExampleWebService : MonoBehaviour
 			Debug.Log(children);
 		}
 		#endregion
-		if (Input.GetKeyDown(KeyCode.T))
+		if (Input.GetKeyDown(KeyCode.U))
 		{
 			Vector2 mouseInput = new Vector2(
 				Input.mousePosition.x / Screen.width,
@@ -313,6 +335,12 @@ public class ExampleWebService : MonoBehaviour
 		if (Input.GetKeyDown(KeyCode.Y))
 		{
 			TestSelectCurrent();
+		}
+    if (Input.GetKeyDown(KeyCode.T))
+		{
+			StartCoroutine(GetScreenshotViaScreenCapture((bytes) => {
+				System.IO.File.WriteAllBytes("screenshot.png", bytes);
+			}));
 		}
 	}
 	private void TestSelectCurrent()
@@ -330,27 +358,6 @@ public class ExampleWebService : MonoBehaviour
 		KTInputManager.Instance.Select(selectable.Children[0]);
 	}
 
-	private void TestSelectChild()
-	{
-		//Selectable selectable = GetActiveSelectables()[2];
-		//GptntDebug.Log("Parent Selectable: " + selectable.Parent.name);
-		//GptntDebug.Log("Current Selectable: " + selectable.name);
-		//KTInputManager.Instance.SelectableManager.Select(selectable, false);
-		//GptntDebug.Log("IS IT TRUE? " + selectable.FocusOnInteraction.ToString());
-		//GptntDebug.Log("Plz be true? " + (selectable.FocusOnInteraction && KTInputManager.Instance.SelectableManager.GetCurrentFloatingHoldable() != null).ToString());
-		//selectable.HandleSelect(false);
-		//selectable.HandleInteract();
-		//selectable.OnFocus();
-		//GptntDebug.Log("Current: " + KTInputManager.Instance.SelectableManager.GetCurrentSelectable());
-
-		Selectable selectable = GetActiveSelectables()[1];
-		Selectable parent = selectable.Parent;
-		GptntDebug.Log("Selectable: " + selectable.name + "\nParent: " + parent.name);
-
-		selectable.HandleInteract();
-		GptntDebug.Log("Done Handle Select on child");
-	}
-
 	private void SegmentSelectables(Selectable[] activeSelectables)
 	{
 		string path = Path.Combine(Application.persistentDataPath, "segmentation.png");
@@ -363,7 +370,6 @@ public class ExampleWebService : MonoBehaviour
 		StartCoroutine(segmentation.Capture(objects, bomb, (bytes) => {
 			File.WriteAllBytes(path, bytes);
 			}));
-		//VennSnippableWire wire = new VennSnippableWire();
 	}
 
 	private void PrintActiveSelectables()
@@ -417,7 +423,7 @@ public class ExampleWebService : MonoBehaviour
     {
         workerThread.Abort();
         workerObject.Stop();
-    }
+	}
 
     // This example requires the System and System.Net namespaces.
     public void SimpleListenerExample(HttpListener listener)
@@ -884,7 +890,7 @@ public class ExampleWebService : MonoBehaviour
 
 	private string HandleRotation(HttpListenerRequest request)
 	{
-		string direction = request.QueryString.Get("direction");
+		string direction = request.QueryString.Get("action");
 		if (direction.Equals("flip"))
 		{
 			Rotation180();
@@ -925,20 +931,19 @@ public class ExampleWebService : MonoBehaviour
     private string HandleScreenshot(HttpListenerResponse response)
     {
         byte[] imageBytes = null;
-        StartCoroutine(GetScreenshot((img) => imageBytes = img));
-        var stopwatch = new System.Diagnostics.Stopwatch();
-        stopwatch.Start();
-
-        while (imageBytes == null)
+        StartCoroutine(GetScreenshotViaScreenCapture((img) => imageBytes = img));
+		var stopwatch = new System.Diagnostics.Stopwatch();
+		stopwatch.Start();
+		while (imageBytes == null)
         {
-            if (stopwatch.ElapsedMilliseconds >= 500)
+			if (stopwatch.ElapsedMilliseconds >= 500)
             {
-                return "Failed to take screenshot";
+				return "Failed to take screenshot";
             }
             // Wait for the screenshot to be taken
         }
-        // base encode as a string
-        response.ContentType = "image/png";
+		// base encode as a string
+		response.ContentType = "image/png";
         return Convert.ToBase64String(imageBytes);
     }
 
@@ -1116,16 +1121,42 @@ public class ExampleWebService : MonoBehaviour
         return listString;
     }
 
-    protected IEnumerator GetScreenshot(System.Action<byte[]> callback)
-    {   
-        //yield return new WaitForSecondsRealtime(1); // to test the time out 
-        yield return new WaitForEndOfFrame();
-		//byte[] img = ScreenCapture.CaptureScreenshotAsTexture().EncodeToPNG();
-		//callback(img);
+	protected IEnumerator GetScreenshotViaScreenCapture(System.Action<byte[]> callback)
+	{
+		yield return new WaitForEndOfFrame();
+		byte[] img = ScreenCapture.CaptureScreenshotAsTexture().EncodeToPNG();
+		callback(img);
+	}
+	
+	protected IEnumerator GetScreenshotViaRenderTexture(System.Action<byte[]> callback)
+    {
+		RenderTexture renderTexture = new RenderTexture(Screen.width, Screen.height, 24);
+		RenderTexture oldTexture = Camera.main.targetTexture;
+		Camera.main.targetTexture = renderTexture;
+		yield return new WaitForEndOfFrame();
+		byte[] img = RenderTextureToPNGBytes(renderTexture); 
+		callback(img);
+		//GptntConsole.WriteLine( "Remove line 988 if null: " + oldTexture); TODO: Test this out
+		//Camera.main.targetTexture = null;
+		Camera.main.targetTexture = oldTexture;
+	}
+	private Texture2D ConvertRenderTextureToTexture2D(RenderTexture rt)
+	{
+		Texture2D tex = new Texture2D(rt.width, rt.height, TextureFormat.RGB24, false);
+		RenderTexture.active = rt;
+		tex.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0);
+		tex.Apply();
+		RenderTexture.active = null;
+		return tex;
 	}
 
+	private byte[] RenderTextureToPNGBytes(RenderTexture rt)
+	{
+		byte[] bytes = ConvertRenderTextureToTexture2D(rt).EncodeToPNG();
+		return bytes;
+	}
 
-    public class Worker
+	public class Worker
     {
         ExampleWebService service;
         HttpListener listener;
@@ -1155,4 +1186,27 @@ public class ExampleWebService : MonoBehaviour
             listener.Stop();
         }
     }
+	void CopyLogContents()
+	{
+		try
+		{
+			if (File.Exists(sourceLogPath))
+			{
+				using (FileStream fs = new FileStream(sourceLogPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+				using (StreamReader reader = new StreamReader(fs))
+				{
+					string currentContents = reader.ReadToEnd();
+					if (currentContents != lastRead)
+					{
+						File.WriteAllText(destinationLogPath, currentContents);
+						lastRead = currentContents;
+					}
+				}
+			}
+		}
+		catch (IOException ex)
+		{
+			Debug.LogWarning("Failed to read log: " + ex.Message);
+		}
+	}
 }

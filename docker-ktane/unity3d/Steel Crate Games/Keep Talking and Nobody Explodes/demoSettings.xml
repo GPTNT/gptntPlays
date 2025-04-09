@@ -1,0 +1,23 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<DemoSettings xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <Mode>FromFile</Mode>
+  <DisableAlarmClockSound>false</DisableAlarmClockSound>
+  <SkipVerificationFlow>false</SkipVerificationFlow>
+  <ForgetLastGameSettings>false</ForgetLastGameSettings>
+  <AlwaysShowControlsTutorial>false</AlwaysShowControlsTutorial>
+  <ShowFirstTimeMissionOnInitialBombBinderPickup>false</ShowFirstTimeMissionOnInitialBombBinderPickup>
+  <HideProgressionStamps>false</HideProgressionStamps>
+  <HideTimerInMirrorOverlay>false</HideTimerInMirrorOverlay>
+  <ShowDemoSettingsMenu>false</ShowDemoSettingsMenu>
+  <ShouldSaveDemoSettings>true</ShouldSaveDemoSettings>
+  <ShouldShowDemoInstruction>false</ShouldShowDemoInstruction>
+  <ShowRestartDemoLabels>false</ShowRestartDemoLabels>
+  <HideFreeplayDevice>false</HideFreeplayDevice>
+  <CustomToC>None</CustomToC>
+  <ConferenceToCSectionName />
+  <ShowScoreboardInMirrorOverlay>false</ShowScoreboardInMirrorOverlay>
+  <MotionControlMenuButtonHoldTime>0</MotionControlMenuButtonHoldTime>
+  <ShowScoreboardAtTop>false</ShowScoreboardAtTop>
+  <SkipTournamentPostGame>false</SkipTournamentPostGame>
+  <ShowPostGameAnimation>true</ShowPostGameAnimation>
+</DemoSettings>
