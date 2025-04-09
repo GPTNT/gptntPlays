@@ -3,7 +3,7 @@ from flask_cors import CORS
 import subprocess
 import requests
 
-HTTP_PORT = 8084
+HTTP_PORT = 1235
 KTANE_PORT = 8085
 
 app = Flask(__name__)
