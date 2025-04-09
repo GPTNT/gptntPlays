@@ -802,19 +802,18 @@ public class ExampleWebService : MonoBehaviour
     {
         byte[] imageBytes = null;
         StartCoroutine(GetScreenshotViaScreenCapture((img) => imageBytes = img));
-        var stopwatch = new System.Diagnostics.Stopwatch();
-        stopwatch.Start();
-
-        while (imageBytes == null)
+		var stopwatch = new System.Diagnostics.Stopwatch();
+		stopwatch.Start();
+		while (imageBytes == null)
         {
-            if (stopwatch.ElapsedMilliseconds >= 500)
+			if (stopwatch.ElapsedMilliseconds >= 500)
             {
-                return "Failed to take screenshot";
+				return "Failed to take screenshot";
             }
             // Wait for the screenshot to be taken
         }
-        // base encode as a string
-        response.ContentType = "image/png";
+		// base encode as a string
+		response.ContentType = "image/png";
         return Convert.ToBase64String(imageBytes);
     }
 
@@ -994,7 +993,6 @@ public class ExampleWebService : MonoBehaviour
 
 	protected IEnumerator GetScreenshotViaScreenCapture(System.Action<byte[]> callback)
 	{
-		yield return new WaitForSecondsRealtime(1); // to test the time out 
 		yield return new WaitForEndOfFrame();
 		byte[] img = ScreenCapture.CaptureScreenshotAsTexture().EncodeToPNG();
 		callback(img);
@@ -1008,7 +1006,7 @@ public class ExampleWebService : MonoBehaviour
 		yield return new WaitForEndOfFrame();
 		byte[] img = RenderTextureToPNGBytes(renderTexture); 
 		callback(img);
-		//GptntDebug.Log( "Remove line 988 if null: " + oldTexture); TODO: Test this out
+		//GptntConsole.WriteLine( "Remove line 988 if null: " + oldTexture); TODO: Test this out
 		//Camera.main.targetTexture = null;
 		Camera.main.targetTexture = oldTexture;
 	}
