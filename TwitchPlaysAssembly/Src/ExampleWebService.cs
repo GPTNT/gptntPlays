@@ -30,6 +30,8 @@ public class ExampleWebService : MonoBehaviour
     Thread workerThread;
     Worker workerObject;
     Queue<Action> actions;
+	string timestamp;
+	string destinationLogPath;
 
     public int timeStepSize = 250;
 	float bombRotationX = 0f;
@@ -52,7 +54,6 @@ public class ExampleWebService : MonoBehaviour
 	bool onBottomFromLeftSide = false;
 	bool onBottomFromRightSide = false;
 	bool inMiddle = true;
-	private string destinationLogPath;
     public string sourceLogPath = @".\logs\ktane.log";
 	private string lastRead = "";
 
@@ -81,7 +82,9 @@ public class ExampleWebService : MonoBehaviour
 
 	void Awake()
     {
-        actions = new Queue<Action>();
+		timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
+		destinationLogPath = $"{timestamp}log.txt";
+		actions = new Queue<Action>();
         bombInfo = GetComponent<KMBombInfo>();
         bombInfo.OnBombExploded += OnBombExplodes;
         bombInfo.OnBombSolved += OnBombDefused;
@@ -97,22 +100,6 @@ public class ExampleWebService : MonoBehaviour
 		segmentation = GetComponent<Segmentation>();
 		gptntActions = GetComponent<GptntActions>();
     }
-
-	TwitchBomb bomb;
-	bool StartingFace;
-	bool onFrontFace = true;
-	bool onBackFace = false;
-	bool onLeftSide = false;
-	bool onRightSide = false;
-	bool onTopFromFront = false;
-	bool onTopFromBack = false;
-	bool onTopFromLeftSide = false;
-	bool onTopFromRightSide = false;
-	bool onBottomFromBack = false;
-	bool onBottomFromFront = false;
-	bool onBottomFromLeftSide = false;
-	bool onBottomFromRightSide = false;
-	bool inMiddle = true;
 
 
 	/*
