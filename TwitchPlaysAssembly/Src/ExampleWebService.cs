@@ -13,7 +13,8 @@ public class ExampleWebService : MonoBehaviour
 {
     KMBombInfo bombInfo;
     KMGameCommands gameCommands;
-    string modules;
+	KMGameInfo gameInfo;
+	string modules;
     string solvableModules;
     string solvedModules;
     string bombState;
@@ -21,6 +22,7 @@ public class ExampleWebService : MonoBehaviour
     KMMission mission;
 	Segmentation segmentation;
 	GptntActions gptntActions;
+	private bool canPlay;
 
     Thread workerThread;
     Worker workerObject;
@@ -30,28 +32,22 @@ public class ExampleWebService : MonoBehaviour
 	float bombRotationX = 0f;
 	float bombRotationZ = 0f;
 	public bool bombStarted = false;
-	// in-game milliseconds
 
-	//public int TimeLimitSecs = 300;
-	//public int NumStrikesBeforeExplosion = 3;
-	//public int TimeBeforeNeedyActivationSecs = 150;
-	//public bool FrontFaceOnly = true;
-	//public int OptionalWidgetCount = 3;
-
-	// [SerializeField] private List<KMComponentPool.ComponentTypeEnum> Modules = new List<KMComponentPool.ComponentTypeEnum>();
-
-	//private void OnValidate()
-	//{
-	//    if (Modules.Count > 11)
-	//    {
-	//        Modules = Modules.GetRange(0, 11);
-	//    }
-
-	//    if (Modules.Count < 1)
-	//    {
-	//        Modules = Modules.GetRange(0, 1);
-	//    }
-	//}
+	TwitchBomb bomb;
+	bool StartingFace;
+	bool onFrontFace = true;
+	bool onBackFace = false;
+	bool onLeftSide = false;
+	bool onRightSide = false;
+	bool onTopFromFront = false;
+	bool onTopFromBack = false;
+	bool onTopFromLeftSide = false;
+	bool onTopFromRightSide = false;
+	bool onBottomFromBack = false;
+	bool onBottomFromFront = false;
+	bool onBottomFromLeftSide = false;
+	bool onBottomFromRightSide = false;
+	bool inMiddle = true;
 
 	void Awake()
     {
@@ -70,25 +66,16 @@ public class ExampleWebService : MonoBehaviour
         workerThread.Start(this);
 		segmentation = GetComponent<Segmentation>();
 		gptntActions = GetComponent<GptntActions>();
-    }
+	}
 
-	TwitchBomb bomb;
-	bool StartingFace;
-	bool onFrontFace = true;
-	bool onBackFace = false;
-	bool onLeftSide = false;
-	bool onRightSide = false;
-	bool onTopFromFront = false;
-	bool onTopFromBack = false;
-	bool onTopFromLeftSide = false;
-	bool onTopFromRightSide = false;
-	bool onBottomFromBack = false;
-	bool onBottomFromFront = false;
-	bool onBottomFromLeftSide = false;
-	bool onBottomFromRightSide = false;
-	bool inMiddle = true;
-
-
+	private void Start()
+	{
+		gameInfo = FindObjectOfType<KMGameInfo>();
+		gameInfo.OnLightsChange += (bool on) => {
+			canPlay = on;
+			bomb = FindObjectOfType<TwitchBomb>();
+		};
+	}
 	/*
 	Keys and what they do:
 	Space: Throws an exception with all the bomb components
@@ -102,10 +89,10 @@ public class ExampleWebService : MonoBehaviour
 	V: Finds a twitch module, assumes it is a wire and then cuts the first wire
 	M: interact with the first module it finds
 	B: ???
-	G: rotate up 
-	H: rotate down
+	I: rotate up 
+	K: rotate down
  	J: rotate left
-	K: rotate right
+	L: rotate right
 	T: Testing different things -Kareem
 	Y: Testing -Kareem
 	O: Save Observations
@@ -272,12 +259,12 @@ public class ExampleWebService : MonoBehaviour
 
 
 		// rotate 90 degrees up
-		if (Input.GetKeyDown(KeyCode.G))
+		if (Input.GetKeyDown(KeyCode.I))
 		{
 			Rotation90("up");
 		}
 		// rotate 90 degrees down
-		if (Input.GetKeyDown(KeyCode.H))
+		if (Input.GetKeyDown(KeyCode.K))
 		{
 			Rotation90("down");
 		}
@@ -287,28 +274,31 @@ public class ExampleWebService : MonoBehaviour
 			Rotation90("left");
 		}
 		// rotate 90 degrees left
-		if (Input.GetKeyDown(KeyCode.K))
+		if (Input.GetKeyDown(KeyCode.L))
 		{
 			Rotation90("right");
 		}
 
-		if (Input.GetKeyDown(KeyCode.R))
-		{
-			string children = HandleBombChildren();
-			Debug.Log(children);
-		}
-		#endregion
 		if (Input.GetKeyDown(KeyCode.T))
 		{
 			Vector2 mouseInput = new Vector2(
 				Input.mousePosition.x / Screen.width,
 				Input.mousePosition.y / Screen.height
 				);
-			gptntActions.SendAction(mouseInput.x, mouseInput.y);
+			gptntActions.Click(mouseInput.x, mouseInput.y);
+		}
+		if (Input.GetKeyUp(KeyCode.T))
+		{
+			MainThreadQueue.Enqueue(gptntActions.Release);
+			//gptntActions.Release();
 		}
 		if (Input.GetKeyDown(KeyCode.Y))
 		{
-			TestSelectCurrent();
+			gptntActions.ZoomOut();
+		}
+		if (Input.GetKeyDown(KeyCode.U))
+		{
+			LogClick();
 		}
 
 		if (Input.GetKeyDown(KeyCode.O))
@@ -319,41 +309,16 @@ public class ExampleWebService : MonoBehaviour
 			}));
 			SegmentSelectables(GetActiveSelectables().ToArray());
 		}
-	}
-	private void TestSelectCurrent()
-	{
-		Selectable selectable = GetActiveSelectables()[0];
-		FloatingHoldable floating = KTInputManager.Instance.SelectableManager.GetCurrentFloatingHoldable();
-		GptntDebug.Log("Selectable: " + selectable.name + "\nFloating: " + floating.name);
-		floating.Focus(selectable.transform, selectable.FocusDistance, true, false, 1f);
-		floating.OnFocusChild(selectable.gameObject);
-		KTInputManager.Instance.SelectableManager.UnlockSelection();
-		KTInputManager.Instance.EnableInteraction();
-		KTInputManager.Instance.SelectableManager.HandleInteract();
-		selectable.HandleInteract();
-		KTInputManager.Instance.SelectableManager.Select(selectable.Children[0], false);
-		KTInputManager.Instance.Select(selectable.Children[0]);
+		#endregion
 	}
 
-	private void TestSelectChild()
+	private void LogClick()
 	{
-		//Selectable selectable = GetActiveSelectables()[2];
-		//GptntDebug.Log("Parent Selectable: " + selectable.Parent.name);
-		//GptntDebug.Log("Current Selectable: " + selectable.name);
-		//KTInputManager.Instance.SelectableManager.Select(selectable, false);
-		//GptntDebug.Log("IS IT TRUE? " + selectable.FocusOnInteraction.ToString());
-		//GptntDebug.Log("Plz be true? " + (selectable.FocusOnInteraction && KTInputManager.Instance.SelectableManager.GetCurrentFloatingHoldable() != null).ToString());
-		//selectable.HandleSelect(false);
-		//selectable.HandleInteract();
-		//selectable.OnFocus();
-		//GptntDebug.Log("Current: " + KTInputManager.Instance.SelectableManager.GetCurrentSelectable());
-
-		Selectable selectable = GetActiveSelectables()[1];
-		Selectable parent = selectable.Parent;
-		GptntDebug.Log("Selectable: " + selectable.name + "\nParent: " + parent.name);
-
-		selectable.HandleInteract();
-		GptntDebug.Log("Done Handle Select on child");
+		Vector2 mouseInput = new Vector2(
+				Input.mousePosition.x / Screen.width,
+				Input.mousePosition.y / Screen.height
+				);
+		GptntDebug.Log("x = " + mouseInput.x + "y = " + (1 - mouseInput.y));
 	}
 
 	private void SegmentSelectables(Selectable[] activeSelectables)
@@ -417,7 +382,6 @@ public class ExampleWebService : MonoBehaviour
 		return activeSelectables;
 	}
 
-
 	void OnDestroy()
     {
         workerThread.Abort();
@@ -440,29 +404,31 @@ public class ExampleWebService : MonoBehaviour
             }
         }
     }
-
-    private void HandleRequest(HttpListenerContext context)
+	#region Handling Requests
+	private void HandleRequest(HttpListenerContext context)
     {
         HttpListenerRequest request = context.Request;
         HttpListenerResponse response = context.Response;
 
         string responseString;
         string path = request.Url.AbsolutePath.ToLowerInvariant(); // Normalise the path for comparison
+		string notStarted = "Cannot do this request: "+ path + " because the game has not started yet";
 
-        // Route handling with switch
-        switch (path)
+		// Route handling with switch
+		// TODO: Make 2 separate switch cases for the requests that need the bomb.
+		switch (path)
         {
             case "/bombinfo":
-                responseString = GetBombInfo();
+                responseString = canPlay ? GetBombInfo() : notStarted;
                 break;
             case "/startmission":
                 responseString = HandleStartMission(request);
                 break;
             case "/causestrike":
-                responseString = HandleCauseStrike(request);
+                responseString = canPlay ? HandleCauseStrike(request) : notStarted;
                 break;
             case "/screenshot":
-                responseString = HandleScreenshot(response);
+                responseString = canPlay ? HandleScreenshot(response) : notStarted;
                 break;
             case "/settimescale":
                 responseString = HandleSetTimescale(request);
@@ -472,13 +438,10 @@ public class ExampleWebService : MonoBehaviour
                 break;
             case "/timestep":
                 responseString = HandleTimeStep(request);
-                break;
-			case "/rotation":
-				responseString = HandleRotation(request);
 				break;
-            case "/selectables":
-                responseString = HandleBombChildren();
-                break;
+			case "/action":
+				responseString = canPlay ? HandleAction(request) : notStarted;
+				break;
             default:
                 responseString = "Unknown route.";
                 break;
@@ -488,31 +451,90 @@ public class ExampleWebService : MonoBehaviour
         SendResponse(response, responseString);
     }
 
-    private string HandleBombChildren()
-    {
-		bomb = GameObject.FindObjectOfType<TwitchBomb>();
-		return GetHierarchyString(bomb.gameObject);
-    }
+	private string HandleHandleRelease()
+	{
+		string response = null;
+		var waitHandle = new ManualResetEvent(false);
+		MainThreadQueue.Enqueue(() =>
+		{
+			HandleRelease((value) =>
+			{
+				response = value;
+				waitHandle.Set();
+			});
+		});
 
-    string GetHierarchyString(GameObject obj, int level = 0)
-    {
-        // Start the string with the current GameObject's name and indent based on level
-        string hierarchy = new string('-', level * 2) + obj.name + "\n";
+		waitHandle.WaitOne();
+		return response;
+	}
 
-        // Loop through all children
-        foreach (Transform child in obj.transform)
-        {
-            // Append the child's hierarchy to the string (recursive call)
-            hierarchy += GetHierarchyString(child.gameObject, level + 1);
-        }
+	private string HandleAction(HttpListenerRequest request)
+	{
+		string action_type = request.QueryString.Get("action");
+		string response = null;
 
-        return hierarchy; // Return the entire hierarchy as a string
-    }
+		if (action_type == "release") // has to be run in the main thread
+		{
+			response = HandleHandleRelease();
+		}
+		else
+		{
+			switch (action_type)
+			{
+				case "hold":
+					response = HandleClicking(request);
+					break;
+				case "click":
+					string response1 = HandleClicking(request);
+					string response2 = HandleHandleRelease();
+					response = response1 + response2;
+					break;
+				case "out":
+					response = HandleZoomOut();
+					break;
+				default:
+					response = HandleRotationOnMainThread(request);
+					GptntDebug.Log("response is " + response);
+					break;
+			}
+		}
+		GptntDebug.Log("last response is: " + response);
+		return response;
+	}
+
+	private string HandleZoomOut()
+	{
+		gptntActions.ZoomOut();
+		return "Zoomed out from a module";
+	}
+
+	private string HandleRelease(Action<string> callback)
+	{
+		gptntActions.Release();
+		callback("Released selectable");
+		return "Released selectable";
+	}
+
+	private string HandleClicking(HttpListenerRequest request)
+	{
+		float x, y;
+
+		try
+		{
+			x = (float) Convert.ToDouble(request.QueryString.Get("x_pos"));
+			y = 1-(float) Convert.ToDouble(request.QueryString.Get("y_pos"));
+		}
+		catch (Exception ex)
+		{
+			GptntDebug.Log(ex.ToString());
+			return "Could not parse x and y coordinates: " + ex;
+		}
+		gptntActions.Click(x, y);
+		return "Great success";		
+	}
 
 	private void Rotation90(string direction)
 	{
-		bomb = GameObject.FindObjectOfType<TwitchBomb>();
-
 		if (direction.Equals("right"))
 		{	
 			InputInterceptor.DisableInput();
@@ -641,23 +663,19 @@ public class ExampleWebService : MonoBehaviour
 			}
 		}
 		//throw new Exception($"X rotation: {bombRotationX}\n Z rotation: {bombRotationZ}");
-		throw new Exception($"X: {bombRotationX}\n Z:{bombRotationZ}");
+		GptntDebug.Log("X: " + bombRotationX + "Z: " + bombRotationZ);
 	}
 
-		private void Rotation180()
+	private void Rotation180()
 	{
-		bomb = GameObject.FindObjectOfType<TwitchBomb>();
-
 		InputInterceptor.DisableInput();
 		if (bombRotationZ == 180)
 		{
 			bomb.RotateByLocalQuaternion(Quaternion.Euler(-bombRotationX, 0, 0));
-
 		}
 		else
 		{
 			bomb.RotateByLocalQuaternion(Quaternion.Euler(-bombRotationX, 0, -bombRotationZ));
-
 		}
 		StartCoroutine(bomb.MyForceHeldRotation(StartingFace, 0f));
 
@@ -718,7 +736,6 @@ public class ExampleWebService : MonoBehaviour
 			onLeftSide = true;
 		}
 	}
-
 
 	private void alignFace90L()
 	{
@@ -867,10 +884,6 @@ public class ExampleWebService : MonoBehaviour
 		}
 	}
 
-
-
-
-
 	private string HandleStartMission(HttpListenerRequest request)
     {
         string seed = request.QueryString.Get("seed");
@@ -887,9 +900,26 @@ public class ExampleWebService : MonoBehaviour
         return StartMission(seed, timeLimit, numStrikes, needyTime, isFront, optWidgets, components);
     }
 
+	private string HandleRotationOnMainThread(HttpListenerRequest request)
+	{
+		string result = null;
+		var waitHandle = new ManualResetEvent(false);
+
+		MainThreadQueue.Enqueue(() =>
+		{
+			result = HandleRotation(request); // this must now be main-thread safe
+			GptntDebug.Log("Done with Rotate");
+			waitHandle.Set();
+		});
+		GptntDebug.Log("902");
+		waitHandle.WaitOne(); // wait until HandleRotation finishes
+		GptntDebug.Log(result);
+		return result;
+	}
+
 	private string HandleRotation(HttpListenerRequest request)
 	{
-		string direction = request.QueryString.Get("direction");
+		string direction = request.QueryString.Get("action");
 		if (direction.Equals("flip"))
 		{
 			Rotation180();
@@ -898,6 +928,7 @@ public class ExampleWebService : MonoBehaviour
 		else if (direction.Equals("left"))
 		{
 			Rotation90(direction);
+			GptntDebug.Log("Handle the fucking rotate to the left");
 			return "flipped bomb left by 90 degrees";
 		} 
 		else if (direction.Equals("right"))
@@ -927,27 +958,33 @@ public class ExampleWebService : MonoBehaviour
         return CauseStrike(reason);
     }
 
-    private string HandleScreenshot(HttpListenerResponse response)
-    {
-        byte[] imageBytes = null;
-        StartCoroutine(GetScreenshot((img) => imageBytes = img));
-        var stopwatch = new System.Diagnostics.Stopwatch();
-        stopwatch.Start();
+	private string HandleScreenshot(HttpListenerResponse response)
+	{
+		byte[] imageBytes = null;
+		var waitHandle = new ManualResetEvent(false);
 
-        while (imageBytes == null)
-        {
-            if (stopwatch.ElapsedMilliseconds >= 500)
-            {
-                return "Failed to take screenshot";
-            }
-            // Wait for the screenshot to be taken
-        }
-        // base encode as a string
-        response.ContentType = "image/png";
-        return Convert.ToBase64String(imageBytes);
-    }
+		// Run this on the Unity main thread
+		MainThreadQueue.Enqueue(() =>
+		{
+			// StartCoroutine must be called on the main thread
+			StartCoroutine(GetScreenshot((img) =>
+			{
+				imageBytes = img;
+				waitHandle.Set();
+			}));
+		});
 
-    private string HandleSetTimescale(HttpListenerRequest request)
+		// Wait up to 500ms for the screenshot to be captured
+		if (!waitHandle.WaitOne(500))
+		{
+			return "Failed to take screenshot";
+		}
+
+		response.ContentType = "image/png";
+		return Convert.ToBase64String(imageBytes);
+	}
+
+	private string HandleSetTimescale(HttpListenerRequest request)
     {
         string value = request.QueryString.Get("value");
         Time.timeScale = float.Parse(value);
@@ -967,8 +1004,9 @@ public class ExampleWebService : MonoBehaviour
         StartCoroutine(TimeStepCoroutine());
         return "Paused after " + timeStepSize + " in-game milliseconds";
     }
+	#endregion
 
-    private IEnumerator TimeStepCoroutine()
+	private IEnumerator TimeStepCoroutine()
     {
         Time.timeScale = 1; // Unpause
         yield return new WaitForSeconds(timeStepSize / 1000f);
@@ -987,7 +1025,6 @@ public class ExampleWebService : MonoBehaviour
     }
 
     protected string StartMission(string seed, int timeLimit, int numStrikes, int needyTime, bool isFront, int optWidgets, List<String> components)
-
     {
         if (string.IsNullOrEmpty(seed)) {
             return "Please enter valid seed. e.g. seed=123";
@@ -1121,11 +1158,11 @@ public class ExampleWebService : MonoBehaviour
         return listString;
     }
 
-    protected IEnumerator GetScreenshot(System.Action<byte[]> callback)
+    protected IEnumerator GetScreenshot(Action<byte[]> callback)
     {
 		return GetScreenshotViaRenderTexture(callback);
 	}
-	protected IEnumerator GetScreenshotViaRenderTexture(System.Action<byte[]> callback)
+	protected IEnumerator GetScreenshotViaRenderTexture(Action<byte[]> callback)
 	{
 		RenderTexture renderTexture = new RenderTexture(Screen.width, Screen.height, 24);
 		RenderTexture oldTexture = Camera.main.targetTexture;
