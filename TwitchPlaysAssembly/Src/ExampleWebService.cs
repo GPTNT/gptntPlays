@@ -246,10 +246,6 @@ public class ExampleWebService : MonoBehaviour
 			gptntActions.Click(mouseInput.x, mouseInput.y);
 			gptntActions.Release();
 		}
-		if (Input.GetKeyUp(KeyCode.T))
-		{
-			//gptntActions.Release();
-		}
 		if (Input.GetKeyDown(KeyCode.Y))
 		{
 			gptntActions.ZoomOut();
@@ -257,6 +253,7 @@ public class ExampleWebService : MonoBehaviour
 		if (Input.GetKeyDown(KeyCode.U))
 		{
 			LogClick();
+			PrintActiveSelectables();
 		}
 
 		if (Input.GetKeyDown(KeyCode.O))
@@ -265,6 +262,7 @@ public class ExampleWebService : MonoBehaviour
 			StartCoroutine(GetScreenshotViaRenderTexture((bytes) => {
 				File.WriteAllBytes(path, bytes);
 			}));
+			PrintActiveSelectables();
 			SegmentSelectables(GetActiveSelectables().ToArray());
 		}
 		#endregion
@@ -295,6 +293,7 @@ public class ExampleWebService : MonoBehaviour
 
 	private void PrintActiveSelectables()
 	{
+		GptntDebug.Log("Parent: " + KTInputManager.Instance.SelectableManager.GetCurrentParent().name);
 		GptntDebug.Log("Selectables: ");
 		foreach(Selectable selectable in GetActiveSelectables())
 		{
@@ -320,7 +319,13 @@ public class ExampleWebService : MonoBehaviour
 			{
 				if (!component.ComponentType.EqualsAny(ComponentTypeEnum.Empty, ComponentTypeEnum.Timer))
 				{
-					activeSelectables.Add(component.GetComponent<Selectable>());
+					Vector3 componentUp = component.transform.up;
+					Vector3 bombUp = bomb.Bomb.transform.up;
+					float angleBetween = Vector3.Angle(componentUp, bombUp);
+					bool isFront =  angleBetween < 90.0f;
+					if(isFront == parentName.Equals("FrontFace")){
+						activeSelectables.Add(component.GetComponent<Selectable>());
+					}
 				}
 			}
 		}

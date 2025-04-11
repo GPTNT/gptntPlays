@@ -128,8 +128,9 @@ public class Segmentation : MonoBehaviour
 		childCount = venn.childCount;
 		for (int i = childCount - 1; i > childCount - 7; i--)
 		{
+			// TODO: Go one level lower such that i get all the children of these gameojects - Some might not have any!
 			Transform child = venn.GetChild(i);
-			vennObjects.Add(child.gameObject);
+			vennObjects.Add(child.gameObject); 
 		}
 		return vennObjects.ToArray();
 	}
