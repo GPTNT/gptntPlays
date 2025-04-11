@@ -98,22 +98,6 @@ public class ExampleWebService : MonoBehaviour
 		gptntActions = GetComponent<GptntActions>();
     }
 
-	TwitchBomb bomb;
-	bool StartingFace;
-	bool onFrontFace = true;
-	bool onBackFace = false;
-	bool onLeftSide = false;
-	bool onRightSide = false;
-	bool onTopFromFront = false;
-	bool onTopFromBack = false;
-	bool onTopFromLeftSide = false;
-	bool onTopFromRightSide = false;
-	bool onBottomFromBack = false;
-	bool onBottomFromFront = false;
-	bool onBottomFromLeftSide = false;
-	bool onBottomFromRightSide = false;
-	bool inMiddle = true;
-
 
 	/*
 	Keys and what they do:
