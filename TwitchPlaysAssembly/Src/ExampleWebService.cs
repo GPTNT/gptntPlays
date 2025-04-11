@@ -399,6 +399,9 @@ public class ExampleWebService : MonoBehaviour
 			case "/action":
 				responseString = canPlay ? HandleAction(request) : notStarted;
 				break;
+			case "/observation":
+				responseString = canPlay ? HandleObservation(response) : notStarted;
+				break;
 			default:
 				responseString = "Unknown route.";
 				break;
@@ -406,6 +409,32 @@ public class ExampleWebService : MonoBehaviour
 
 		// Send response
 		SendResponse(response, responseString);
+	}
+
+	private string HandleObservation(HttpListenerResponse response)
+	{
+		string screenshot = HandleScreenshot(response);
+		string segmentation = HandleSegmentation(response);
+
+		string json = "{"
+		+ "\"screenshot\":\"" + EscapeJsonString(screenshot) + "\","
+		+ "\"segmentation\":\"" + EscapeJsonString(segmentation) + "\""
+		+ "}";
+
+		response.ContentType = "application/json";
+		return json;
+	}
+
+	// Helper function to parse string to json
+	private string EscapeJsonString(string str)
+	{
+		if (str == null) return "";
+		return str
+			.Replace("\\", "\\\\")
+			.Replace("\"", "\\\"")
+			.Replace("\n", "\\n")
+			.Replace("\r", "\\r")
+			.Replace("\t", "\\t");
 	}
 
 	private string HandleHandleRelease()
@@ -597,6 +626,34 @@ public class ExampleWebService : MonoBehaviour
 			return "Failed to take screenshot";
 		}
 
+		response.ContentType = "image/png";
+		return Convert.ToBase64String(imageBytes);
+	}
+
+	private string HandleSegmentation(HttpListenerResponse response)
+	{
+		byte[] imageBytes = null;
+		var waitHandle = new ManualResetEvent(false);
+
+		Selectable[] selectables = GetActiveSelectables().ToArray();
+		GameObject[] objects = new GameObject[selectables.Length];
+		for (int i = 0; i < selectables.Length; i++)
+		{
+			objects[i] = selectables[i].gameObject;
+		}
+		MainThreadQueue.Enqueue(() =>
+		{
+			StartCoroutine(segmentation.Capture(objects, bomb, (bytes) =>
+			{
+				imageBytes = bytes;
+				waitHandle.Set();
+			}));
+		});
+
+		if (!waitHandle.WaitOne(500))
+		{
+			return "Failed to get segmentation mask";
+		}
 		response.ContentType = "image/png";
 		return Convert.ToBase64String(imageBytes);
 	}
