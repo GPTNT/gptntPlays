@@ -26,6 +26,7 @@ public class ExampleWebService : MonoBehaviour
     KMMission mission;
 	Segmentation segmentation;
 	GptntActions gptntActions;
+	GptntStates gptntStates;
 
     Thread workerThread;
     Worker workerObject;
@@ -56,6 +57,7 @@ public class ExampleWebService : MonoBehaviour
 	bool inMiddle = true;
     public string sourceLogPath = @".\logs\ktane.log";
 	private string lastRead = "";
+	long lastPosition = 0;
 
 	// in-game milliseconds
 
@@ -82,8 +84,6 @@ public class ExampleWebService : MonoBehaviour
 
 	void Awake()
     {
-		timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
-		destinationLogPath = $"{timestamp}log.txt";
 		actions = new Queue<Action>();
         bombInfo = GetComponent<KMBombInfo>();
         bombInfo.OnBombExploded += OnBombExplodes;
@@ -99,7 +99,17 @@ public class ExampleWebService : MonoBehaviour
         workerThread.Start(this);
 		segmentation = GetComponent<Segmentation>();
 		gptntActions = GetComponent<GptntActions>();
+		gptntStates = GetComponent<GptntStates>();
     }
+
+	void Start()
+	{
+		timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
+		destinationLogPath = $"{timestamp}log.txt";
+		gptntStates.logFilePath = destinationLogPath;
+		StartCoroutine(CopyLogPeriodically());
+		GptntDebug.Log($"states destination: {gptntStates.logFilePath}");
+	}
 
 
 	/*
@@ -145,6 +155,8 @@ public class ExampleWebService : MonoBehaviour
 			onBottomFromLeftSide = false;
 			onBottomFromRightSide = false;
 			inMiddle = true;
+			StartCoroutine(gptntStates.populate(2f));
+			GptntDebug.Log(gptntStates.serialNumber);
 		}
 
 		if (actions.Count > 0)
@@ -1114,7 +1126,8 @@ public class ExampleWebService : MonoBehaviour
 		byte[] img = ScreenCapture.CaptureScreenshotAsTexture().EncodeToPNG();
 		callback(img);
 	}
-	
+
+
 	protected IEnumerator GetScreenshotViaRenderTexture(System.Action<byte[]> callback)
     {
 		RenderTexture renderTexture = new RenderTexture(Screen.width, Screen.height, 24);
@@ -1185,20 +1198,34 @@ public class ExampleWebService : MonoBehaviour
 			if (File.Exists(sourceLogPath))
 			{
 				using (FileStream fs = new FileStream(sourceLogPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
-				using (StreamReader reader = new StreamReader(fs))
 				{
-					string currentContents = reader.ReadToEnd();
-					if (currentContents != lastRead)
+					fs.Seek(lastPosition, SeekOrigin.Begin); // jump to where we left off
+
+					using (StreamReader reader = new StreamReader(fs))
 					{
-						File.WriteAllText(destinationLogPath, currentContents);
-						lastRead = currentContents;
+						string newContent = reader.ReadToEnd();
+
+						if (!string.IsNullOrEmpty(newContent))
+						{
+							File.AppendAllText(destinationLogPath, newContent);
+							lastPosition = fs.Position; // update our position
+						}
 					}
 				}
 			}
 		}
-		catch (IOException ex)
+		catch (Exception ex)
 		{
-			Debug.LogWarning("Failed to read log: " + ex.Message);
+			Debug.LogWarning($"Error while copying log: {ex.Message}");
+		}
+	}
+
+	IEnumerator CopyLogPeriodically()
+	{
+		while (true)
+		{
+			CopyLogContents();
+			yield return new WaitForSeconds(0.5f); // wait 1 second
 		}
 	}
 }
