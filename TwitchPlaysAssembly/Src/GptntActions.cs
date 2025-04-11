@@ -32,13 +32,22 @@ public class GptntActions : MonoBehaviour
 			if (!selectable)
 			{
 				GptntDebug.Log("Couldnt get from selectable parent");
-				selectable = hit.collider.gameObject.GetComponent<SelectableArea>().Selectable;
+				if (hit.collider.gameObject.GetComponent<SelectableArea>())
+				{
+					selectable = hit.collider.gameObject.GetComponent<SelectableArea>().Selectable;
+				}
+				else
+				{
+					selectable = null;
+				}
+					
 			}
 
 			if (!selectable)
 			{
 				GptntDebug.Log("Selectable not found!");
 				GptntDebug.LogChildrenRecursive(hit.collider.transform.parent.gameObject);
+				return;
 			}
 
 			if (selectable.FocusOnInteraction)
