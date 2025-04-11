@@ -6,69 +6,50 @@ using System;
 using System.Linq;
 using System.Collections;
 using Assets.Scripts.Missions;
-using Assets.Scripts.Input;
 using System.IO;
 
 public class ExampleWebService : MonoBehaviour
 {
-    KMBombInfo bombInfo;
-    KMGameCommands gameCommands;
+	KMBombInfo bombInfo;
+	KMGameCommands gameCommands;
 	KMGameInfo gameInfo;
 	string modules;
-    string solvableModules;
-    string solvedModules;
-    string bombState;
-    GameObject spawn;
-    KMMission mission;
+	string solvableModules;
+	string solvedModules;
+	string bombState;
+	GameObject spawn;
+	KMMission mission;
 	Segmentation segmentation;
 	GptntActions gptntActions;
 	private bool canPlay;
 
-    Thread workerThread;
-    Worker workerObject;
-    Queue<Action> actions;
+	Thread workerThread;
+	Worker workerObject;
+	Queue<Action> actions;
 
-    public int timeStepSize = 250;
-	float bombRotationX = 0f;
-	float bombRotationZ = 0f;
-	public bool bombStarted = false;
-
+	public int timeStepSize = 250;
 
 	TwitchBomb bomb;
-	bool StartingFace;
-	bool onFrontFace = true;
-	bool onBackFace = false;
-	bool onLeftSide = false;
-	bool onRightSide = false;
-	bool onTopFromFront = false;
-	bool onTopFromBack = false;
-	bool onTopFromLeftSide = false;
-	bool onTopFromRightSide = false;
-	bool onBottomFromBack = false;
-	bool onBottomFromFront = false;
-	bool onBottomFromLeftSide = false;
-	bool onBottomFromRightSide = false;
-	bool inMiddle = true;
 	private string destinationLogPath;
-    public string sourceLogPath = @".\logs\ktane.log";
+	public string sourceLogPath = @".\logs\ktane.log";
 	private string lastRead = "";
 
 
 	void Awake()
-    {
-        actions = new Queue<Action>();
-        bombInfo = GetComponent<KMBombInfo>();
-        bombInfo.OnBombExploded += OnBombExplodes;
-        bombInfo.OnBombSolved += OnBombDefused;
-        gameCommands = GetComponent<KMGameCommands>();
-        bombState = "NA";
-        spawn = new GameObject();
-        mission = ScriptableObject.CreateInstance<KMMission>();
-        // Create the thread object. This does not start the thread.
-        workerObject = new Worker(this);
-        workerThread = new Thread(workerObject.DoWork);
-        // Start the worker thread.
-        workerThread.Start(this);
+	{
+		actions = new Queue<Action>();
+		bombInfo = GetComponent<KMBombInfo>();
+		bombInfo.OnBombExploded += OnBombExplodes;
+		bombInfo.OnBombSolved += OnBombDefused;
+		gameCommands = GetComponent<KMGameCommands>();
+		bombState = "NA";
+		spawn = new GameObject();
+		mission = ScriptableObject.CreateInstance<KMMission>();
+		// Create the thread object. This does not start the thread.
+		workerObject = new Worker(this);
+		workerThread = new Thread(workerObject.DoWork);
+		// Start the worker thread.
+		workerThread.Start(this);
 		segmentation = GetComponent<Segmentation>();
 		gptntActions = GetComponent<GptntActions>();
 	}
@@ -79,6 +60,8 @@ public class ExampleWebService : MonoBehaviour
 		gameInfo.OnLightsChange += (bool on) => {
 			canPlay = on;
 			bomb = FindObjectOfType<TwitchBomb>();
+			gptntActions.bomb = bomb;
+			gptntActions.InitRotation();
 		};
 	}
 	/*
@@ -87,7 +70,6 @@ public class ExampleWebService : MonoBehaviour
 	P: ???
 	Left Click: prints mouse position
 	F: Rotate 180
-	Z: Bomb initial rotation
 	backslash: Enable inputs
 	X: Hold bomb
 	C: Let go Bomb
@@ -96,36 +78,15 @@ public class ExampleWebService : MonoBehaviour
 	B: ???
 	I: rotate up 
 	K: rotate down
- 	J: rotate left
+	J: rotate left
 	K: rotate right
 	T: Take a screeenshot
-  U: Testing -Kareem
+	U: Testing -Kareem
 	Y: Testing -Kareem 
 	*/
 
 	void Update()
 	{
-		if (bombStarted)
-		{
-			bombStarted = false;
-			bombRotationZ = 0;
-			bombRotationX = 0;
-			StartingFace = KTInputManager.Instance.SelectableManager.GetActiveFace() == FaceEnum.Front;
-			onFrontFace = true;
-			onBackFace = false;
-			onLeftSide = false;
-			onRightSide = false;
-			onTopFromFront = false;
-			onTopFromBack = false;
-			onTopFromLeftSide = false;
-			onTopFromRightSide = false;
-			onBottomFromFront = false;
-			onBottomFromBack = false;
-			onBottomFromLeftSide = false;
-			onBottomFromRightSide = false;
-			inMiddle = true;
-		}
-
 		if (actions.Count > 0)
 		{
 			Action action = actions.Dequeue();
@@ -207,15 +168,7 @@ public class ExampleWebService : MonoBehaviour
 		// Flip 180 degrees
 		if (Input.GetKeyDown(KeyCode.F))
 		{
-			Rotation180();
-		}
-
-		// Disabling mouse input ensures correct functioning of other commands- should be used before any other
-		if (Input.GetKeyDown(KeyCode.Z))
-		{
-
-			throw new Exception($"Initial rotation: {bombRotationZ}");
-
+			StartCoroutine(gptntActions.Rotate180());
 		}
 
 		if (Input.GetKeyDown(KeyCode.Backslash))
@@ -266,22 +219,22 @@ public class ExampleWebService : MonoBehaviour
 		// rotate 90 degrees up
 		if (Input.GetKeyDown(KeyCode.I))
 		{
-			Rotation90("up");
+			StartCoroutine(gptntActions.Rotate90("up"));
 		}
 		// rotate 90 degrees down
 		if (Input.GetKeyDown(KeyCode.K))
 		{
-			Rotation90("down");
-		}
-		// rotate 90 degrees right
-		if (Input.GetKeyDown(KeyCode.J))
-		{
-			Rotation90("left");
+			StartCoroutine(gptntActions.Rotate90("down"));
 		}
 		// rotate 90 degrees left
+		if (Input.GetKeyDown(KeyCode.J))
+		{
+			StartCoroutine(gptntActions.Rotate90("left"));
+		}
+		// rotate 90 degrees right
 		if (Input.GetKeyDown(KeyCode.L))
 		{
-			Rotation90("right");
+			StartCoroutine(gptntActions.Rotate90("right"));
 		}
 
 		if (Input.GetKeyDown(KeyCode.T))
@@ -291,10 +244,10 @@ public class ExampleWebService : MonoBehaviour
 				Input.mousePosition.y / Screen.height
 				);
 			gptntActions.Click(mouseInput.x, mouseInput.y);
+			gptntActions.Release();
 		}
 		if (Input.GetKeyUp(KeyCode.T))
 		{
-			MainThreadQueue.Enqueue(gptntActions.Release);
 			//gptntActions.Release();
 		}
 		if (Input.GetKeyDown(KeyCode.Y))
@@ -387,73 +340,73 @@ public class ExampleWebService : MonoBehaviour
 	}
 
 	void OnDestroy()
-    {
-        workerThread.Abort();
-        workerObject.Stop();
+	{
+		workerThread.Abort();
+		workerObject.Stop();
 	}
 
-    // This example requires the System and System.Net namespaces.
-    public void SimpleListenerExample(HttpListener listener)
-    {
-        while (true)
-        {
-            try
-            {
-                HttpListenerContext context = listener.GetContext();
-                HandleRequest(context);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("Error processing request: " + ex.Message);
-            }
-        }
-    }
+	// This example requires the System and System.Net namespaces.
+	public void SimpleListenerExample(HttpListener listener)
+	{
+		while (true)
+		{
+			try
+			{
+				HttpListenerContext context = listener.GetContext();
+				HandleRequest(context);
+			}
+			catch (Exception ex)
+			{
+				Console.WriteLine("Error processing request: " + ex.Message);
+			}
+		}
+	}
 	#region Handling Requests
 	private void HandleRequest(HttpListenerContext context)
-    {
-        HttpListenerRequest request = context.Request;
-        HttpListenerResponse response = context.Response;
+	{
+		HttpListenerRequest request = context.Request;
+		HttpListenerResponse response = context.Response;
 
-        string responseString;
-        string path = request.Url.AbsolutePath.ToLowerInvariant(); // Normalise the path for comparison
+		string responseString;
+		string path = request.Url.AbsolutePath.ToLowerInvariant(); // Normalise the path for comparison
 		string notStarted = "Cannot do this request: "+ path + " because the game has not started yet";
 
 		// Route handling with switch
 		// TODO: Make 2 separate switch cases for the requests that need the bomb.
 		switch (path)
-        {
-            case "/bombinfo":
-                responseString = canPlay ? GetBombInfo() : notStarted;
-                break;
-            case "/startmission":
-                responseString = HandleStartMission(request);
-                break;
-            case "/causestrike":
-                responseString = canPlay ? HandleCauseStrike(request) : notStarted;
-                break;
-            case "/screenshot":
-                responseString = canPlay ? HandleScreenshot(response) : notStarted;
-                break;
-            case "/settimescale":
-                responseString = HandleSetTimescale(request);
-                break;
-            case "/setstepunit":
-                responseString = HandleSetStepUnit(request);
-                break;
-            case "/timestep":
-                responseString = HandleTimeStep(request);
+		{
+			case "/bombinfo":
+				responseString = canPlay ? GetBombInfo() : notStarted;
+				break;
+			case "/startmission":
+				responseString = HandleStartMission(request);
+				break;
+			case "/causestrike":
+				responseString = canPlay ? HandleCauseStrike(request) : notStarted;
+				break;
+			case "/screenshot":
+				responseString = canPlay ? HandleScreenshot(response) : notStarted;
+				break;
+			case "/settimescale":
+				responseString = HandleSetTimescale(request);
+				break;
+			case "/setstepunit":
+				responseString = HandleSetStepUnit(request);
+				break;
+			case "/timestep":
+				responseString = HandleTimeStep(request);
 				break;
 			case "/action":
 				responseString = canPlay ? HandleAction(request) : notStarted;
 				break;
-            default:
-                responseString = "Unknown route.";
-                break;
-        }
+			default:
+				responseString = "Unknown route.";
+				break;
+		}
 
-        // Send response
-        SendResponse(response, responseString);
-    }
+		// Send response
+		SendResponse(response, responseString);
+	}
 
 	private string HandleHandleRelease()
 	{
@@ -468,6 +421,21 @@ public class ExampleWebService : MonoBehaviour
 			});
 		});
 
+		waitHandle.WaitOne();
+		return response;
+	}
+
+	private string HandleClickAndRelease(HttpListenerRequest request)
+	{
+		string response = null;
+		var waitHandle = new ManualResetEvent(false);
+		MainThreadQueue.Enqueue(() =>
+		{
+			response = HandleClicking(request);
+			HandleRelease((str) => { response += str; });
+			waitHandle.Set();
+		}
+		);
 		waitHandle.WaitOne();
 		return response;
 	}
@@ -489,9 +457,7 @@ public class ExampleWebService : MonoBehaviour
 					response = HandleClicking(request);
 					break;
 				case "click":
-					string response1 = HandleClicking(request);
-					string response2 = HandleHandleRelease();
-					response = response1 + response2;
+					response = HandleClickAndRelease(request);
 					break;
 				case "out":
 					response = HandleZoomOut();
@@ -508,15 +474,14 @@ public class ExampleWebService : MonoBehaviour
 
 	private string HandleZoomOut()
 	{
-		gptntActions.ZoomOut();
-		return "Zoomed out from a module";
+		return gptntActions.ZoomOut();
 	}
 
 	private string HandleRelease(Action<string> callback)
 	{
-		gptntActions.Release();
+		string response = gptntActions.Release();
 		callback("Released selectable");
-		return "Released selectable";
+		return response;
 	}
 
 	private string HandleClicking(HttpListenerRequest request)
@@ -533,376 +498,24 @@ public class ExampleWebService : MonoBehaviour
 			GptntDebug.Log(ex.ToString());
 			return "Could not parse x and y coordinates: " + ex;
 		}
-		gptntActions.Click(x, y);
-		return "Great success";		
-	}
-
-	private void Rotation90(string direction)
-	{
-		if (direction.Equals("right"))
-		{	
-			InputInterceptor.DisableInput();
-			if (bombRotationZ == 180)
-			{
-				bomb.RotateByLocalQuaternion(Quaternion.Euler(-bombRotationX, 0, 0));
-
-			}
-			else
-			{
-				bomb.RotateByLocalQuaternion(Quaternion.Euler(-bombRotationX, 0, -bombRotationZ));
-
-			}
-			StartCoroutine(bomb.MyForceHeldRotation(StartingFace, 0f));
-			if (onFrontFace)
-			{
-				bombRotationZ = 90;
-			}
-			else if (onBackFace)
-			{
-				bombRotationZ = -90;
-			}
-			else if (onLeftSide)
-			{
-				bombRotationZ = 0;
-			}
-			else if (onRightSide)
-			{
-				bombRotationZ = 180;
-			}
-			bomb.RotateByLocalQuaternion(Quaternion.Euler(bombRotationX, 0, bombRotationZ));
-			alignFace90R();
-		}
-		if (direction.Equals("left"))
-		{
-			InputInterceptor.DisableInput();
-			if (bombRotationZ == 180)
-			{
-				bomb.RotateByLocalQuaternion(Quaternion.Euler(-bombRotationX, 0, 0));
-
-			}
-			else
-			{
-				bomb.RotateByLocalQuaternion(Quaternion.Euler(-bombRotationX, 0, -bombRotationZ));
-
-			}
-			StartCoroutine(bomb.MyForceHeldRotation(StartingFace, 0f));
-			if (onFrontFace)
-			{
-				bombRotationZ = -90;
-			}
-			else if (onBackFace)
-			{
-				bombRotationZ = 90;
-			}
-			else if (onLeftSide)
-			{
-				bombRotationZ = 180;
-			}
-			else if (onRightSide)
-			{
-				bombRotationZ = 0;
-			}
-			bomb.RotateByLocalQuaternion(Quaternion.Euler(bombRotationX, 0, bombRotationZ));
-			alignFace90L();
-		}
-
-		if (direction.Equals("up"))
-		{
-			if (bombRotationX < 90)
-			{
-				InputInterceptor.DisableInput();
-				if (bombRotationZ == 180)
-				{
-					bomb.RotateByLocalQuaternion(Quaternion.Euler(-bombRotationX, 0, 0));
-
-				}
-				else
-				{
-					bomb.RotateByLocalQuaternion(Quaternion.Euler(-bombRotationX, 0, -bombRotationZ));
-
-				}
-				StartCoroutine(bomb.MyForceHeldRotation(StartingFace, 0f));
-
-
-				bombRotationX += 90;
-				bomb.RotateByLocalQuaternion(Quaternion.Euler(bombRotationX, 0, bombRotationZ));
-
-			}
-		}
-
-		if (direction.Equals("down"))
-		{
-			if (bombRotationX > -90)
-			{
-				InputInterceptor.DisableInput();
-				if (bombRotationZ == 180)
-				{
-					bomb.RotateByLocalQuaternion(Quaternion.Euler(-bombRotationX, 0, 0));
-
-				}
-				else
-				{
-					bomb.RotateByLocalQuaternion(Quaternion.Euler(-bombRotationX, 0, -bombRotationZ));
-
-				}
-				StartCoroutine(bomb.MyForceHeldRotation(StartingFace, 0f));
-
-
-				bombRotationX -= 90;
-				bomb.RotateByLocalQuaternion(Quaternion.Euler(bombRotationX, 0, bombRotationZ));
-			}
-		}
-
-		if (bombRotationX == 0)
-		{
-			if (bombRotationZ % 360 == 0)
-			{
-				StartCoroutine(bomb.MyForceHeldRotation(StartingFace, 0f));
-				InputInterceptor.EnableInput();
-			}
-			else if (bombRotationZ % 180 == 0)
-			{
-				StartCoroutine(bomb.MyForceHeldRotation(!StartingFace, 0f));
-				InputInterceptor.EnableInput();
-			}
-		}
-		//throw new Exception($"X rotation: {bombRotationX}\n Z rotation: {bombRotationZ}");
-		GptntDebug.Log("X: " + bombRotationX + "Z: " + bombRotationZ);
-	}
-
-	private void Rotation180()
-	{
-		InputInterceptor.DisableInput();
-		if (bombRotationZ == 180)
-		{
-			bomb.RotateByLocalQuaternion(Quaternion.Euler(-bombRotationX, 0, 0));
-		}
-		else
-		{
-			bomb.RotateByLocalQuaternion(Quaternion.Euler(-bombRotationX, 0, -bombRotationZ));
-		}
-		StartCoroutine(bomb.MyForceHeldRotation(StartingFace, 0f));
-
-		if (onFrontFace)
-		{
-			bombRotationZ = 180;
-		}
-		else if (onBackFace)
-		{
-			bombRotationZ = 0;
-		}
-		else if (onLeftSide)
-		{
-			bombRotationZ = 90;
-		}
-		else if (onRightSide)
-		{
-			bombRotationZ = -90;
-		}
-		bomb.RotateByLocalQuaternion(Quaternion.Euler(bombRotationX, 0, bombRotationZ));
-
-		if (bombRotationX == 0)
-		{
-			if (bombRotationZ % 360 == 0)
-			{
-				StartCoroutine(bomb.MyForceHeldRotation(StartingFace, 0f));
-				InputInterceptor.EnableInput();
-			}
-			else if (bombRotationZ % 180 == 0)
-			{
-				StartCoroutine(bomb.MyForceHeldRotation(!StartingFace, 0f));
-				InputInterceptor.EnableInput();
-			}
-		}
-		alignFace180();
-	}
-
-	private void alignFace180()
-	{
-		if (onFrontFace)
-		{
-			onFrontFace = false;
-			onBackFace = true;
-		}
-		else if (onBackFace)
-		{
-			onBackFace = false;
-			onFrontFace = true;
-		}
-		else if (onLeftSide)
-		{
-			onLeftSide = false;
-			onRightSide = true;
-		}
-		else if (onRightSide)
-		{
-			onRightSide = false;
-			onLeftSide = true;
-		}
-	}
-
-	private void alignFace90L()
-	{
-		if (onFrontFace)
-		{
-			onFrontFace = false;
-			onLeftSide = true;
-		}
-		else if (onBackFace)
-		{
-			onBackFace = false;
-			onRightSide = true;
-		}
-		else if (onLeftSide)
-		{
-			onLeftSide = false;
-			onBackFace = true;
-		}
-		else if (onRightSide)
-		{
-			onRightSide = false;
-			onFrontFace = true;
-		}
-	}
-
-	private void alignFace90R()
-	{
-		if (onFrontFace)
-		{
-			onFrontFace = false;
-			onRightSide = true;
-		}
-		else if (onBackFace)
-		{
-			onBackFace = false;
-			onLeftSide = true;
-		}
-		else if (onLeftSide)
-		{
-			onLeftSide = false;
-			onFrontFace = true;
-		}
-		else if (onRightSide)
-		{
-			onRightSide = false;
-			onBackFace = true;
-		}
-	}
-
-	private void alignFace90U()
-	{
-		if (inMiddle && onFrontFace)
-		{
-			inMiddle = false;
-			onTopFromFront = true;
-		}
-
-		else if (inMiddle && onBackFace)
-		{
-			inMiddle = false;
-			onTopFromBack = true;
-		}
-
-		//else if (inMiddle && onLeftSideFromFront)
-		//{
-		//	inMiddle=false;
-		//	onTopFromLeftSide = true;
-		//}
-
-		//else if (inMiddle && onRightSide)
-		//{
-		//	inMiddle=false;
-		//	onTopFromRightSide = true;
-		//}
-
-		else if (onBottomFromBack)
-		{
-			onBottomFromBack = false;
-			inMiddle = true;
-		}
-		else if (onBottomFromFront)
-		{
-			onBottomFromFront = false;
-			inMiddle = true;
-		}
-		else if (onBottomFromLeftSide)
-		{
-			onBottomFromLeftSide = false;
-			inMiddle = true;
-		}
-
-		else if (onTopFromRightSide)
-		{
-			onBottomFromRightSide = false;
-			inMiddle = true;
-		}
-	}
-
-	private void alignFace90D()
-	{
-		if (inMiddle && onFrontFace)
-		{
-			inMiddle = false;
-			onBottomFromFront = true;
-		}
-		else if (inMiddle && onBackFace)
-		{
-			inMiddle = false;
-			onBottomFromBack = true;
-		}
-
-		//else if (inMiddle && onLeftSide)
-		//{
-		//	inMiddle = false;
-		//	onBottomFromLeftSide = true;
-		//}
-
-		//else if (inMiddle && onRightSide)
-		//{
-		//	inMiddle = false;
-		//	onBottomFromRightSide = true;
-		//}
-
-		else if (onTopFromFront)
-		{
-			onTopFromFront = false;
-			inMiddle = true;
-		}
-
-		else if (onTopFromLeftSide)
-		{
-			onTopFromLeftSide = false;
-			inMiddle = true;
-		}
-
-		else if (onTopFromRightSide)
-		{
-			onTopFromRightSide = false;
-			inMiddle = true;
-		}
-
-		else if (onTopFromBack)
-		{
-			onTopFromBack = false;
-			inMiddle = true;
-		}
+		return gptntActions.Click(x, y);
 	}
 
 	private string HandleStartMission(HttpListenerRequest request)
-    {
-        string seed = request.QueryString.Get("seed");
-        int timeLimit = int.Parse(request.QueryString.Get("timeLimit"));
-        int numStrikes = int.Parse(request.QueryString.Get("numStrikes"));
-        int needyTime = int.Parse(request.QueryString.Get("needyTime"));
-        bool isFront = bool.Parse(request.QueryString.Get("isFront"));
-        int optWidgets = int.Parse(request.QueryString.Get("optWidgets"));
-        string componentsString = request.QueryString.Get("components");
-        List<String> components = componentsString.Split(',').ToList();
-        Time.timeScale = float.Parse(request.QueryString.Get("timeScale"));
-        timeStepSize = int.Parse(request.QueryString.Get("timeStepSize"));
+	{
+		string seed = request.QueryString.Get("seed");
+		int timeLimit = int.Parse(request.QueryString.Get("timeLimit"));
+		int numStrikes = int.Parse(request.QueryString.Get("numStrikes"));
+		int needyTime = int.Parse(request.QueryString.Get("needyTime"));
+		bool isFront = bool.Parse(request.QueryString.Get("isFront"));
+		int optWidgets = int.Parse(request.QueryString.Get("optWidgets"));
+		string componentsString = request.QueryString.Get("components");
+		List<String> components = componentsString.Split(',').ToList();
+		Time.timeScale = float.Parse(request.QueryString.Get("timeScale"));
+		timeStepSize = int.Parse(request.QueryString.Get("timeStepSize"));
 
-        return StartMission(seed, timeLimit, numStrikes, needyTime, isFront, optWidgets, components);
-    }
+		return StartMission(seed, timeLimit, numStrikes, needyTime, isFront, optWidgets, components);
+	}
 
 	private string HandleRotationOnMainThread(HttpListenerRequest request)
 	{
@@ -926,28 +539,28 @@ public class ExampleWebService : MonoBehaviour
 		string direction = request.QueryString.Get("action");
 		if (direction.Equals("flip"))
 		{
-			Rotation180();
+			StartCoroutine(gptntActions.Rotate180());
 			return "flipped bomb 180 degrees";
 		}
 		else if (direction.Equals("left"))
 		{
-			Rotation90(direction);
+			StartCoroutine(gptntActions.Rotate90(direction));
 			GptntDebug.Log("Handle the fucking rotate to the left");
 			return "flipped bomb left by 90 degrees";
 		} 
 		else if (direction.Equals("right"))
 		{
-			Rotation90(direction);
+			StartCoroutine(gptntActions.Rotate90(direction));
 			return "flipped bomb right by 90 degrees";
 		} 
 		else if (direction.Equals("up"))
 		{
-			Rotation90(direction);
+			StartCoroutine(gptntActions.Rotate90(direction));
 			return "flipped bomb up by 90 degrees";
 		}
 		else if (direction.Equals("down"))
 		{
-			Rotation90(direction);
+			StartCoroutine(gptntActions.Rotate90(direction));
 			return "flipped bomb down by 90 degrees";
 		}
 		else
@@ -956,11 +569,11 @@ public class ExampleWebService : MonoBehaviour
 		}
 	}
 
-    private string HandleCauseStrike(HttpListenerRequest request)
-    {
-        string reason = request.QueryString["reason"];
-        return CauseStrike(reason);
-    }
+	private string HandleCauseStrike(HttpListenerRequest request)
+	{
+		string reason = request.QueryString["reason"];
+		return CauseStrike(reason);
+	}
 
 	private string HandleScreenshot(HttpListenerResponse response)
 	{
@@ -989,181 +602,181 @@ public class ExampleWebService : MonoBehaviour
 	}
 
 	private string HandleSetTimescale(HttpListenerRequest request)
-    {
-        string value = request.QueryString.Get("value");
-        Time.timeScale = float.Parse(value);
-        return "Set timeScale to " + value;
-    }
+	{
+		string value = request.QueryString.Get("value");
+		Time.timeScale = float.Parse(value);
+		return "Set timeScale to " + value;
+	}
 
-    private string HandleSetStepUnit(HttpListenerRequest request)
-    {
-        string value = request.QueryString.Get("value");
-        timeStepSize = int.Parse(value);
-        return "Set timeStepSize to " + value;
-    }
+	private string HandleSetStepUnit(HttpListenerRequest request)
+	{
+		string value = request.QueryString.Get("value");
+		timeStepSize = int.Parse(value);
+		return "Set timeStepSize to " + value;
+	}
 
-    private string HandleTimeStep(HttpListenerRequest request)
-    {
-        // Start the coroutine to handle the time step
-        StartCoroutine(TimeStepCoroutine());
-        return "Paused after " + timeStepSize + " in-game milliseconds";
-    }
+	private string HandleTimeStep(HttpListenerRequest request)
+	{
+		// Start the coroutine to handle the time step
+		StartCoroutine(TimeStepCoroutine());
+		return "Paused after " + timeStepSize + " in-game milliseconds";
+	}
 	#endregion
 
 	private IEnumerator TimeStepCoroutine()
-    {
-        Time.timeScale = 1; // Unpause
-        yield return new WaitForSeconds(timeStepSize / 1000f);
-        Time.timeScale = 0; // Pause
-    }
+	{
+		Time.timeScale = 1; // Unpause
+		yield return new WaitForSeconds(timeStepSize / 1000f);
+		Time.timeScale = 0; // Pause
+	}
 
-    private void SendResponse(HttpListenerResponse response, string responseString)
-    {
-        byte[] buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
-        // Get a response stream and write the response to it.
-        response.ContentLength64 = buffer.Length;
-        System.IO.Stream output = response.OutputStream;
-        output.Write(buffer, 0, buffer.Length);
-        // You must close the output stream.
-        output.Close();
-    }
+	private void SendResponse(HttpListenerResponse response, string responseString)
+	{
+		byte[] buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
+		// Get a response stream and write the response to it.
+		response.ContentLength64 = buffer.Length;
+		System.IO.Stream output = response.OutputStream;
+		output.Write(buffer, 0, buffer.Length);
+		// You must close the output stream.
+		output.Close();
+	}
 
-    protected string StartMission(string seed, int timeLimit, int numStrikes, int needyTime, bool isFront, int optWidgets, List<String> components)
-    {
-        if (string.IsNullOrEmpty(seed)) {
-            return "Please enter valid seed. e.g. seed=123";
-        }
+	protected string StartMission(string seed, int timeLimit, int numStrikes, int needyTime, bool isFront, int optWidgets, List<String> components)
+	{
+		if (string.IsNullOrEmpty(seed)) {
+			return "Please enter valid seed. e.g. seed=123";
+		}
 
-        if (timeLimit < 0) {
-            return "Please enter a valid time limit. e.g. timeLimit=90";
-        }
+		if (timeLimit < 0) {
+			return "Please enter a valid time limit. e.g. timeLimit=90";
+		}
 
-        if (numStrikes < 1)
-        {
-            return "Please enter a valid number of strikes. e.g. numStrikes=3";
-        }
+		if (numStrikes < 1)
+		{
+			return "Please enter a valid number of strikes. e.g. numStrikes=3";
+		}
 
-        if (needyTime < 0 || needyTime > timeLimit){
-            return "Please enter valid time delay for needy module activation. e.g. needyTime=30";
-        }
+		if (needyTime < 0 || needyTime > timeLimit){
+			return "Please enter valid time delay for needy module activation. e.g. needyTime=30";
+		}
 
-        if (optWidgets < 0)
-        {
-            return "Please enter a valid number of optional widgets. e.g. optWidgets=3";
-        }
+		if (optWidgets < 0)
+		{
+			return "Please enter a valid number of optional widgets. e.g. optWidgets=3";
+		}
 
-        if (components.Count < 1 || components.Count > 11) 
-        {
-            return "Please enter a valid list of components to be present on the bomb. e.g. components=Wires,BigButton";
-        }
+		if (components.Count < 1 || components.Count > 11) 
+		{
+			return "Please enter a valid list of components to be present on the bomb. e.g. components=Wires,BigButton";
+		}
 
-        //Update bomb characteristics with inputted values, then create mission instance with the bomb
-        KMGeneratorSetting setting = new KMGeneratorSetting();
-        setting.TimeLimit = timeLimit;
-        setting.NumStrikes = numStrikes;
-        setting.TimeBeforeNeedyActivation = needyTime;
-        setting.FrontFaceOnly = isFront;
-        setting.OptionalWidgetCount = optWidgets;
-        List<KMComponentPool> pools = new List<KMComponentPool>();
+		//Update bomb characteristics with inputted values, then create mission instance with the bomb
+		KMGeneratorSetting setting = new KMGeneratorSetting();
+		setting.TimeLimit = timeLimit;
+		setting.NumStrikes = numStrikes;
+		setting.TimeBeforeNeedyActivation = needyTime;
+		setting.FrontFaceOnly = isFront;
+		setting.OptionalWidgetCount = optWidgets;
+		List<KMComponentPool> pools = new List<KMComponentPool>();
 
-        for (int i = 0; i < components.Count; i++)
-        {
-            KMComponentPool pool = new KMComponentPool();
-            pool.Count = 1;
-            String compString = components[i];
-            KMComponentPool.ComponentTypeEnum CompType;
-            try
-            {
-                CompType = (KMComponentPool.ComponentTypeEnum)Enum.Parse(typeof(KMComponentPool.ComponentTypeEnum), compString);
-            }
-            catch (Exception e) 
-            {
-                return "Invalid component found! Please try again.";
-            }
-            pool.ComponentTypes = new List<KMComponentPool.ComponentTypeEnum> { CompType };
-            pools.Add(pool);
+		for (int i = 0; i < components.Count; i++)
+		{
+			KMComponentPool pool = new KMComponentPool();
+			pool.Count = 1;
+			String compString = components[i];
+			KMComponentPool.ComponentTypeEnum CompType;
+			try
+			{
+				CompType = (KMComponentPool.ComponentTypeEnum)Enum.Parse(typeof(KMComponentPool.ComponentTypeEnum), compString);
+			}
+			catch (Exception e) 
+			{
+				return "Invalid component found! Please try again.";
+			}
+			pool.ComponentTypes = new List<KMComponentPool.ComponentTypeEnum> { CompType };
+			pools.Add(pool);
 
 
-        }
-        setting.ComponentPools = pools;
-        mission.GeneratorSetting = setting;
+		}
+		setting.ComponentPools = pools;
+		mission.GeneratorSetting = setting;
 
-        KMBomb bomb = gameCommands.CreateBomb(null, setting, spawn, seed);
+		KMBomb bomb = gameCommands.CreateBomb(null, setting, spawn, seed);
 
-        actions.Enqueue(delegate () { gameCommands.StartMission(mission, seed); });
+		actions.Enqueue(delegate () { gameCommands.StartMission(mission, seed); });
 
-        return seed;
-    }
+		return seed;
+	}
 
-    protected string CauseStrike(string reason)
-    {
-        actions.Enqueue(delegate () { gameCommands.CauseStrike(reason); });
+	protected string CauseStrike(string reason)
+	{
+		actions.Enqueue(delegate () { gameCommands.CauseStrike(reason); });
 
-        return reason;
-    }
+		return reason;
+	}
 
-    protected string GetBombInfo()
-    {
-        if(bombInfo.IsBombPresent())
-        {
-            if(bombState == "NA")
-            {
-                bombState = "Active";
-            }
-        }
-        else if(bombState == "Active")
-        {
-            bombState = "NA";
-        }
+	protected string GetBombInfo()
+	{
+		if(bombInfo.IsBombPresent())
+		{
+			if(bombState == "NA")
+			{
+				bombState = "Active";
+			}
+		}
+		else if(bombState == "Active")
+		{
+			bombState = "NA";
+		}
 
-        string time = bombInfo.GetFormattedTime();
-        int strikes = bombInfo.GetStrikes();
-        modules = GetListAsHTML(bombInfo.GetModuleNames());
+		string time = bombInfo.GetFormattedTime();
+		int strikes = bombInfo.GetStrikes();
+		modules = GetListAsHTML(bombInfo.GetModuleNames());
 		TwitchModule mod = GameObject.FindObjectOfType<TwitchModule>();
 		ComponentSolver Solver = ComponentSolverFactory.CreateSolver(mod);
 		var ModInfo = Solver.ModInfo;
 		string id = ModInfo.moduleID;
 		solvableModules = GetListAsHTML(bombInfo.GetSolvableModuleNames());
-        solvedModules = GetListAsHTML(bombInfo.GetSolvedModuleNames());
-        
-        string responseString = string.Format(
-            "<HTML><BODY>"
-            + "<span>Time: {0}</span><br>"
-            + "<span>Strikes: {1}</span><br>"
-            + "<span>Modules: {2}</span><br>"
+		solvedModules = GetListAsHTML(bombInfo.GetSolvedModuleNames());
+		
+		string responseString = string.Format(
+			"<HTML><BODY>"
+			+ "<span>Time: {0}</span><br>"
+			+ "<span>Strikes: {1}</span><br>"
+			+ "<span>Modules: {2}</span><br>"
 			+ "<span>IDs: {6}</span><br>"
 			+ "<span>Solvable Modules: {3}</span><br>"
-            + "<span>Solved Modules: {4}</span><br>"
-            + "<span>State: {5}</span><br>"
-            + "</BODY></HTML>", time, strikes, modules, solvableModules, solvedModules, bombState, id);
+			+ "<span>Solved Modules: {4}</span><br>"
+			+ "<span>State: {5}</span><br>"
+			+ "</BODY></HTML>", time, strikes, modules, solvableModules, solvedModules, bombState, id);
 
-        return responseString;
-    }
+		return responseString;
+	}
 
-    protected void OnBombExplodes()
-    {
-        bombState = "Exploded";
-    }
+	protected void OnBombExplodes()
+	{
+		bombState = "Exploded";
+	}
 
-    protected void OnBombDefused()
-    {
-        bombState = "Defused";
-    }
+	protected void OnBombDefused()
+	{
+		bombState = "Defused";
+	}
 
-    protected string GetListAsHTML(List<string> list)
-    {
-        string listString = "";
+	protected string GetListAsHTML(List<string> list)
+	{
+		string listString = "";
 
-        foreach(string s in list)
-        {
-            listString += s + ", ";
-        }
+		foreach(string s in list)
+		{
+			listString += s + ", ";
+		}
 
-        return listString;
-    }
+		return listString;
+	}
 
-    protected IEnumerator GetScreenshot(Action<byte[]> callback)
-    {
+	protected IEnumerator GetScreenshot(Action<byte[]> callback)
+	{
 		return GetScreenshotViaRenderTexture(callback);
 	}
 	protected IEnumerator GetScreenshotViaRenderTexture(Action<byte[]> callback)
@@ -1195,18 +808,18 @@ public class ExampleWebService : MonoBehaviour
 	}
 
 	public class Worker
-    {
-        ExampleWebService service;
-        HttpListener listener;
+	{
+		ExampleWebService service;
+		HttpListener listener;
 
-        public Worker(ExampleWebService s)
-        {
-            service = s;
-        }
+		public Worker(ExampleWebService s)
+		{
+			service = s;
+		}
 
-        // This method will be called when the thread is started. 
-        public void DoWork()
-        {
+		// This method will be called when the thread is started. 
+		public void DoWork()
+		{
 			string port = Environment.GetEnvironmentVariable("port");
 			if (port == "" || port is null)
 			{
@@ -1214,21 +827,21 @@ public class ExampleWebService : MonoBehaviour
 			}
 				// Create a listener.
 				listener = new HttpListener();
-            // Add the prefixes.
-            foreach (string s in new string[] { $"http://localhost:{port}/" })
-            {
-                listener.Prefixes.Add(s);
-            }
-            listener.Start();
+			// Add the prefixes.
+			foreach (string s in new string[] { $"http://localhost:{port}/" })
+			{
+				listener.Prefixes.Add(s);
+			}
+			listener.Start();
 
-            service.SimpleListenerExample(listener);
-        }
+			service.SimpleListenerExample(listener);
+		}
 
-        public void Stop()
-        {
-            listener.Stop();
-        }
-    }
+		public void Stop()
+		{
+			listener.Stop();
+		}
+	}
 	void CopyLogContents()
 	{
 		try
