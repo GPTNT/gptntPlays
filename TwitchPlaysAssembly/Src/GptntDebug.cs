@@ -13,16 +13,14 @@ public class GptntDebug : MonoBehaviour
 		writer.Close();
 	}
 
-	public static void LogChildrenRecursive(GameObject obj, int depth = 0)
+	public static void LogChildrenRecursive(GameObject obj,bool withComponents, int depth = 0)
 	{
-		Log("Parent: " + obj.name);
-		LogAllComponents(obj);
 		foreach (Transform child in obj.transform)
 		{
 			string indent = new string('-', depth);
 			Log($"{indent}{child.gameObject.name}");
-			LogAllComponents(child.gameObject);
-			LogChildrenRecursive(child.gameObject, depth + 1);
+			if (withComponents) {LogAllComponents(child.gameObject);}
+			LogChildrenRecursive(child.gameObject, withComponents, depth + 1);
 		}
 	}
 

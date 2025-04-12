@@ -115,7 +115,6 @@ public class ExampleWebService : MonoBehaviour
 					modules.Add(game.Modules[modulesIndex]);
 					modulesIndex++;
 				}
-
 			}
 			string mystr = "";
 			foreach (var comp in bomb.Bomb.Faces)
@@ -253,7 +252,6 @@ public class ExampleWebService : MonoBehaviour
 		if (Input.GetKeyDown(KeyCode.U))
 		{
 			LogClick();
-			PrintActiveSelectables();
 		}
 
 		if (Input.GetKeyDown(KeyCode.O))
@@ -262,7 +260,6 @@ public class ExampleWebService : MonoBehaviour
 			StartCoroutine(GetScreenshotViaRenderTexture((bytes) => {
 				File.WriteAllBytes(path, bytes);
 			}));
-			PrintActiveSelectables();
 			SegmentSelectables(GetActiveSelectables().ToArray());
 		}
 		#endregion
@@ -286,7 +283,7 @@ public class ExampleWebService : MonoBehaviour
 			objects[i] = activeSelectables[i].gameObject;
 		}
 
-		StartCoroutine(segmentation.Capture(objects, bomb, (bytes) => {
+		StartCoroutine(segmentation.Capture(objects, (bytes) => {
 			File.WriteAllBytes(path, bytes);
 			}));
 	}
@@ -648,7 +645,7 @@ public class ExampleWebService : MonoBehaviour
 		}
 		MainThreadQueue.Enqueue(() =>
 		{
-			StartCoroutine(segmentation.Capture(objects, bomb, (bytes) =>
+			StartCoroutine(segmentation.Capture(objects, (bytes) =>
 			{
 				imageBytes = bytes;
 				waitHandle.Set();
