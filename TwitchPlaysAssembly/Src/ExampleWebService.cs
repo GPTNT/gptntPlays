@@ -157,8 +157,6 @@ public class ExampleWebService : MonoBehaviour
 			throw new Exception(mystr);
 		}
 
-
-
 		if (Input.GetMouseButtonDown(1))
 		{
 			throw new Exception(Input.mousePosition.ToString());
@@ -247,7 +245,7 @@ public class ExampleWebService : MonoBehaviour
 		}
 		if (Input.GetKeyDown(KeyCode.Y))
 		{
-			gptntActions.ZoomOut();
+			GetActiveSelectables();
 		}
 		if (Input.GetKeyDown(KeyCode.U))
 		{
@@ -305,12 +303,12 @@ public class ExampleWebService : MonoBehaviour
 		List<Selectable> activeSelectables = new List<Selectable>();
 		SelectableManager selectableManager = KTInputManager.Instance.SelectableManager;
 		string parentName = selectableManager.GetCurrentParent().gameObject.name;
-		bomb = FindObjectOfType<TwitchBomb>();
-		if (parentName.Equals("FacilityRoom(Clone)")) // Level 1
+		GptntDebug.Log("Selectable Parent name: " + parentName);
+		if (parentName.Equals("BasicRectangleBomb(Clone)")) // Level 1
 		{
-			//activeSelectables.Add(bomb.Bomb.GetComponent<Selectable>());
+			// Face has no selectables;
 		}
-		else if (parentName.Equals("FrontFace") || parentName.Equals("RearFace")) // Level 2 
+		else if ((parentName.Equals("FrontFace") || parentName.Equals("RearFace")) && gptntActions.bombRotationX == 0f && gptntActions.bombRotationZ.EqualsAny(0f,180f)) // Level 2 
 		{
 			foreach (BombComponent component in bomb.Bomb.BombComponents)
 			{
