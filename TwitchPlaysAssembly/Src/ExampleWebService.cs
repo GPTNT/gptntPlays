@@ -19,7 +19,6 @@ public class ExampleWebService : MonoBehaviour
 	string bombState;
 	GameObject spawn;
 	KMMission mission;
-	Segmentation segmentation;
 	GptntActions gptntActions;
 	private bool canPlay;
 
@@ -34,6 +33,11 @@ public class ExampleWebService : MonoBehaviour
 	public string sourceLogPath = @".\logs\ktane.log";
 	private string lastRead = "";
 
+	// Observation variables 
+	private Segmentation segmentation;
+	private RenderTexture rawScreenRenderTexture;
+	private Texture2D tex;
+	private Rect rect;
 
 	void Awake()
 	{
@@ -63,6 +67,13 @@ public class ExampleWebService : MonoBehaviour
 			gptntActions.bomb = bomb;
 			gptntActions.InitRotation();
 		};
+		int width = Screen.width;
+		int height = Screen.height;
+		rawScreenRenderTexture = new RenderTexture(width, height, 24);
+		rawScreenRenderTexture.Create();
+
+		tex = new Texture2D(width, height, TextureFormat.RGB24, false);
+		rect = new Rect(0, 0, width, height);
 	}
 	/*
 	Keys and what they do:
@@ -836,23 +847,22 @@ public class ExampleWebService : MonoBehaviour
 	{
 		return GetScreenshotViaRenderTexture(callback);
 	}
+
 	protected IEnumerator GetScreenshotViaRenderTexture(Action<byte[]> callback)
 	{
-		RenderTexture renderTexture = new RenderTexture(Screen.width, Screen.height, 24);
-		RenderTexture oldTexture = Camera.main.targetTexture;
-		Camera.main.targetTexture = renderTexture;
+		Camera.main.targetTexture = rawScreenRenderTexture;
 		yield return new WaitForEndOfFrame();
-		byte[] img = RenderTextureToPNGBytes(renderTexture);
+		byte[] img = RenderTextureToPNGBytes(rawScreenRenderTexture);
+		Camera.main.targetTexture = null;
 		callback(img);
-		//GptntConsole.WriteLine( "Remove line 988 if null: " + oldTexture); TODO: Test this out
-		//Camera.main.targetTexture = null;
-		Camera.main.targetTexture = oldTexture;
+		
+		//rawScreenRenderTexture.Release();
 	}
+
 	private Texture2D ConvertRenderTextureToTexture2D(RenderTexture rt)
 	{
-		Texture2D tex = new Texture2D(rt.width, rt.height, TextureFormat.RGB24, false);
 		RenderTexture.active = rt;
-		tex.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0);
+		tex.ReadPixels(rect, 0, 0);
 		tex.Apply();
 		RenderTexture.active = null;
 		return tex;

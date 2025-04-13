@@ -20,6 +20,8 @@ public class Segmentation : MonoBehaviour
 	private Camera duplicateCam = null;
 	private GameObject duplicate = null;
 	private RenderTexture renderTexture;
+	private Texture2D tex;
+	private Rect rect;
 	[SerializeField] public Shader shader;
 	private int segmentationLayer = 31;
 	private int defaultLayer = 11;
@@ -29,7 +31,11 @@ public class Segmentation : MonoBehaviour
 
 	private void Start()
 	{
-		renderTexture = new RenderTexture(Screen.width, Screen.height, 24);
+		int width = Screen.width;
+		int height = Screen.height;
+		renderTexture = new RenderTexture(width, height, 24);
+		tex = new Texture2D(width, height);
+		rect = new Rect(0, 0, width, height);
 		if (!shader) GptntDebug.Log("Shader is null");
 	}
 
@@ -42,6 +48,7 @@ public class Segmentation : MonoBehaviour
 		yield return new WaitForEndOfFrame();
 		byte[] bytes = RenderTextureToPNGBytes(renderTexture);
 		callback?.Invoke(bytes);
+		renderTexture.Release();
 		ResetObjects();
 	}
 
@@ -156,9 +163,8 @@ public class Segmentation : MonoBehaviour
 	// Convert a RenderTexture to a Texture2D
 	private Texture2D ConvertRenderTextureToTexture2D(RenderTexture rt)
 	{
-		Texture2D tex = new Texture2D(rt.width, rt.height, TextureFormat.RGB24, false);
 		RenderTexture.active = rt;
-		tex.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0);
+		tex.ReadPixels(rect, 0, 0);
 		tex.Apply();
 		RenderTexture.active = null;
 		return tex;
