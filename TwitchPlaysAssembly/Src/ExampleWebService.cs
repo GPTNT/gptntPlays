@@ -115,7 +115,6 @@ public class ExampleWebService : MonoBehaviour
 					modules.Add(game.Modules[modulesIndex]);
 					modulesIndex++;
 				}
-
 			}
 			string mystr = "";
 			foreach (var comp in bomb.Bomb.Faces)
@@ -157,8 +156,6 @@ public class ExampleWebService : MonoBehaviour
 			mystr += "END";
 			throw new Exception(mystr);
 		}
-
-
 
 		if (Input.GetMouseButtonDown(1))
 		{
@@ -246,13 +243,9 @@ public class ExampleWebService : MonoBehaviour
 			gptntActions.Click(mouseInput.x, mouseInput.y);
 			gptntActions.Release();
 		}
-		if (Input.GetKeyUp(KeyCode.T))
-		{
-			//gptntActions.Release();
-		}
 		if (Input.GetKeyDown(KeyCode.Y))
 		{
-			gptntActions.ZoomOut();
+			GetActiveSelectables();
 		}
 		if (Input.GetKeyDown(KeyCode.U))
 		{
@@ -288,13 +281,14 @@ public class ExampleWebService : MonoBehaviour
 			objects[i] = activeSelectables[i].gameObject;
 		}
 
-		StartCoroutine(segmentation.Capture(objects, bomb, (bytes) => {
+		StartCoroutine(segmentation.Capture(objects, (bytes) => {
 			File.WriteAllBytes(path, bytes);
 			}));
 	}
 
 	private void PrintActiveSelectables()
 	{
+		GptntDebug.Log("Parent: " + KTInputManager.Instance.SelectableManager.GetCurrentParent().name);
 		GptntDebug.Log("Selectables: ");
 		foreach(Selectable selectable in GetActiveSelectables())
 		{
@@ -309,18 +303,24 @@ public class ExampleWebService : MonoBehaviour
 		List<Selectable> activeSelectables = new List<Selectable>();
 		SelectableManager selectableManager = KTInputManager.Instance.SelectableManager;
 		string parentName = selectableManager.GetCurrentParent().gameObject.name;
-		bomb = FindObjectOfType<TwitchBomb>();
-		if (parentName.Equals("FacilityRoom(Clone)")) // Level 1
+		GptntDebug.Log("Selectable Parent name: " + parentName);
+		if (parentName.Equals("BasicRectangleBomb(Clone)")) // Level 1
 		{
-			//activeSelectables.Add(bomb.Bomb.GetComponent<Selectable>());
+			// Face has no selectables;
 		}
-		else if (parentName.Equals("FrontFace") || parentName.Equals("RearFace")) // Level 2 
+		else if ((parentName.Equals("FrontFace") || parentName.Equals("RearFace")) && gptntActions.bombRotationX == 0f && gptntActions.bombRotationZ.EqualsAny(0f,180f)) // Level 2 
 		{
 			foreach (BombComponent component in bomb.Bomb.BombComponents)
 			{
 				if (!component.ComponentType.EqualsAny(ComponentTypeEnum.Empty, ComponentTypeEnum.Timer))
 				{
-					activeSelectables.Add(component.GetComponent<Selectable>());
+					Vector3 componentUp = component.transform.up;
+					Vector3 bombUp = bomb.Bomb.transform.up;
+					float angleBetween = Vector3.Angle(componentUp, bombUp);
+					bool isFront =  angleBetween < 90.0f;
+					if(isFront == parentName.Equals("FrontFace")){
+						activeSelectables.Add(component.GetComponent<Selectable>());
+					}
 				}
 			}
 		}
@@ -399,6 +399,9 @@ public class ExampleWebService : MonoBehaviour
 			case "/action":
 				responseString = canPlay ? HandleAction(request) : notStarted;
 				break;
+			case "/observation":
+				responseString = canPlay ? HandleObservation(response) : notStarted;
+				break;
 			default:
 				responseString = "Unknown route.";
 				break;
@@ -406,6 +409,32 @@ public class ExampleWebService : MonoBehaviour
 
 		// Send response
 		SendResponse(response, responseString);
+	}
+
+	private string HandleObservation(HttpListenerResponse response)
+	{
+		string screenshot = HandleScreenshot(response);
+		string segmentation = HandleSegmentation(response);
+
+		string json = "{"
+		+ "\"screenshot\":\"" + EscapeJsonString(screenshot) + "\","
+		+ "\"segmentation\":\"" + EscapeJsonString(segmentation) + "\""
+		+ "}";
+
+		response.ContentType = "application/json";
+		return json;
+	}
+
+	// Helper function to parse string to json
+	private string EscapeJsonString(string str)
+	{
+		if (str == null) return "";
+		return str
+			.Replace("\\", "\\\\")
+			.Replace("\"", "\\\"")
+			.Replace("\n", "\\n")
+			.Replace("\r", "\\r")
+			.Replace("\t", "\\t");
 	}
 
 	private string HandleHandleRelease()
@@ -597,6 +626,34 @@ public class ExampleWebService : MonoBehaviour
 			return "Failed to take screenshot";
 		}
 
+		response.ContentType = "image/png";
+		return Convert.ToBase64String(imageBytes);
+	}
+
+	private string HandleSegmentation(HttpListenerResponse response)
+	{
+		byte[] imageBytes = null;
+		var waitHandle = new ManualResetEvent(false);
+
+		Selectable[] selectables = GetActiveSelectables().ToArray();
+		GameObject[] objects = new GameObject[selectables.Length];
+		for (int i = 0; i < selectables.Length; i++)
+		{
+			objects[i] = selectables[i].gameObject;
+		}
+		MainThreadQueue.Enqueue(() =>
+		{
+			StartCoroutine(segmentation.Capture(objects, (bytes) =>
+			{
+				imageBytes = bytes;
+				waitHandle.Set();
+			}));
+		});
+
+		if (!waitHandle.WaitOne(500))
+		{
+			return "Failed to get segmentation mask";
+		}
 		response.ContentType = "image/png";
 		return Convert.ToBase64String(imageBytes);
 	}

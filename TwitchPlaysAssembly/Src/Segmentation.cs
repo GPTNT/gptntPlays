@@ -26,7 +26,6 @@ public class Segmentation : MonoBehaviour
 	// each element in renderers has an array of renderers for the children of an object
 	private List<Renderer[]> renderersWithChildren;
 	private List<GameObject> objectsOnSegmentationLayer;
-	private TwitchBomb bomb;
 
 	private void Start()
 	{
@@ -34,13 +33,11 @@ public class Segmentation : MonoBehaviour
 		if (!shader) GptntDebug.Log("Shader is null");
 	}
 
-	public IEnumerator Capture(GameObject[] objects, TwitchBomb bomb, Action<byte[]> callback)
+	public IEnumerator Capture(GameObject[] objects, Action<byte[]> callback)
 	{
-		// TODO: Make sure the bomb is also put on the layer. 
 		if (objects.Length == 0) yield return null;
 		propertyBlock = new MaterialPropertyBlock();
 		objectsOnSegmentationLayer = new List<GameObject>();
-		this.bomb = bomb;
 		Segment(objects);
 		yield return new WaitForEndOfFrame();
 		byte[] bytes = RenderTextureToPNGBytes(renderTexture);
@@ -51,7 +48,10 @@ public class Segmentation : MonoBehaviour
 	public void Segment(GameObject[] objects)
 	{
 		DuplicateCamera();
+
 		objects = tryGetVennWires(objects);
+		objects = tryGetButton(objects);
+
 		SetObjectsToSegmentationLayer(objects);
 		renderersWithChildren = GetRenderers(objects);
 
@@ -90,8 +90,8 @@ public class Segmentation : MonoBehaviour
 			GptntDebug.Log("Putting this on segmentation layer: " + obj.name);
 			SetLayerRecursively(obj, segmentationLayer);
 		}
-		bomb.gameObject.layer = segmentationLayer;
 	}
+
 	private void SetLayerRecursively(GameObject obj, int layer)
 	{
 		obj.layer = layer;
@@ -120,18 +120,37 @@ public class Segmentation : MonoBehaviour
 	{
 		// Checks if the objects are the wires themselves and the not the whole module
 		if (!objects[0].name.StartsWith("VennWire") || objects[0].name.StartsWith("VennWiresComponent")) return objects;
-
+		GptntDebug.Log("Venn wires modules to be segmented");
+		
 		List<GameObject> vennObjects = new List<GameObject>();
 		Transform venn = KTInputManager.Instance.SelectableManager.GetCurrentParent().transform;
 		int childCount = venn.childCount;
+		GptntDebug.Log("The module is: " + venn + " and has: " + childCount + " children");
 		venn = venn.GetChild(childCount - 2);
 		childCount = venn.childCount;
+		GptntDebug.Log("Got " + venn.name + "child which has: " + childCount + " children");
 		for (int i = childCount - 1; i > childCount - 7; i--)
 		{
+			// TODO: Go one level lower such that i get all the children of these gameojects - Some might not have any!
 			Transform child = venn.GetChild(i);
-			vennObjects.Add(child.gameObject);
+			foreach (Transform grandChild in child)
+			{
+				GptntDebug.Log("Added " + grandChild.name);
+				vennObjects.Add(grandChild.gameObject);
+			}
+			
 		}
+		GptntDebug.Log("Tried segmenting a venn wires, returned: " + vennObjects[0].name);
 		return vennObjects.ToArray();
+	}
+
+	// Check if Button since the button also has the casing and light strip as part of the selectable.
+	private GameObject[] tryGetButton(GameObject[] objects)
+	{
+		if (!objects[0].name.Equals("Button")) return objects;
+		objects[0] = objects[0].transform.GetChild(0).gameObject;
+		GptntDebug.Log("Tried segmenting a button, returned: " + objects[0].name);
+		return objects;
 	}
 
 	// Convert a RenderTexture to a Texture2D
@@ -161,7 +180,7 @@ public class Segmentation : MonoBehaviour
 			mainCam = Camera.main;
 			if (!mainCam)
 			{
-				Debug.LogError("Main camera not found");
+				GptntDebug.Log("Main camera not found");
 				return;
 			}
 		}

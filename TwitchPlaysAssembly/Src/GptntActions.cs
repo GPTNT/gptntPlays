@@ -12,22 +12,13 @@ public class GptntActions : MonoBehaviour
 	private Selectable zoomedInto;
 	public TwitchBomb bomb;
 
-	float bombRotationX = 0f;
-	float bombRotationZ = 0f;
+	public float bombRotationX { get; private set; } = 0f;
+	public float bombRotationZ { get; private set; } = 0f;
 	bool StartingFace;
 	bool onFrontFace = true;
 	bool onBackFace = false;
 	bool onLeftSide = false;
 	bool onRightSide = false;
-	bool onTopFromFront = false;
-	bool onTopFromBack = false;
-	bool onTopFromLeftSide = false;
-	bool onTopFromRightSide = false;
-	bool onBottomFromBack = false;
-	bool onBottomFromFront = false;
-	bool onBottomFromLeftSide = false;
-	bool onBottomFromRightSide = false;
-	bool inMiddle = true;
 
 	private void Start()
 	{
@@ -43,15 +34,6 @@ public class GptntActions : MonoBehaviour
 		onBackFace = false;
 		onLeftSide = false;
 		onRightSide = false;
-		onTopFromFront = false;
-		onTopFromBack = false;
-		onTopFromLeftSide = false;
-		onTopFromRightSide = false;
-		onBottomFromFront = false;
-		onBottomFromBack = false;
-		onBottomFromLeftSide = false;
-		onBottomFromRightSide = false;
-		inMiddle = true;
 	}
 
 	#region Mouse clicks
@@ -436,80 +418,97 @@ public class GptntActions : MonoBehaviour
 		}
 	}
 
-	private void alignFace90U()
-	{
-		if (inMiddle && onFrontFace)
-		{
-			inMiddle = false;
-			onTopFromFront = true;
-		}
+	//private void alignFace90U()
+	//{
+	//	if (inMiddle && onFrontFace)
+	//	{
+	//		GptntDebug.Log("1");
+	//		inMiddle = false;
+	//		onTopFromFront = true;
+	//		onFrontFace = false; // Changed this
+	//	}
 
-		else if (inMiddle && onBackFace)
-		{
-			inMiddle = false;
-			onTopFromBack = true;
-		}
+	//	else if (inMiddle && onBackFace)
+	//	{
+	//		GptntDebug.Log("2");
+	//		inMiddle = false;
+	//		onTopFromBack = true;
+	//		onBackFace = false; // Changed this
+	//	}
 
-		else if (onBottomFromBack)
-		{
-			onBottomFromBack = false;
-			inMiddle = true;
-		}
-		else if (onBottomFromFront)
-		{
-			onBottomFromFront = false;
-			inMiddle = true;
-		}
-		else if (onBottomFromLeftSide)
-		{
-			onBottomFromLeftSide = false;
-			inMiddle = true;
-		}
+	//	else if (onBottomFromBack)
+	//	{
+	//		GptntDebug.Log("3");
+	//		onBottomFromBack = false;
+	//		inMiddle = true;
+	//		onBackFace = true; // Changed this
+	//	}
+	//	else if (onBottomFromFront)
+	//	{
+	//		GptntDebug.Log("4");
+	//		onBottomFromFront = false;
+	//		inMiddle = true;
+	//		onFrontFace = true; // Changed this
+	//	}
+	//	else if (onBottomFromLeftSide)
+	//	{
+	//		onBottomFromLeftSide = false;
+	//		inMiddle = true;
+	//	}
 
-		else if (onTopFromRightSide)
-		{
-			onBottomFromRightSide = false;
-			inMiddle = true;
-		}
-	}
+	//	else if (onTopFromRightSide)
+	//	{
+	//		onBottomFromRightSide = false;
+	//		inMiddle = true;
+	//	}
+	//}
 
-	private void alignFace90D()
-	{
-		if (inMiddle && onFrontFace)
-		{
-			inMiddle = false;
-			onBottomFromFront = true;
-		}
-		else if (inMiddle && onBackFace)
-		{
-			inMiddle = false;
-			onBottomFromBack = true;
-		}
+	//private void alignFace90D()
+	//{
+	//	GptntDebug.Log("Called alignFace90D");
+	//	if (inMiddle && onFrontFace)
+	//	{
+	//		GptntDebug.Log("1");
+	//		inMiddle = false;
+	//		onBottomFromFront = true;
+	//		onFrontFace = false; // Changed this
+	//	}
+	//	else if (inMiddle && onBackFace)
+	//	{
+	//		GptntDebug.Log("2");
+	//		inMiddle = false;
+	//		onBottomFromBack = true;
+	//		onBackFace = false; // Changed this
+	//	}
 
-		else if (onTopFromFront)
-		{
-			onTopFromFront = false;
-			inMiddle = true;
-		}
+	//	else if (onTopFromFront)
+	//	{
+	//		GptntDebug.Log("3");
+	//		onTopFromFront = false;
+	//		inMiddle = true;
+	//		onFrontFace = true; // Changed this
+	//	}
 
-		else if (onTopFromLeftSide)
-		{
-			onTopFromLeftSide = false;
-			inMiddle = true;
-		}
+	//	else if (onTopFromLeftSide)
+	//	{
+	//		onTopFromLeftSide = false;
+	//		inMiddle = true;
+	//	}
 
-		else if (onTopFromRightSide)
-		{
-			onTopFromRightSide = false;
-			inMiddle = true;
-		}
+	//	else if (onTopFromRightSide)
+	//	{
+	//		onTopFromRightSide = false;
+	//		inMiddle = true;
+	//	}
 
-		else if (onTopFromBack)
-		{
-			onTopFromBack = false;
-			inMiddle = true;
-		}
-	}
+	//	else if (onTopFromBack)
+	//	{
+	//		GptntDebug.Log("4");
+	//		onTopFromBack = false;
+	//		inMiddle = true;
+	//		onBackFace = true; // Changed this
+	//	}
+	//}
 
 	#endregion
 
