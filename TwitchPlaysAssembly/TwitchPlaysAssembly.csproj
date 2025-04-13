@@ -1,94 +1,97 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
- <PropertyGroup>
-   <ProjectGuid>{B2DBE282-D779-4B15-BDC9-C747EA7EAF72}</ProjectGuid>
-   <TargetFramework>net35</TargetFramework>
-   <AssemblyTitle>TwitchPlaysAssembly</AssemblyTitle>
-   <Product>TwitchPlaysAssembly</Product>
-   <LangVersion>7.3</LangVersion>
-   <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-   <Deterministic>false</Deterministic>
-   <Configurations>Release</Configurations>
- </PropertyGroup>
- <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
-   <DebugType>pdbonly</DebugType>
-   <OutputPath>../Assets/Plugins/Managed/</OutputPath>
-   <DocumentationFile>../docs/documentation.xml</DocumentationFile>
- </PropertyGroup>
- <PropertyGroup>
-   <GameFolder Condition="'$(GameFolder)' == ''">/Users/mac/Desktop/KTANE/Keep Talking and Nobody Explodes.app/Contents/Resources/Data/Managed</GameFolder>
-   <Copy>copy</Copy>
-   <Copy Condition=" '$(OS)' != 'Windows_NT' ">cp</Copy>
- </PropertyGroup>
- <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-   <Exec Command="$(Copy) &quot;$(TargetPath)&quot; &quot;$(GameFolder)mods/Twitch Plays/$(TargetFileName)&quot;" />
- </Target>
- <ItemGroup>
-   <Reference Include="Newtonsoft.Json, Version=6.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
-     <HintPath>../Assets/Plugins/Managed/Newtonsoft.Json.dll</HintPath>
-     <SpecificVersion>False</SpecificVersion>
-   </Reference>
-   <Reference Include="Assembly-CSharp">
-     <HintPath>$(GameFolder)/Assembly-CSharp.dll</HintPath>
-     <Private>False</Private>
-   </Reference>
-   <Reference Include="KMFramework">
-     <HintPath>../Assets/Plugins/Managed/KMFramework.dll</HintPath>
-     <Private>False</Private>
-   </Reference>
-   <Reference Include="UnityEngine">
-     <HintPath>$(GameFolder)/UnityEngine.dll</HintPath>
-     <Private>False</Private>
-   </Reference>
-   <Reference Include="UnityEngine.AnimationModule">
-     <HintPath>$(GameFolder)/UnityEngine.AnimationModule.dll</HintPath>
-     <Private>False</Private>
-   </Reference>
-   <Reference Include="UnityEngine.AudioModule">
-     <HintPath>$(GameFolder)/UnityEngine.AudioModule.dll</HintPath>
-     <Private>False</Private>
-   </Reference>
-   <Reference Include="UnityEngine.CoreModule">
-     <HintPath>$(GameFolder)/UnityEngine.CoreModule.dll</HintPath>
-     <Private>False</Private>
-   </Reference>
-   <Reference Include="UnityEngine.ImageConversionModule">
-     <HintPath>$(GameFolder)/UnityEngine.ImageConversionModule.dll</HintPath>
-     <Private>False</Private>
-   </Reference>
-   <Reference Include="UnityEngine.IMGUIModule">
-     <HintPath>$(GameFolder)/UnityEngine.IMGUIModule.dll</HintPath>
-     <Private>False</Private>
-   </Reference>
-   <Reference Include="UnityEngine.PhysicsModule">
-     <HintPath>$(GameFolder)/UnityEngine.PhysicsModule.dll</HintPath>
-     <Private>False</Private>
-   </Reference>
-   <Reference Include="UnityEngine.TextRenderingModule">
-     <HintPath>$(GameFolder)/UnityEngine.TextRenderingModule.dll</HintPath>
-     <Private>False</Private>
-   </Reference>
-   <Reference Include="UnityEngine.UI">
-     <HintPath>$(GameFolder)/UnityEngine.UI.dll</HintPath>
-     <Private>False</Private>
-   </Reference>
-   <Reference Include="UnityEngine.UIModule">
-     <HintPath>$(GameFolder)/UnityEngine.UIModule.dll</HintPath>
-     <Private>False</Private>
-   </Reference>
-   <Reference Include="UnityEngine.UnityWebRequestModule">
-     <HintPath>$(GameFolder)/UnityEngine.UnityWebRequestModule.dll</HintPath>
-     <Private>False</Private>
-   </Reference>
-   <Reference Include="UnityEngine.UnityWebRequestWWWModule">
-     <HintPath>$(GameFolder)/UnityEngine.UnityWebRequestWWWModule.dll</HintPath>
-     <Private>False</Private>
-   </Reference>
- </ItemGroup>
- <ItemGroup>
-   <None Include=".editorconfig" />
- </ItemGroup>
- <ItemGroup>
-   <PackageReference Include="BouncyCastle" Version="1.8.9" />
- </ItemGroup>
-
+  <PropertyGroup>
+    <ProjectGuid>{B2DBE282-D779-4B15-BDC9-C747EA7EAF72}</ProjectGuid>
+    <TargetFramework>net35</TargetFramework>
+    <AssemblyTitle>TwitchPlaysAssembly</AssemblyTitle>
+    <Product>TwitchPlaysAssembly</Product>
+    <LangVersion>7.3</LangVersion>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <Deterministic>false</Deterministic>
+    <Configurations>Release</Configurations>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <OutputPath>..\Assets\Plugins\Managed\</OutputPath>
+    <DocumentationFile>..\docs\documentation.xml</DocumentationFile>
+  </PropertyGroup>
+  <PropertyGroup>
+    <GameFolder Condition="'$(GameFolder)' == ''">C:\GPTNT\Keep Talking and Nobody Explodes\</GameFolder>
+    <Copy>copy</Copy>
+    <Copy Condition=" '$(OS)' != 'Windows_NT' ">cp</Copy>
+  </PropertyGroup>
+  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
+    <Exec Command="$(Copy) &quot;$(TargetPath)&quot; &quot;$(GameFolder)mods\Twitch Plays\$(TargetFileName)&quot;" />
+  </Target>
+  <ItemGroup>
+    <Reference Include="Newtonsoft.Json, Version=6.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
+      <HintPath>..\Assets\Plugins\Managed\Newtonsoft.Json.dll</HintPath>
+      <SpecificVersion>False</SpecificVersion>
+    </Reference>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(GameFolder)\ktane_Data\Managed\Assembly-CSharp.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="KMFramework">
+      <HintPath>..\Assets\Plugins\Managed\KMFramework.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>$(GameFolder)\ktane_Data\Managed\UnityEngine.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.AnimationModule">
+      <HintPath>$(GameFolder)\ktane_Data\Managed\UnityEngine.AnimationModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.AudioModule">
+      <HintPath>$(GameFolder)\ktane_Data\Managed\UnityEngine.AudioModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(GameFolder)\ktane_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.ImageConversionModule">
+      <HintPath>$(GameFolder)\ktane_Data\Managed\UnityEngine.ImageConversionModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.IMGUIModule">
+      <HintPath>$(GameFolder)\ktane_Data\Managed\UnityEngine.IMGUIModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.PhysicsModule">
+      <HintPath>$(GameFolder)\ktane_Data\Managed\UnityEngine.PhysicsModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.TextRenderingModule">
+      <HintPath>$(GameFolder)\ktane_Data\Managed\UnityEngine.TextRenderingModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UI">
+      <HintPath>$(GameFolder)\ktane_Data\Managed\UnityEngine.UI.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UIModule">
+      <HintPath>$(GameFolder)\ktane_Data\Managed\UnityEngine.UIModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UnityWebRequestModule">
+      <HintPath>$(GameFolder)\ktane_Data\Managed\UnityEngine.UnityWebRequestModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UnityWebRequestWWWModule">
+      <HintPath>$(GameFolder)\ktane_Data\Managed\UnityEngine.UnityWebRequestWWWModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.ScreenCaptureModule">
+      <HintPath>$(GameFolder)\ktane_Data\Managed\UnityEngine.ScreenCaptureModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include=".editorconfig" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="BouncyCastle" Version="1.8.9" />
+  </ItemGroup>
 </Project>
