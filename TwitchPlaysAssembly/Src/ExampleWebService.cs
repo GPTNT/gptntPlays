@@ -20,7 +20,8 @@ public class ExampleWebService : MonoBehaviour
 	GameObject spawn;
 	KMMission mission;
 	GptntActions gptntActions;
-	private bool canPlay;
+	private bool lightsOn;
+	private string gameState;
 
 	Thread workerThread;
 	Worker workerObject;
@@ -62,10 +63,15 @@ public class ExampleWebService : MonoBehaviour
 	{
 		gameInfo = FindObjectOfType<KMGameInfo>();
 		gameInfo.OnLightsChange += (bool on) => {
-			canPlay = on;
+			lightsOn = on;
 			bomb = FindObjectOfType<TwitchBomb>();
 			gptntActions.bomb = bomb;
 			gptntActions.InitRotation();
+			gameState = gameState.EqualsAny("Gameplay", "Lights On", "Lights Off") ? (lightsOn ? "Lights On" : "Lights Off") : gameState;
+		};
+		gameInfo.OnStateChange += (KMGameInfo.State state) =>
+		{
+			gameState = state.ToString();
 		};
 		int width = Screen.width;
 		int height = Screen.height;
@@ -387,16 +393,16 @@ public class ExampleWebService : MonoBehaviour
 		switch (path)
 		{
 			case "/bombinfo":
-				responseString = canPlay ? GetBombInfo() : notStarted;
+				responseString = lightsOn ? GetBombInfo() : notStarted;
 				break;
 			case "/startmission":
 				responseString = HandleStartMission(request);
 				break;
 			case "/causestrike":
-				responseString = canPlay ? HandleCauseStrike(request) : notStarted;
+				responseString = lightsOn ? HandleCauseStrike(request) : notStarted;
 				break;
 			case "/screenshot":
-				responseString = canPlay ? HandleScreenshot(response) : notStarted;
+				responseString = lightsOn ? HandleScreenshot(response) : notStarted;
 				break;
 			case "/settimescale":
 				responseString = HandleSetTimescale(request);
@@ -408,10 +414,13 @@ public class ExampleWebService : MonoBehaviour
 				responseString = HandleTimeStep(request);
 				break;
 			case "/action":
-				responseString = canPlay ? HandleAction(request) : notStarted;
+				responseString = lightsOn ? HandleAction(request) : notStarted;
 				break;
 			case "/observation":
-				responseString = canPlay ? HandleObservation(response) : notStarted;
+				responseString = lightsOn ? HandleObservation(response) : notStarted;
+				break;
+			case "/health":
+				responseString = HandleHealth();
 				break;
 			default:
 				responseString = "Unknown route.";
@@ -420,6 +429,11 @@ public class ExampleWebService : MonoBehaviour
 
 		// Send response
 		SendResponse(response, responseString);
+	}
+
+	private string HandleHealth()
+	{
+		return gameState;
 	}
 
 	private string HandleObservation(HttpListenerResponse response)
