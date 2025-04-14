@@ -42,6 +42,8 @@ JSON structure
     screenshot: [<base64-encoded PNG bytes>],
     segmentation: [<base64-encoded PNG bytes>]
 }`
+### /health
+Returns a state of the game: Lights On, Lights Off, Transitioning, Setup, PostGame, Unlock, Quitting
 ### /causestrike
 Causes a strike to the bomb with a reason
 ### /screenshot
