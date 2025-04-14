@@ -41,7 +41,11 @@ public class Segmentation : MonoBehaviour
 
 	public IEnumerator Capture(GameObject[] objects, Action<byte[]> callback)
 	{
-		if (objects.Length == 0) yield return null;
+		if (objects.Length == 0)
+		{
+			callback?.Invoke(null);
+			yield break;
+		}
 		propertyBlock = new MaterialPropertyBlock();
 		objectsOnSegmentationLayer = new List<GameObject>();
 		Segment(objects);
