@@ -436,7 +436,7 @@ public class ExampleWebService : MonoBehaviour
 		}
 
 		// Send response
-		SendResponse(response, responseString);
+		SendResponse(request, response, responseString);
 	}
 
 	private string HandleReset()
@@ -753,9 +753,23 @@ public class ExampleWebService : MonoBehaviour
 		Time.timeScale = 0; // Pause
 	}
 
-	private void SendResponse(HttpListenerResponse response, string responseString)
+	private void SendResponse(HttpListenerRequest request ,HttpListenerResponse response, string responseString)
 	{
 		byte[] buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
+
+		// Set CORS headers here
+		response.AddHeader("Access-Control-Allow-Origin", "*"); // or restrict to your domain
+		response.AddHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+		response.AddHeader("Access-Control-Allow-Headers", "Content-Type");
+
+		// Special case for preflight OPTIONS requests — immediately return 200 OK
+		if (response.StatusCode == (int) HttpStatusCode.OK && request.HttpMethod == "OPTIONS")
+		{
+			response.ContentLength64 = 0;
+			response.OutputStream.Close();
+			return;
+		}
+
 		// Get a response stream and write the response to it.
 		response.ContentLength64 = buffer.Length;
 		System.IO.Stream output = response.OutputStream;
