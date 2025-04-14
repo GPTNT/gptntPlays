@@ -62,16 +62,17 @@ public class ExampleWebService : MonoBehaviour
 	private void Start()
 	{
 		gameInfo = FindObjectOfType<KMGameInfo>();
+		gameInfo.OnStateChange += (KMGameInfo.State state) =>
+		{
+			gameState = state.ToString();
+			if (gameState.Equals("Setup")) Reset();
+		};
 		gameInfo.OnLightsChange += (bool on) => {
 			lightsOn = on;
 			bomb = FindObjectOfType<TwitchBomb>();
 			gptntActions.bomb = bomb;
 			gptntActions.InitRotation();
 			gameState = gameState.EqualsAny("Gameplay", "Lights On", "Lights Off") ? (lightsOn ? "Lights On" : "Lights Off") : gameState;
-		};
-		gameInfo.OnStateChange += (KMGameInfo.State state) =>
-		{
-			gameState = state.ToString();
 		};
 		int width = Screen.width;
 		int height = Screen.height;
@@ -80,6 +81,11 @@ public class ExampleWebService : MonoBehaviour
 
 		tex = new Texture2D(width, height, TextureFormat.RGB24, false);
 		rect = new Rect(0, 0, width, height);
+	}
+
+	private void Reset()
+	{
+		actions.Clear();
 	}
 	/*
 	Keys and what they do:
@@ -362,7 +368,6 @@ public class ExampleWebService : MonoBehaviour
 		workerObject.Stop();
 	}
 
-	// This example requires the System and System.Net namespaces.
 	public void SimpleListenerExample(HttpListener listener)
 	{
 		while (true)
@@ -422,6 +427,9 @@ public class ExampleWebService : MonoBehaviour
 			case "/health":
 				responseString = HandleHealth();
 				break;
+			case "/reset":
+				responseString = HandleReset();
+				break;
 			default:
 				responseString = "Unknown route.";
 				break;
@@ -429,6 +437,39 @@ public class ExampleWebService : MonoBehaviour
 
 		// Send response
 		SendResponse(response, responseString);
+	}
+
+	private string HandleReset()
+	{
+		actions.Enqueue(() => StartCoroutine(GoToSetup()));
+		return "Nuh uh";
+	}
+
+	private IEnumerator GoToSetup()
+	{
+		while (!gameState.Equals("Setup"))
+		{
+			switch (gameState)
+			{
+				case "Lights On":
+				case "Lights Off":
+					// force fail bomb
+					CauseStrike("Reset");
+					break;
+				case "PostGame":
+					// PostGameCommands.Continue()
+					Selectable continueBtn = FindObjectOfType<ResultPage>()?.ContinueButton;
+					if (!continueBtn)
+						continue;
+					continueBtn.Trigger(); // if the button is clicked while the text animation shows, it shortcuts the typing 
+					continueBtn.Trigger(); // click again
+					break;
+				default:
+					// transitioning, wait
+					break;
+			}
+			yield return null;
+		}
 	}
 
 	private string HandleHealth()
