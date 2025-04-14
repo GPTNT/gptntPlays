@@ -35,7 +35,7 @@ actions:
 - release
 - out - to zoom out of a module
 ### /observation
-eg: `http://localhost:8085/action?action=observation`
+eg: `http://localhost:8085/action?action=observation` \
 Returns a JSON object containing a screenshot and segmentation mask captured from the game. \
 JSON structure 
 `{
