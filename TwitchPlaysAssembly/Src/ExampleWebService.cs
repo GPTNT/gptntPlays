@@ -326,13 +326,15 @@ public class ExampleWebService : MonoBehaviour
 		List<Selectable> activeSelectables = new List<Selectable>();
 		SelectableManager selectableManager = KTInputManager.Instance.SelectableManager;
 		string parentName = selectableManager.GetCurrentParent().gameObject.name;
-		GptntDebug.Log("Selectable Parent name: " + parentName);
 		if (parentName.Equals("BasicRectangleBomb(Clone)")) // Level 1
 		{
 			// Face has no selectables;
 		}
-		else if ((parentName.Equals("FrontFace") || parentName.Equals("RearFace")) && gptntActions.bombRotationX == 0f && gptntActions.bombRotationZ.EqualsAny(0f,180f)) // Level 2 
+		else if (parentName.Equals("FrontFace") || parentName.Equals("RearFace")) // Level 2 
 		{
+			if (!(gptntActions.bombRotationX == 0f && gptntActions.bombRotationZ.EqualsAny(0f, 180f)))
+				return activeSelectables;
+				
 			foreach (BombComponent component in bomb.Bomb.BombComponents)
 			{
 				if (!component.ComponentType.EqualsAny(ComponentTypeEnum.Empty, ComponentTypeEnum.Timer))
@@ -352,6 +354,8 @@ public class ExampleWebService : MonoBehaviour
 			// assume that it is a module and get its selectables
 			Selectable parent = selectableManager.GetCurrentParent();
 			Selectable[] children = parent.gameObject.GetComponentsInChildren<Selectable>();
+			if (children.Length <= 1) return activeSelectables;
+
 			Selectable[] childrenWithoutHead = new Selectable[children.Length - 1];
 			Array.Copy(children, 1, childrenWithoutHead, 0, children.Length - 1);
 			foreach (Selectable selectable in childrenWithoutHead)
@@ -721,7 +725,7 @@ public class ExampleWebService : MonoBehaviour
 			return "Failed to get segmentation mask";
 		}
 		response.ContentType = "image/png";
-		return Convert.ToBase64String(imageBytes);
+		return (imageBytes != null) ? Convert.ToBase64String(imageBytes) : "";
 	}
 
 	private string HandleSetTimescale(HttpListenerRequest request)
