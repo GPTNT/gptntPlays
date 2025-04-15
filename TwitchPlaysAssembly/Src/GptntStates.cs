@@ -126,7 +126,10 @@ public class GptntStates : MonoBehaviour
 						SerialNumber serialNumber = (SerialNumber) widget;
 						FieldInfo fieldInfo = typeof(SerialNumber).GetField("serialString", BindingFlags.NonPublic | BindingFlags.Instance);
 						string serialString = (string) fieldInfo.GetValue(serialNumber);
-						bombState.SerialNumber = serialString;
+						SerialNumberWidgetState serialState = new SerialNumberWidgetState();
+						serialState.SerialNumber = serialString;
+						serialState.Position = widgetFace;
+						bombState.Widgets.Add(serialState);
 					}
 					catch (Exception ex)
 					{
@@ -154,6 +157,7 @@ public class GptntStates : MonoBehaviour
 							batteryState.BatteriesCount = 1;
 						}
 						batteryState.Position = widgetFace;
+						bombState.Widgets.Add(batteryState);
 					}
 					catch (Exception ex)
 					{
@@ -1124,6 +1128,11 @@ public class PortWidgetState : BaseWidgetState
 	public List<string> PortTypes { get; set; }
 }
 
+public class SerialNumberWidgetState : BaseWidgetState
+{
+	public string SerialNumber { get; set; }
+}
+
 public class BombState
 {
 	public int Seed { get; set; }
@@ -1131,7 +1140,6 @@ public class BombState
 	public float Timestamp { get; set; }
 	public int MaxStrikes { get; set; } = 3;
 	public int CurrentStrikes { get; set; } = 0;
-	public string SerialNumber { get; set; }
 	public bool isDetonated { get; set; }
 	public bool isSolved { get; set; }
 
