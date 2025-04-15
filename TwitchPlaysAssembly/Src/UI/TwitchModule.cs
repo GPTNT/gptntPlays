@@ -11,7 +11,7 @@ public class TwitchModule : MonoBehaviour
 	#region Public Fields
 	public CanvasGroup CanvasGroupMultiDecker { get => _data.canvasGroupMultiDecker; set => _data.canvasGroupMultiDecker = value; }
 	public CanvasGroup CanvasGroupUnsupported { get => _data.canvasGroupUnsupported; set => _data.canvasGroupUnsupported = value; }
-	//public Text IDTextMultiDecker { get => _data.idTextMultiDecker; set => _data.idTextMultiDecker = value; }
+	public Text IDTextMultiDecker { get => _data.idTextMultiDecker; set => _data.idTextMultiDecker = value; }
 	public Text IDTextUnsupported { get => _data.idTextUnsupported; set => _data.idTextUnsupported = value; }
 	public Image ClaimedUserMultiDecker { get => _data.claimedUserMultiDecker; set => _data.claimedUserMultiDecker = value; }
 	public Color ClaimedBackgroundColour { get => _data.claimedBackgroundColour; set => _data.claimedBackgroundColour = value; }
@@ -232,7 +232,7 @@ public class TwitchModule : MonoBehaviour
 					SetStatusLightPosition(ModInfo.statusLightPosition);
 				}
 
-				//CanvasGroupUnsupported.gameObject.SetActive(Solver.UnsupportedModule);
+				CanvasGroupUnsupported.gameObject.SetActive(Solver.UnsupportedModule);
 
 				IDTextUnsupported.text = BombComponent is ModBombComponent
 					? $"To solve this\nmodule, use\n!{Code} solve"
@@ -255,7 +255,7 @@ public class TwitchModule : MonoBehaviour
 			UnsupportedComponents.Add(this);
 			Solver = null;
 
-			//CanvasGroupUnsupported.gameObject.SetActive(true);
+			CanvasGroupUnsupported.gameObject.SetActive(true);
 			IDTextUnsupported.gameObject.SetActive(false);
 
 			if (!TwitchPlaySettings.data.EnableInteractiveMode)
@@ -319,20 +319,20 @@ public class TwitchModule : MonoBehaviour
 
 	private void GetStatusLightY(float offset = 0.03514f)
 	{
-		//Vector3 pos = CanvasGroupMultiDecker.transform.localPosition;
+		Vector3 pos = CanvasGroupMultiDecker.transform.localPosition;
 		// This sets the Y position of ID tag to be right above the status light for modules where the status light has been moved.
 		// Which is done by getting the status light's position in world space, converting it to the tag's local space, taking the Y and adding 0.03514 (unless otherwise specified).
 		StatusLightParent statusLightParent = BombComponent.GetComponentInChildren<StatusLightParent>();
 		if (statusLightParent != null)
 		{
-			//float y = CanvasGroupMultiDecker.transform.parent.InverseTransformPoint(statusLightParent.transform.position).y + offset;
-			//if (y >= 0) // Make sure the Y position wouldn't be inside the module.
-			//{
-			//	//pos.y = y;
-			//}
+			float y = CanvasGroupMultiDecker.transform.parent.InverseTransformPoint(statusLightParent.transform.position).y + offset;
+			if (y >= 0) // Make sure the Y position wouldn't be inside the module.
+			{
+				pos.y = y;
+			}
 		}
 
-		//_originalIDPosition = pos;
+		_originalIDPosition = pos;
 	}
 
 	private IEnumerator RepeatStatusLightY(ModuleInformation ModInfo)
@@ -708,12 +708,12 @@ public class TwitchModule : MonoBehaviour
 	{
 		for (float time = 0f; time < timeframe; time += Time.deltaTime)
 		{
-			//BackgroundAlphaPercent = Mathf.Lerp(begin, end, Mathf.InverseLerp(0f, timeframe, time));
-			//CanvasGroupMultiDecker.alpha = BackgroundBaseAlpha * BackgroundAlphaPercent;
+			BackgroundAlphaPercent = Mathf.Lerp(begin, end, Mathf.InverseLerp(0f, timeframe, time));
+			CanvasGroupMultiDecker.alpha = BackgroundBaseAlpha * BackgroundAlphaPercent;
 			yield return null;
 		}
 		BackgroundAlphaPercent = end;
-		//CanvasGroupMultiDecker.alpha = BackgroundBaseAlpha * BackgroundAlphaPercent;
+		CanvasGroupMultiDecker.alpha = BackgroundBaseAlpha * BackgroundAlphaPercent;
 	}
 
 	private void SetStatusLightPosition(StatusLightPosition newPos)
@@ -737,36 +737,36 @@ public class TwitchModule : MonoBehaviour
 			// Else, it'll be left at "Default", which will behave the same as "TopRight".
 		}
 
-		//RectTransform rectTransform = ClaimedUserMultiDecker.rectTransform;
+		RectTransform rectTransform = ClaimedUserMultiDecker.rectTransform;
 
-		//switch (newPos)
-		//{
-		//	case StatusLightPosition.Center:
-		//		CanvasGroupMultiDecker.transform.localPosition = new Vector3(0, _originalIDPosition.y, 0);
-		//		rectTransform.anchorMax = rectTransform.anchorMin = new Vector2(0.5f, 1);
-		//		rectTransform.pivot = new Vector2(0.5f, 0);
-		//		break;
-		//	case StatusLightPosition.TopLeft:
-		//		CanvasGroupMultiDecker.transform.localPosition = new Vector3(-_originalIDPosition.x, _originalIDPosition.y, _originalIDPosition.z);
-		//		rectTransform.anchorMax = rectTransform.anchorMin = new Vector2(1, 1);
-		//		rectTransform.pivot = new Vector2(0, 1);
-		//		break;
-		//	case StatusLightPosition.BottomRight:
-		//		CanvasGroupMultiDecker.transform.localPosition = new Vector3(_originalIDPosition.x, _originalIDPosition.y, -_originalIDPosition.z);
-		//		rectTransform.anchorMax = rectTransform.anchorMin = new Vector2(0, 0);
-		//		rectTransform.pivot = new Vector2(1, 0);
-		//		break;
-		//	case StatusLightPosition.BottomLeft:
-		//		CanvasGroupMultiDecker.transform.localPosition = new Vector3(-_originalIDPosition.x, _originalIDPosition.y, -_originalIDPosition.z);
-		//		rectTransform.anchorMax = rectTransform.anchorMin = new Vector2(1, 0);
-		//		rectTransform.pivot = new Vector2(0, 0);
-		//		break;
-		//	default:
-		//		CanvasGroupMultiDecker.transform.localPosition = new Vector3(_originalIDPosition.x, _originalIDPosition.y, _originalIDPosition.z);
-		//		rectTransform.anchorMax = rectTransform.anchorMin = new Vector2(0, 1);
-		//		rectTransform.pivot = new Vector2(1, 1);
-		//		break;
-		//}
+		switch (newPos)
+		{
+			case StatusLightPosition.Center:
+				CanvasGroupMultiDecker.transform.localPosition = new Vector3(0, _originalIDPosition.y, 0);
+				rectTransform.anchorMax = rectTransform.anchorMin = new Vector2(0.5f, 1);
+				rectTransform.pivot = new Vector2(0.5f, 0);
+				break;
+			case StatusLightPosition.TopLeft:
+				CanvasGroupMultiDecker.transform.localPosition = new Vector3(-_originalIDPosition.x, _originalIDPosition.y, _originalIDPosition.z);
+				rectTransform.anchorMax = rectTransform.anchorMin = new Vector2(1, 1);
+				rectTransform.pivot = new Vector2(0, 1);
+				break;
+			case StatusLightPosition.BottomRight:
+				CanvasGroupMultiDecker.transform.localPosition = new Vector3(_originalIDPosition.x, _originalIDPosition.y, -_originalIDPosition.z);
+				rectTransform.anchorMax = rectTransform.anchorMin = new Vector2(0, 0);
+				rectTransform.pivot = new Vector2(1, 0);
+				break;
+			case StatusLightPosition.BottomLeft:
+				CanvasGroupMultiDecker.transform.localPosition = new Vector3(-_originalIDPosition.x, _originalIDPosition.y, -_originalIDPosition.z);
+				rectTransform.anchorMax = rectTransform.anchorMin = new Vector2(1, 0);
+				rectTransform.pivot = new Vector2(0, 0);
+				break;
+			default:
+				CanvasGroupMultiDecker.transform.localPosition = new Vector3(_originalIDPosition.x, _originalIDPosition.y, _originalIDPosition.z);
+				rectTransform.anchorMax = rectTransform.anchorMin = new Vector2(0, 1);
+				rectTransform.pivot = new Vector2(1, 1);
+				break;
+		}
 	}
 	#endregion
 

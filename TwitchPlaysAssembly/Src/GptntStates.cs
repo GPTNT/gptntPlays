@@ -10,6 +10,8 @@ using BombGame;
 using System.Drawing;
 using Assets.Scripts.Components.VennWire;
 using System.Linq;
+using TMPro;
+using Events;
 
 public class GptntStates : MonoBehaviour 
 {
@@ -18,24 +20,54 @@ public class GptntStates : MonoBehaviour
 	private string line;
 	public BombState bombState;
 	float StartTime;
+	TwitchBomb twitchBomb;
 	public bool readyToGive = false;
+	KMBombInfo bombInfo;
 
-	public void Awake()
+	public void Start()
 	{
-		bombState = new BombState();
-		bombState.Widgets = new List<BaseWidgetState> { };
-		bombState.Modules = new List<BaseModuleState> { };
+		bombInfo = GetComponent<KMBombInfo>();
+
+		bombInfo.OnBombExploded += () =>
+		{
+			bombState.isDetonated = true;
+			bombState.CurrentStrikes = twitchBomb.Bomb.NumStrikes;
+			bombState.TimeRemaining = twitchBomb.Bomb.GetTimer().TimeRemaining;
+			if (bombState.TimeRemaining < 0)
+			{
+				bombState.TimeRemaining = 0;
+			}
+			else
+			{
+				bombState.CurrentStrikes++;
+			}
+
+		};
+
+		bombInfo.OnBombSolved += () =>
+		{
+			bombState.isSolved = true;
+			bombState.CurrentStrikes = twitchBomb.Bomb.NumStrikes;
+			bombState.TimeRemaining = twitchBomb.Bomb.GetTimer().TimeRemaining;
+		};
 	}
 
-	public void resetClock()
+	public void ResetClock()
 	{
 		StartTime = Time.time;
 	}
 
-	public void getModuleData()
+	public void GetInitialBombState()
 	{
-		TwitchBomb twitchBomb = FindObjectOfType<TwitchBomb>();
+		ResetClock();
+		bombState = new BombState();
+		bombState.isSolved = false;
+		bombState.isDetonated = false;
+		bombState.Widgets = new List<BaseWidgetState> { };
+		bombState.Modules = new List<BaseModuleState> { };
+		twitchBomb = FindObjectOfType<TwitchBomb>();
 		Bomb bomb = twitchBomb.Bomb;
+
 		bombState.Seed = bomb.Seed;
 		bombState.Timestamp = Time.time - StartTime;
 		try
@@ -549,21 +581,380 @@ public class GptntStates : MonoBehaviour
 		// TODO: readyToGive needs to be reset when the bomb is finished, ask Kareem about how to know if a module is infocus
 	}
 
-	public IEnumerator populate(float delay)
+
+	public void UpdateBombState()
 	{
-		yield return new WaitForSeconds(delay);
+		TwitchBomb twitchBomb = FindObjectOfType<TwitchBomb>();
+		Bomb bomb = twitchBomb.Bomb;
+		bombState.Modules = new List<BaseModuleState> { };
+		bombState.Timestamp = Time.time - StartTime;
+		try
+		{
+			bombState.TimeRemaining = bomb.GetTimer().TimeRemaining;
+		}
+		catch (Exception ex)
+		{
+			GptntDebug.Log("Error setting TimeRemaining: " + ex);
+		}
 
-		//populateValues();
-		//GptntDebug.Log($"serial: {serialNumber}\n");
-		//GptntDebug.Log($"seed: {seed}\n");
-		//for (int i = 0; i < modules.Count; i++)
-		//{
-		//	GptntDebug.Log($"Includes module: {modules[i]}");
-		//}
-		resetClock();
-		getModuleData();
+		try
+		{
+			bombState.CurrentStrikes = bomb.NumStrikes;
+		}
+		catch (Exception ex)
+		{
+			GptntDebug.Log("Error setting CurrentStrikes: " + ex);
+		}
+
+
+		foreach (BombComponent comp in bomb.BombComponents)
+		{
+			bool isSolved = comp.IsSolved;
+			FieldInfo fieldInfo3 = typeof(BombComponent).GetField("isFocused", BindingFlags.NonPublic | BindingFlags.Instance);
+			bool isFocused = (bool) fieldInfo3.GetValue(comp);
+
+
+
+			if (comp.ComponentType == ComponentTypeEnum.Simon)
+			{
+				SimonComponent simon = (SimonComponent) comp;
+				FieldInfo fieldInfo1 = typeof(SimonComponent).GetField("currentSequence", BindingFlags.NonPublic | BindingFlags.Instance);
+				int[] sequence = (int[]) fieldInfo1.GetValue(simon);
+				FieldInfo fieldInfo2 = typeof(SimonComponent).GetField("solveProgress", BindingFlags.NonPublic | BindingFlags.Instance);
+				int solveProgress = (int) fieldInfo2.GetValue(simon);
+
+				SimonSaysModuleState simonState = new SimonSaysModuleState();
+				List<string> beepSequence = new List<string>();
+				foreach (int beep in sequence)
+				{
+					if (beep == 0)
+					{
+						beepSequence.Add("Red");
+					}
+					else if (beep == 1)
+					{
+						beepSequence.Add("Blue");
+					}
+					else if (beep == 2)
+					{
+						beepSequence.Add("Green");
+					}
+					else if (beep == 3)
+					{
+						beepSequence.Add("Yellow");
+					}
+				}
+
+
+				simonState.BeepSequence = beepSequence;
+				simonState.solveProgress = solveProgress;
+				simonState.IsSolved = isSolved;
+				simonState.InFocus = isFocused;
+				bombState.Modules.Add(simonState);
+
+
+			}
+			else if (comp.ComponentType == ComponentTypeEnum.Wires)
+			{
+				WireSetComponent wireset = (WireSetComponent) comp;
+				List<int> indices = new List<int>();
+				Selectable component = wireset.GetComponent<Selectable>();
+				for (int i = 0; i < component.Children.Length; i++)
+				{
+					if (component.Children[i] != null)
+					{
+						indices.Add(int.Parse(component.Children[i].name[component.Children[i].name.Length - 1].ToString()) - 1);
+					}
+				}
+				WireColor[] colors = new WireColor[6];
+				bool[] is_snipped = new bool[6];
+
+				WireSetModuleState wireSetState = new WireSetModuleState();
+				wireSetState.Wires = new WireSetWireState[6];
+				// Just assign the spaces that contain wires
+				int indicesIndex = 0;
+				foreach (SnippableWire wire in wireset.wires)
+				{
+					wireSetState.Wires[indices[indicesIndex]] = new WireSetWireState();
+					wireSetState.Wires[indices[indicesIndex]].Colour = wire.GetColor().ToString();
+					wireSetState.Wires[indices[indicesIndex]].IsCut = wire.Snipped;
+					wireSetState.Wires[indices[indicesIndex]].Position = indices[indicesIndex];
+					indicesIndex++;
+				}
+
+				wireSetState.IsSolved = isSolved;
+				wireSetState.InFocus = isFocused;
+				bombState.Modules.Add(wireSetState);
+			}
+			else if (comp.ComponentType == ComponentTypeEnum.BigButton)
+			{
+				ButtonComponent button = (ButtonComponent) comp;
+				string buttonColor = button.ButtonColor.ToString();
+				string buttonMessage = button.ButtonInstruction.ToString();
+				string stripColor = button.IndicatorColor.ToString();
+
+				ButtonModuleState buttonState = new ButtonModuleState();
+				buttonState.ButtonColor = buttonColor;
+				buttonState.ButtonWord = buttonMessage;
+				buttonState.IsHeld = button.IsHolding;
+				if (buttonState.IsHeld)
+				{
+					buttonState.StripColour = stripColor;
+				}
+				else
+				{
+					buttonState.StripColour = null;
+				}
+				buttonState.IsSolved = isSolved;
+				buttonState.InFocus = isFocused;
+				bombState.Modules.Add(buttonState);
+
+			}
+			else if (comp.ComponentType == ComponentTypeEnum.Keypad)
+			{
+				KeypadComponent keypad = (KeypadComponent) comp;
+
+				KeypadModuleState keypadState = new KeypadModuleState();
+				keypadState.KeypadButtons = new KeyPadButtonState[4];
+
+				for (int i = 0; i < 4; i++)
+				{
+					KeypadButton button = keypad.buttons[i];
+					keypadState.KeypadButtons[i] = new KeyPadButtonState();
+					keypadState.KeypadButtons[i].Symbol = button.GetValue();
+					if (button.LED_Correct.active)
+					{
+						keypadState.KeypadButtons[i].Colour = "Green";
+
+
+					}
+					else if (button.LED_Wrong.active)
+					{
+						keypadState.KeypadButtons[i].Colour = "Red";
+
+					}
+					else
+					{
+						keypadState.KeypadButtons[i].Colour = null;
+					}
+				}
+				keypadState.IsSolved = isSolved;
+				keypadState.InFocus = isFocused;
+				bombState.Modules.Add(keypadState);
+
+
+			}
+			else if (comp.ComponentType == ComponentTypeEnum.WhosOnFirst)
+			{
+				WhosOnFirstComponent whoFirst = (WhosOnFirstComponent) comp;
+				int stage = whoFirst.CurrentStage;
+				string[] buttonValues = new string[6];
+				foreach (KeypadButton button in whoFirst.Buttons)
+				{
+					buttonValues[button.ButtonIndex] = button.Text.text;
+
+				}
+				string displayWord = whoFirst.DisplayText.text;
+
+				WhosOnFirstModuleState whoFirstState = new WhosOnFirstModuleState();
+				whoFirstState.Stage = stage;
+				whoFirstState.ButtonWords = buttonValues;
+				whoFirstState.DisplayWord = displayWord;
+				whoFirstState.IsSolved = isSolved;
+				bombState.Modules.Add(whoFirstState);
+			}
+
+			else if (comp.ComponentType == ComponentTypeEnum.Memory)
+			{
+				MemoryComponent memory = (MemoryComponent) comp;
+				MemoryModuleState memoryState = new MemoryModuleState();
+				memoryState.Stage = memory.CurrentStage;
+				memoryState.DisplayNumber = int.Parse(memory.DisplayText.text);
+				int[] buttonValues = new int[4];
+				foreach (KeypadButton button in memory.Buttons)
+				{
+					buttonValues[button.ButtonIndex] = int.Parse(button.Text.text);
+
+				}
+				memoryState.ButtonNumbers = buttonValues;
+				memoryState.IsSolved = isSolved;
+				memoryState.InFocus = isFocused;
+				bombState.Modules.Add(memoryState);
+			}
+
+			else if (comp.ComponentType == ComponentTypeEnum.Morse)
+			{
+				MorseCodeComponent morse = (MorseCodeComponent) comp;
+				int currentFrequency = morse.CurrentFrequency;
+				FieldInfo fieldInfo = typeof(MorseCodeComponent).GetField("chosenWord", BindingFlags.NonPublic | BindingFlags.Instance);
+				string word = (string) fieldInfo.GetValue(morse);
+
+				MorseCodeModuleState morseState = new MorseCodeModuleState();
+
+				morseState.Frequency = currentFrequency;
+				morseState.Sequence = word;
+				morseState.IsSolved = isSolved;
+				morseState.InFocus = isFocused;
+				bombState.Modules.Add(morseState);
+			}
+
+			else if (comp.ComponentType == ComponentTypeEnum.Venn)
+			{
+				VennWireComponent venn = (VennWireComponent) comp;
+				bool[] has_star = new bool[6];
+				bool[] is_led_on = new bool[6];
+				bool[] is_snipped = new bool[6];
+				string[] color = new string[6];
+
+				List<int> indices = new List<int>();
+				Selectable component = venn.GetComponent<Selectable>();
+				for (int i = 0; i < component.Children.Length; i++)
+				{
+					if (component.Children[i] != null)
+					{
+						indices.Add(int.Parse(component.Children[i].name[component.Children[i].name.Length - 1].ToString()) - 1);
+					}
+				}
+
+				ComplicatedWiresModuleState compState = new ComplicatedWiresModuleState();
+				compState.Wires = new ComplicatedWireState[6];
+
+				int indicesIndex = 0;
+				foreach (VennSnippableWire wire in venn.ActiveWires)
+				{
+					compState.Wires[indices[indicesIndex]] = new ComplicatedWireState();
+					compState.Wires[indices[indicesIndex]].HasStar = wire.HasSymbol;
+					compState.Wires[indices[indicesIndex]].IsLedOn = wire.IsLEDOn;
+					compState.Wires[indices[indicesIndex]].IsCut = wire.Snipped;
+					compState.Wires[indices[indicesIndex]].Colour = wire.Color.ToString();
+					compState.Wires[indices[indicesIndex]].Position = indices[indicesIndex];
+
+					indicesIndex++;
+				}
+
+				compState.IsSolved = isSolved;
+				compState.InFocus = isFocused;
+				bombState.Modules.Add(compState);
+			}
+
+			else if (comp.ComponentType == ComponentTypeEnum.WireSequence)
+			{
+				WireSequenceComponent wireSeq = (WireSequenceComponent) comp;
+				FieldInfo fieldInfo = typeof(WireSequenceComponent).GetField("currentPage", BindingFlags.NonPublic | BindingFlags.Instance);
+
+				WireSequenceModuleState wireSeqState = new WireSequenceModuleState();
+				wireSeqState.Panel = (int) fieldInfo.GetValue(wireSeq);
+				wireSeqState.Wires = new WireSequenceWireState[12];
+
+				FieldInfo fieldInfo2 = typeof(WireSequenceComponent).GetField("wireSequence", BindingFlags.NonPublic | BindingFlags.Instance);
+				List<WireSequenceComponent.WireConfiguration> configs = (List<WireSequenceComponent.WireConfiguration>) fieldInfo2.GetValue(wireSeq);
+				for (int i = 0; i < 12; i++)
+				{
+					WireSequenceComponent.WireConfiguration config = configs[i];
+					if (!config.NoWire)
+					{
+						wireSeqState.Wires[i] = new WireSequenceWireState();
+						wireSeqState.Wires[i].StartPositionNumber = i;
+						if (config.To == 0)
+						{
+							wireSeqState.Wires[i].EndPositionLetter = "A";
+
+						}
+						else if (config.To == 1)
+						{
+							wireSeqState.Wires[i].EndPositionLetter = "B";
+
+						}
+						else
+						{
+							wireSeqState.Wires[i].EndPositionLetter = "C";
+
+						}
+						wireSeqState.Wires[i].Colour = config.Wire.GetColor().ToString();
+						wireSeqState.Wires[i].IsCut = config.Wire.Snipped;
+					}
+				}
+
+				wireSeqState.IsSolved = isSolved;
+				wireSeqState.InFocus = isFocused;
+				bombState.Modules.Add(wireSeqState);
+			}
+
+			else if (comp.ComponentType == ComponentTypeEnum.Maze)
+			{
+				InvisibleWallsComponent invis = (InvisibleWallsComponent) comp;
+				MazeModuleState mazeState = new MazeModuleState();
+				mazeState.NumColumns = 6;
+				mazeState.NumRows = 6;
+
+
+				int StartX = invis.CurrentCell.X;
+				int startY = invis.CurrentCell.Y;
+				int goalX = invis.GoalCell.X;
+				int goalY = invis.GoalCell.Y;
+				int circle1X = 0;
+				int circle1Y = 0;
+				int circle2X = 0;
+				int circle2Y = 0;
+
+				foreach (List<InvisibleMazeCell> cellRow in invis.Cells)
+				{
+					foreach (InvisibleMazeCell cell in cellRow)
+					{
+						FieldInfo fieldInfo = typeof(InvisibleMazeCell).GetField("cell", BindingFlags.NonPublic | BindingFlags.Instance);
+						MazeCell cellData = (MazeCell) fieldInfo.GetValue(cell);
+						if (cell.Identifier1 != null)
+						{
+							circle1X = cellData.X;
+							circle1Y = cellData.Y;
+						}
+						else if (cell.Identifier2 != null)
+						{
+							circle2X = cellData.X;
+							circle2Y = cellData.Y;
+						}
+					}
+				}
+
+				mazeState.SquarePosition = new MazeCoordinate();
+				mazeState.SquarePosition.Column = StartX;
+				mazeState.SquarePosition.Row = startY;
+				mazeState.TrianglePosition = new MazeCoordinate();
+				mazeState.TrianglePosition.Column = goalX;
+				mazeState.TrianglePosition.Row = goalY;
+				mazeState.CirclePositions = new MazeCoordinate[2];
+				mazeState.CirclePositions[0] = new MazeCoordinate();
+				mazeState.CirclePositions[0].Column = circle1X;
+				mazeState.CirclePositions[0].Row = circle1Y;
+				mazeState.CirclePositions[1] = new MazeCoordinate();
+				mazeState.CirclePositions[1].Column = circle2X;
+				mazeState.CirclePositions[1].Row = circle2Y;
+
+				mazeState.IsSolved = isSolved;
+				mazeState.InFocus = isFocused;
+				bombState.Modules.Add(mazeState);
+			}
+
+			else if (comp.ComponentType == ComponentTypeEnum.Password)
+			{
+				PasswordComponent pass = (PasswordComponent) comp;
+				FieldInfo fieldInfo = typeof(PasswordComponent).GetField("m_CurrentLayout", BindingFlags.NonPublic | BindingFlags.Instance);
+				PasswordLayout layout = (PasswordLayout) fieldInfo.GetValue(pass);
+
+				PasswordModuleState passState = new PasswordModuleState();
+
+
+				passState.currentWord = layout.GetCurrentWord();
+				passState.goalWord = pass.CorrectWord;
+
+				passState.IsSolved = isSolved;
+				passState.InFocus = isFocused;
+				bombState.Modules.Add(passState);
+			}
+		}
+		readyToGive = true;
+		// TODO: readyToGive needs to be reset when the bomb is finished, ask Kareem about how to know if a module is infocus
 	}
-
 }
 
 public class BaseModuleState
@@ -741,6 +1132,8 @@ public class BombState
 	public int MaxStrikes { get; set; } = 3;
 	public int CurrentStrikes { get; set; } = 0;
 	public string SerialNumber { get; set; }
+	public bool isDetonated { get; set; }
+	public bool isSolved { get; set; }
 
 	public List<BaseWidgetState> Widgets { get; set; }
 	public List<BaseModuleState> Modules { get; set; }

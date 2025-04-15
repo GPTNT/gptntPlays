@@ -18,8 +18,8 @@ public class UnsupportedModComponentSolver : ComponentSolver
 		Selectable[] selectables = module.BombComponent.GetComponentsInChildren<Selectable>();
 		HashSet<Selectable> selectableHashSet = new HashSet<Selectable>(selectables) { selectable };
 
-		//selectable.OnInteract += () => { if (Module != null && Module.CanvasGroupUnsupported != null) Module.CanvasGroupUnsupported.gameObject.SetActive(false); return true; };
-		//selectable.OnDeselect += (x) => { if (Module != null && Module.CanvasGroupUnsupported != null) Module.CanvasGroupUnsupported.gameObject.SetActive(x == null || !selectableHashSet.Contains(x)); };
+		selectable.OnInteract += () => { if (Module != null && Module.CanvasGroupUnsupported != null) Module.CanvasGroupUnsupported.gameObject.SetActive(false); return true; };
+		selectable.OnDeselect += (x) => { if (Module != null && Module.CanvasGroupUnsupported != null) Module.CanvasGroupUnsupported.gameObject.SetActive(x == null || !selectableHashSet.Contains(x)); };
 
 		if (componentSolverFields == null) return;
 		CommandComponent = componentSolverFields.CommandComponent;

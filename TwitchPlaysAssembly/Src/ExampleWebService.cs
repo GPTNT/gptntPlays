@@ -83,7 +83,16 @@ public class ExampleWebService : MonoBehaviour
 		gameInfo.OnStateChange += (KMGameInfo.State state) =>
 		{
 			gameState = state.ToString();
-			if (gameState.Equals("Setup")) Reset();
+			if (gameState.Equals("Setup"))
+			{
+				Reset();
+				gptntStates.readyToGive = false;
+			}
+
+			if (gameState.Equals("PostGame"))
+			{
+
+			}
 		};
 		gameInfo.OnLightsChange += (bool on) => {
 			lightsOn = on;
@@ -91,6 +100,12 @@ public class ExampleWebService : MonoBehaviour
 			gptntActions.bomb = bomb;
 			gptntActions.InitRotation();
 			gameState = gameState.EqualsAny("Gameplay", "Lights On", "Lights Off") ? (lightsOn ? "Lights On" : "Lights Off") : gameState;
+
+			if (gameState.Equals("Lights On"))
+			{
+				gptntStates.readyToGive = true;
+				gptntStates.GetInitialBombState();
+			}
 		};
 		int width = Screen.width;
 		int height = Screen.height;
@@ -132,7 +147,6 @@ public class ExampleWebService : MonoBehaviour
 		{
 			GptntDebug.Log("bomb started");
 			bombStarted = false;
-			StartCoroutine(gptntStates.populate(10f));
 		}
 
 		if (actions.Count > 0)
@@ -596,12 +610,20 @@ public class ExampleWebService : MonoBehaviour
 			}
 		}
 		GptntDebug.Log("last response is: " + response);
+		string json;
+		try
+		{
+			gptntStates.GetInitialBombState();
+			json = JsonConvert.SerializeObject(gptntStates.bombState, Formatting.Indented);
+			return json;
+		}
+		catch (Exception e)
+		{
 
-		gptntStates.bombState = new BombState();
-		gptntStates.bombState.Widgets = new List<BaseWidgetState> { };
-		gptntStates.bombState.Modules = new List<BaseModuleState> { };
-		gptntStates.getModuleData();
-		string json = JsonConvert.SerializeObject(gptntStates.bombState, Formatting.Indented);
+		}
+
+		gptntStates.GetInitialBombState();
+		json = JsonConvert.SerializeObject(gptntStates.bombState, Formatting.Indented);
 		return json;
 	}
 
@@ -675,10 +697,16 @@ public class ExampleWebService : MonoBehaviour
 		}
 		else
 		{
-			gptntStates.bombState = new BombState();
-			gptntStates.bombState.Widgets = new List<BaseWidgetState> { };
-			gptntStates.bombState.Modules = new List<BaseModuleState> { };
-			gptntStates.getModuleData();
+			try
+			{
+				gptntStates.UpdateBombState();
+
+			}
+			catch (Exception e)
+			{
+				GptntDebug.Log("update failed, returning last version");
+			}
+
 			string json = JsonConvert.SerializeObject(gptntStates.bombState, Formatting.Indented);
 			return json;
 		}
