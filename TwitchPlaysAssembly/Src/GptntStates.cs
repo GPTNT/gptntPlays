@@ -40,7 +40,7 @@ public class GptntStates : MonoBehaviour
 		bombState.Timestamp = Time.time - StartTime;
 		try
 		{
-			bombState.TimeRemaining = bomb.TotalTime;
+			bombState.TimeRemaining = bomb.GetTimer().TimeRemaining;
 		}
 		catch (Exception ex)
 		{
@@ -122,7 +122,6 @@ public class GptntStates : MonoBehaviour
 							batteryState.BatteriesCount = 1;
 						}
 						batteryState.Position = widgetFace;
-						GptntDebug.Log("BatteryWidget - Face: " + batteryState.Position + ", Type: " + batteryState.BatteryType + ", Count: " + batteryState.BatteriesCount); bombState.Widgets.Add(batteryState);
 					}
 					catch (Exception ex)
 					{
@@ -221,7 +220,6 @@ public class GptntStates : MonoBehaviour
 				List<string> beepSequence = new List<string>();
 				foreach (int beep in sequence)
 				{
-					GptntDebug.Log($"{beep}");
 					if (beep == 0)
 					{
 						beepSequence.Add("Red");
@@ -239,10 +237,7 @@ public class GptntStates : MonoBehaviour
 						beepSequence.Add("Yellow");
 					}
 				}
-				foreach (string beep in beepSequence)
-				{
-					GptntDebug.Log(beep);
-				}
+
 
 				simonState.BeepSequence = beepSequence;
 				simonState.solveProgress = solveProgress;
@@ -295,9 +290,6 @@ public class GptntStates : MonoBehaviour
 				buttonState.ButtonColor = buttonColor;
 				buttonState.ButtonWord = buttonMessage;
 				buttonState.IsHeld = button.IsHolding;
-				GptntDebug.Log(buttonState.ButtonColor);
-				GptntDebug.Log(buttonState.ButtonWord);
-				GptntDebug.Log(buttonState.IsHeld.ToString());
 				if (buttonState.IsHeld)
 				{
 					buttonState.StripColour = stripColor;
@@ -352,7 +344,6 @@ public class GptntStates : MonoBehaviour
 				string[] buttonValues = new string[6];
 				foreach (KeypadButton button in whoFirst.Buttons)
 				{
-					GptntDebug.Log($"button word: {button.Text.text}");
 					buttonValues[button.ButtonIndex] = button.Text.text;
 
 				}

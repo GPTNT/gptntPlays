@@ -22,6 +22,7 @@ public class ExampleWebService : MonoBehaviour
 	GameObject spawn;
 	KMMission mission;
 	GptntActions gptntActions;
+	GptntStates gptntStates;
 	private bool lightsOn;
 	private string gameState;
 
@@ -36,10 +37,10 @@ public class ExampleWebService : MonoBehaviour
 	public int timeStepSize = 250;
 
 	TwitchBomb bomb;
-	private string destinationLogPath;
 	public string sourceLogPath = @".\logs\ktane.log";
 	private string lastRead = "";
 	long lastPosition = 0;
+	public bool bombStarted = false;
 
 	// Observation variables 
 	private Segmentation segmentation;
@@ -68,6 +69,8 @@ public class ExampleWebService : MonoBehaviour
         workerThread.Start(this);
 		segmentation = GetComponent<Segmentation>();
 		gptntActions = GetComponent<GptntActions>();
+		gptntStates = GetComponent<GptntStates>();
+		
 	}
 
 	private void Start()
@@ -127,6 +130,7 @@ public class ExampleWebService : MonoBehaviour
 	{
 		if (bombStarted)
 		{
+			GptntDebug.Log("bomb started");
 			bombStarted = false;
 			StartCoroutine(gptntStates.populate(10f));
 		}
@@ -455,13 +459,6 @@ public class ExampleWebService : MonoBehaviour
 			case "/reset":
 				responseString = HandleReset();
 				break;
-			default:
-				responseString = "Unknown route.";
-				break;
-		}
-            case "/selectables":
-                responseString = HandleBombChildren();
-                break;
 			case "/state":
 				responseString = HandleGetState();
 				break;

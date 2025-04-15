@@ -16,6 +16,7 @@ GameObject:
   - component: {fileID: 114679433292821144}
   - component: {fileID: 114644498815997642}
   - component: {fileID: 114569536059629964}
+  - component: {fileID: 114690007393336494}
   m_Layer: 0
   m_Name: ExampleWebService
   m_TagString: Untagged
@@ -116,8 +117,8 @@ MonoBehaviour:
   m_Script: {fileID: -1705822043, guid: 366880d94a4406540983fc80e2e0edb0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  otherSeed: 
   timeStepSize: 250
-  bombStarted: 0
   sourceLogPath: .\logs\ktane.log
 --- !u!114 &114644498815997642
 MonoBehaviour:
@@ -130,6 +131,8 @@ MonoBehaviour:
   m_Script: {fileID: 1372372887, guid: 366880d94a4406540983fc80e2e0edb0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  interactableLayer: 11
+  cam: {fileID: 0}
 --- !u!114 &114679433292821144
 MonoBehaviour:
   m_ObjectHideFlags: 1
@@ -144,7 +147,7 @@ MonoBehaviour:
   shader: {fileID: 4800000, guid: da01d6839a720493093d1917dc450dc1, type: 3}
 --- !u!114 &114690007393336494
 MonoBehaviour:
-  m_ObjectHideFlags: 1
+  m_ObjectHideFlags: 0
   m_PrefabParentObject: {fileID: 0}
   m_PrefabInternal: {fileID: 100100000}
   m_GameObject: {fileID: 161788}
@@ -155,3 +158,4 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   logFilePath: 
   lastPosition: 0
+  readyToGive: 0
