@@ -7,6 +7,8 @@ using System.Linq;
 using System.Collections;
 using Assets.Scripts.Missions;
 using System.IO;
+using System.Text;
+using Newtonsoft.Json;
 
 public class ExampleWebService : MonoBehaviour
 {
@@ -20,19 +22,25 @@ public class ExampleWebService : MonoBehaviour
 	GameObject spawn;
 	KMMission mission;
 	GptntActions gptntActions;
+	GptntStates gptntStates;
 	private bool lightsOn;
 	private string gameState;
 
-	Thread workerThread;
-	Worker workerObject;
-	Queue<Action> actions;
+    Thread workerThread;
+    Worker workerObject;
+    Queue<Action> actions;
+	string timestamp;
+	string destinationLogPath;
+
+	public string otherSeed;
 
 	public int timeStepSize = 250;
 
 	TwitchBomb bomb;
-	private string destinationLogPath;
 	public string sourceLogPath = @".\logs\ktane.log";
 	private string lastRead = "";
+	long lastPosition = 0;
+	public bool bombStarted = false;
 
 	// Observation variables 
 	private Segmentation segmentation;
@@ -41,26 +49,36 @@ public class ExampleWebService : MonoBehaviour
 	private Rect rect;
 
 	void Awake()
-	{
+    {
+		using (FileStream fs = new FileStream(sourceLogPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+		{
+			lastPosition = fs.Length;
+		}
 		actions = new Queue<Action>();
-		bombInfo = GetComponent<KMBombInfo>();
-		bombInfo.OnBombExploded += OnBombExplodes;
-		bombInfo.OnBombSolved += OnBombDefused;
-		gameCommands = GetComponent<KMGameCommands>();
-		bombState = "NA";
-		spawn = new GameObject();
-		mission = ScriptableObject.CreateInstance<KMMission>();
-		// Create the thread object. This does not start the thread.
-		workerObject = new Worker(this);
-		workerThread = new Thread(workerObject.DoWork);
-		// Start the worker thread.
-		workerThread.Start(this);
+        bombInfo = GetComponent<KMBombInfo>();
+        bombInfo.OnBombExploded += OnBombExplodes;
+        bombInfo.OnBombSolved += OnBombDefused;
+        gameCommands = GetComponent<KMGameCommands>();
+        bombState = "NA";
+        spawn = new GameObject();
+        mission = ScriptableObject.CreateInstance<KMMission>();
+        // Create the thread object. This does not start the thread.
+        workerObject = new Worker(this);
+        workerThread = new Thread(workerObject.DoWork);
+        // Start the worker thread.
+        workerThread.Start(this);
 		segmentation = GetComponent<Segmentation>();
 		gptntActions = GetComponent<GptntActions>();
+		gptntStates = GetComponent<GptntStates>();
+		
 	}
 
 	private void Start()
 	{
+		timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
+		destinationLogPath = $"{timestamp}log.txt";
+		gptntStates.logFilePath = destinationLogPath;
+		StartCoroutine(CopyLogPeriodically());
 		gameInfo = FindObjectOfType<KMGameInfo>();
 		gameInfo.OnStateChange += (KMGameInfo.State state) =>
 		{
@@ -110,6 +128,13 @@ public class ExampleWebService : MonoBehaviour
 
 	void Update()
 	{
+		if (bombStarted)
+		{
+			GptntDebug.Log("bomb started");
+			bombStarted = false;
+			StartCoroutine(gptntStates.populate(10f));
+		}
+
 		if (actions.Count > 0)
 		{
 			Action action = actions.Dequeue();
@@ -434,10 +459,13 @@ public class ExampleWebService : MonoBehaviour
 			case "/reset":
 				responseString = HandleReset();
 				break;
-			default:
-				responseString = "Unknown route.";
+			case "/state":
+				responseString = HandleGetState();
 				break;
-		}
+            default:
+                responseString = "Unknown route.";
+                break;
+        }
 
 		// Send response
 		SendResponse(request, response, responseString);
@@ -601,20 +629,20 @@ public class ExampleWebService : MonoBehaviour
 	}
 
 	private string HandleStartMission(HttpListenerRequest request)
-	{
-		string seed = request.QueryString.Get("seed");
+    {
+        string seed = request.QueryString.Get("seed");
+		otherSeed = seed;
 		int timeLimit = int.Parse(request.QueryString.Get("timeLimit"));
-		int numStrikes = int.Parse(request.QueryString.Get("numStrikes"));
-		int needyTime = int.Parse(request.QueryString.Get("needyTime"));
-		bool isFront = bool.Parse(request.QueryString.Get("isFront"));
-		int optWidgets = int.Parse(request.QueryString.Get("optWidgets"));
-		string componentsString = request.QueryString.Get("components");
-		List<String> components = componentsString.Split(',').ToList();
-		Time.timeScale = float.Parse(request.QueryString.Get("timeScale"));
-		timeStepSize = int.Parse(request.QueryString.Get("timeStepSize"));
-
-		return StartMission(seed, timeLimit, numStrikes, needyTime, isFront, optWidgets, components);
-	}
+        int numStrikes = int.Parse(request.QueryString.Get("numStrikes"));
+        int needyTime = int.Parse(request.QueryString.Get("needyTime"));
+        bool isFront = bool.Parse(request.QueryString.Get("isFront"));
+        int optWidgets = int.Parse(request.QueryString.Get("optWidgets"));
+        string componentsString = request.QueryString.Get("components");
+        List<String> components = componentsString.Split(',').ToList();
+        Time.timeScale = float.Parse(request.QueryString.Get("timeScale"));
+        timeStepSize = int.Parse(request.QueryString.Get("timeStepSize"));
+        return StartMission(seed, timeLimit, numStrikes, needyTime, isFront, optWidgets, components);
+    }
 
 	private string HandleRotationOnMainThread(HttpListenerRequest request)
 	{
@@ -633,6 +661,24 @@ public class ExampleWebService : MonoBehaviour
 		return result;
 	}
 
+	private string HandleGetState()
+	{
+		if (!gptntStates.readyToGive)
+		{
+			return "Bomb states not ready yet";
+		}
+		else
+		{
+			gptntStates.bombState = new BombState();
+			gptntStates.bombState.Widgets = new List<BaseWidgetState> { };
+			gptntStates.bombState.Modules = new List<BaseModuleState> { };
+			gptntStates.getModuleData();
+			string json = JsonConvert.SerializeObject(gptntStates.bombState, Formatting.Indented);
+			return json;
+		}
+
+		return "";
+	}
 	private string HandleRotation(HttpListenerRequest request)
 	{
 		string direction = request.QueryString.Get("action");
@@ -989,20 +1035,34 @@ public class ExampleWebService : MonoBehaviour
 			if (File.Exists(sourceLogPath))
 			{
 				using (FileStream fs = new FileStream(sourceLogPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
-				using (StreamReader reader = new StreamReader(fs))
 				{
-					string currentContents = reader.ReadToEnd();
-					if (currentContents != lastRead)
+					fs.Seek(lastPosition, SeekOrigin.Begin); // jump to where we left off
+
+					using (StreamReader reader = new StreamReader(fs))
 					{
-						File.WriteAllText(destinationLogPath, currentContents);
-						lastRead = currentContents;
+						string newContent = reader.ReadToEnd();
+
+						if (!string.IsNullOrEmpty(newContent))
+						{
+							File.AppendAllText(destinationLogPath, newContent);
+							lastPosition = fs.Position; // update our position
+						}
 					}
 				}
 			}
 		}
-		catch (IOException ex)
+		catch (Exception ex)
 		{
-			Debug.LogWarning("Failed to read log: " + ex.Message);
+			Debug.LogWarning($"Error while copying log: {ex.Message}");
+		}
+	}
+
+	IEnumerator CopyLogPeriodically()
+	{
+		while (true)
+		{
+			CopyLogContents();
+			yield return new WaitForSeconds(0.5f); // wait 1 second
 		}
 	}
 }
