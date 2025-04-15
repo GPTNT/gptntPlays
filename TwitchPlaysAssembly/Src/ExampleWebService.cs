@@ -36,7 +36,7 @@ public class ExampleWebService : MonoBehaviour
 	public int timeStepSize = 250;
 
 	TwitchBomb bomb;
-	public string sourceLogPath = @".\logs\ktane.log";
+	public string sourceLogPath = @"logs/ktane.log";
 	private string lastRead = "";
 	long lastPosition = 0;
 	public bool bombStarted = false;
@@ -674,7 +674,7 @@ public class ExampleWebService : MonoBehaviour
 
 	private string HandleStartMission(HttpListenerRequest request, HttpListenerResponse response)
 	{
-		if (gameState != KMGameInfo.State.Setup.ToString())
+		if (!gameState.Equals(KMGameInfo.State.Setup.ToString()))
 		{
 			response.StatusCode = (int) HttpStatusCode.BadRequest;
 			return "Cannot start a game from " + gameState + " state";
