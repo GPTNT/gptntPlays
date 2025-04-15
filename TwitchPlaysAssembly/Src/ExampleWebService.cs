@@ -23,12 +23,11 @@ public class ExampleWebService : MonoBehaviour
 	KMMission mission;
 	GptntActions gptntActions;
 	GptntStates gptntStates;
-	private bool lightsOn;
 	private string gameState;
 
-    Thread workerThread;
-    Worker workerObject;
-    Queue<Action> actions;
+	Thread workerThread;
+	Worker workerObject;
+	Queue<Action> actions;
 	string timestamp;
 	string destinationLogPath;
 
@@ -49,24 +48,24 @@ public class ExampleWebService : MonoBehaviour
 	private Rect rect;
 
 	void Awake()
-    {
+	{
 		using (FileStream fs = new FileStream(sourceLogPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
 		{
 			lastPosition = fs.Length;
 		}
 		actions = new Queue<Action>();
-        bombInfo = GetComponent<KMBombInfo>();
-        bombInfo.OnBombExploded += OnBombExplodes;
-        bombInfo.OnBombSolved += OnBombDefused;
-        gameCommands = GetComponent<KMGameCommands>();
-        bombState = "NA";
-        spawn = new GameObject();
-        mission = ScriptableObject.CreateInstance<KMMission>();
-        // Create the thread object. This does not start the thread.
-        workerObject = new Worker(this);
-        workerThread = new Thread(workerObject.DoWork);
-        // Start the worker thread.
-        workerThread.Start(this);
+		bombInfo = GetComponent<KMBombInfo>();
+		bombInfo.OnBombExploded += OnBombExplodes;
+		bombInfo.OnBombSolved += OnBombDefused;
+		gameCommands = GetComponent<KMGameCommands>();
+		bombState = "NA";
+		spawn = new GameObject();
+		mission = ScriptableObject.CreateInstance<KMMission>();
+		// Create the thread object. This does not start the thread.
+		workerObject = new Worker(this);
+		workerThread = new Thread(workerObject.DoWork);
+		// Start the worker thread.
+		workerThread.Start(this);
 		segmentation = GetComponent<Segmentation>();
 		gptntActions = GetComponent<GptntActions>();
 		gptntStates = GetComponent<GptntStates>();
@@ -95,7 +94,6 @@ public class ExampleWebService : MonoBehaviour
 			}
 		};
 		gameInfo.OnLightsChange += (bool on) => {
-			lightsOn = on;
 			bomb = FindObjectOfType<TwitchBomb>();
 			gptntActions.bomb = bomb;
 			gptntActions.InitRotation();
@@ -433,24 +431,22 @@ public class ExampleWebService : MonoBehaviour
 		HttpListenerResponse response = context.Response;
 
 		string responseString;
-		string path = request.Url.AbsolutePath.ToLowerInvariant(); // Normalise the path for comparison
-		string notStarted = "Cannot do this request: "+ path + " because the game has not started yet";
+		string path = request.Url.AbsolutePath.ToLowerInvariant();
 
 		// Route handling with switch
-		// TODO: Make 2 separate switch cases for the requests that need the bomb.
 		switch (path)
 		{
 			case "/bombinfo":
-				responseString = lightsOn ? GetBombInfo() : notStarted;
+				responseString = GetBombInfo(response);
 				break;
 			case "/startmission":
-				responseString = HandleStartMission(request);
+				responseString = HandleStartMission(request, response);
 				break;
 			case "/causestrike":
-				responseString = lightsOn ? HandleCauseStrike(request) : notStarted;
+				responseString = HandleCauseStrike(request, response);
 				break;
 			case "/screenshot":
-				responseString = lightsOn ? HandleScreenshot(response) : notStarted;
+				responseString = HandleScreenshot(response);
 				break;
 			case "/settimescale":
 				responseString = HandleSetTimescale(request);
@@ -462,10 +458,10 @@ public class ExampleWebService : MonoBehaviour
 				responseString = HandleTimeStep(request);
 				break;
 			case "/action":
-				responseString = lightsOn ? HandleAction(request) : notStarted;
+				responseString = HandleAction(request, response);
 				break;
 			case "/observation":
-				responseString = lightsOn ? HandleObservation(response) : notStarted;
+				responseString = HandleObservation(response);
 				break;
 			case "/health":
 				responseString = HandleHealth();
@@ -476,10 +472,10 @@ public class ExampleWebService : MonoBehaviour
 			case "/state":
 				responseString = HandleGetState();
 				break;
-            default:
-                responseString = "Unknown route.";
-                break;
-        }
+			default:
+				responseString = "Unknown route.";
+				break;
+		}
 
 		// Send response
 		SendResponse(request, response, responseString);
@@ -528,6 +524,11 @@ public class ExampleWebService : MonoBehaviour
 		string screenshot = HandleScreenshot(response);
 		string segmentation = HandleSegmentation(response);
 
+		if(response.StatusCode != (int) HttpStatusCode.OK)
+		{
+			return screenshot + " " + segmentation;
+		}
+
 		string json = "{"
 		+ "\"screenshot\":\"" + EscapeJsonString(screenshot) + "\","
 		+ "\"segmentation\":\"" + EscapeJsonString(segmentation) + "\""
@@ -566,50 +567,60 @@ public class ExampleWebService : MonoBehaviour
 		return response;
 	}
 
-	private string HandleClickAndRelease(HttpListenerRequest request)
+	private string HandleClickAndRelease(HttpListenerRequest request, HttpListenerResponse response)
 	{
-		string response = null;
+		string responseString = null;
 		var waitHandle = new ManualResetEvent(false);
 		MainThreadQueue.Enqueue(() =>
 		{
-			response = HandleClicking(request);
-			HandleRelease((str) => { response += str; });
+			responseString = HandleClicking(request, response);
+			HandleRelease((str) => { responseString += " " + str; });
 			waitHandle.Set();
 		}
 		);
 		waitHandle.WaitOne();
-		return response;
+		return responseString;
 	}
 
-	private string HandleAction(HttpListenerRequest request)
+	private string HandleAction(HttpListenerRequest request, HttpListenerResponse response)
 	{
+		if(!gameState.Equals("Lights On"))
+		{
+			response.StatusCode = (int) HttpStatusCode.BadRequest;
+			return "Cannot send action to the game in " + gameState + " state";
+		}
+
 		string action_type = request.QueryString.Get("action");
-		string response = null;
+		string responseString = null;
 
 		if (action_type == "release") // has to be run in the main thread
 		{
-			response = HandleHandleRelease();
+			responseString = HandleHandleRelease();
 		}
 		else
 		{
 			switch (action_type)
 			{
 				case "hold":
-					response = HandleClicking(request);
+					responseString = HandleClicking(request, response);
 					break;
 				case "click":
-					response = HandleClickAndRelease(request);
+					responseString = HandleClickAndRelease(request, response);
 					break;
 				case "out":
-					response = HandleZoomOut();
+					responseString = HandleZoomOut();
 					break;
 				default:
-					response = HandleRotationOnMainThread(request);
-					GptntDebug.Log("response is " + response);
+					responseString = HandleRotationOnMainThread(request);
 					break;
 			}
 		}
-		GptntDebug.Log("last response is: " + response);
+		GptntDebug.Log("last response is: " + responseString);
+		if(response.StatusCode != (int) HttpStatusCode.OK)
+		{
+			return responseString;
+		}
+
 		string json;
 		try
 		{
@@ -639,7 +650,7 @@ public class ExampleWebService : MonoBehaviour
 		return response;
 	}
 
-	private string HandleClicking(HttpListenerRequest request)
+	private string HandleClicking(HttpListenerRequest request, HttpListenerResponse response)
 	{
 		float x, y;
 
@@ -647,30 +658,40 @@ public class ExampleWebService : MonoBehaviour
 		{
 			x = (float) Convert.ToDouble(request.QueryString.Get("x_pos"));
 			y = 1-(float) Convert.ToDouble(request.QueryString.Get("y_pos"));
+			if(x < 0 || x > 1 || y < 0 || y > 1)
+			{
+				throw new Exception("Coordinates must be between 0-1");
+			} 
 		}
 		catch (Exception ex)
 		{
 			GptntDebug.Log(ex.ToString());
+			response.StatusCode = (int) HttpStatusCode.BadRequest;
 			return "Could not parse x and y coordinates: " + ex;
 		}
 		return gptntActions.Click(x, y);
 	}
 
-	private string HandleStartMission(HttpListenerRequest request)
-    {
-        string seed = request.QueryString.Get("seed");
+	private string HandleStartMission(HttpListenerRequest request, HttpListenerResponse response)
+	{
+		if (gameState != KMGameInfo.State.Setup.ToString())
+		{
+			response.StatusCode = (int) HttpStatusCode.BadRequest;
+			return "Cannot start a game from " + gameState + " state";
+		}
+		string seed = request.QueryString.Get("seed");
 		otherSeed = seed;
 		int timeLimit = int.Parse(request.QueryString.Get("timeLimit"));
-        int numStrikes = int.Parse(request.QueryString.Get("numStrikes"));
-        int needyTime = int.Parse(request.QueryString.Get("needyTime"));
-        bool isFront = bool.Parse(request.QueryString.Get("isFront"));
-        int optWidgets = int.Parse(request.QueryString.Get("optWidgets"));
-        string componentsString = request.QueryString.Get("components");
-        List<String> components = componentsString.Split(',').ToList();
-        Time.timeScale = float.Parse(request.QueryString.Get("timeScale"));
-        timeStepSize = int.Parse(request.QueryString.Get("timeStepSize"));
-        return StartMission(seed, timeLimit, numStrikes, needyTime, isFront, optWidgets, components);
-    }
+		int numStrikes = int.Parse(request.QueryString.Get("numStrikes"));
+		int needyTime = int.Parse(request.QueryString.Get("needyTime"));
+		bool isFront = bool.Parse(request.QueryString.Get("isFront"));
+		int optWidgets = int.Parse(request.QueryString.Get("optWidgets"));
+		string componentsString = request.QueryString.Get("components");
+		List<String> components = componentsString.Split(',').ToList();
+		Time.timeScale = float.Parse(request.QueryString.Get("timeScale"));
+		timeStepSize = int.Parse(request.QueryString.Get("timeStepSize"));
+		return StartMission(seed, timeLimit, numStrikes, needyTime, isFront, optWidgets, components);
+	}
 
 	private string HandleRotationOnMainThread(HttpListenerRequest request)
 	{
@@ -679,13 +700,10 @@ public class ExampleWebService : MonoBehaviour
 
 		MainThreadQueue.Enqueue(() =>
 		{
-			result = HandleRotation(request); // this must now be main-thread safe
-			GptntDebug.Log("Done with Rotate");
+			result = HandleRotation(request);
 			waitHandle.Set();
 		});
-		GptntDebug.Log("902");
 		waitHandle.WaitOne(); // wait until HandleRotation finishes
-		GptntDebug.Log(result);
 		return result;
 	}
 
@@ -747,8 +765,13 @@ public class ExampleWebService : MonoBehaviour
 		}
 	}
 
-	private string HandleCauseStrike(HttpListenerRequest request)
+	private string HandleCauseStrike(HttpListenerRequest request, HttpListenerResponse response)
 	{
+		if (gameState.EqualsAny("Lights On", "Lights Off"))
+		{
+			response.StatusCode = (int) HttpStatusCode.BadRequest;
+			return "Cannot strike a bomb when in " + gameState;
+		}
 		string reason = request.QueryString["reason"];
 		return CauseStrike(reason);
 	}
@@ -772,7 +795,14 @@ public class ExampleWebService : MonoBehaviour
 		// Wait up to 500ms for the screenshot to be captured
 		if (!waitHandle.WaitOne(500))
 		{
+			response.StatusCode = (int) HttpStatusCode.RequestTimeout;
 			return "Failed to take screenshot";
+		}
+
+		if(imageBytes == null || imageBytes.Length == 0)
+		{
+			response.StatusCode = (int) HttpStatusCode.InternalServerError;
+			return "Empty screenshot";
 		}
 
 		response.ContentType = "image/png";
@@ -935,8 +965,13 @@ public class ExampleWebService : MonoBehaviour
 		return reason;
 	}
 
-	protected string GetBombInfo()
+	protected string GetBombInfo(HttpListenerResponse response)
 	{
+		if(!gameState.Equals("Lights On"))
+		{
+			response.StatusCode = (int) HttpStatusCode.BadRequest;
+			return "Cannot get bomb info before the game starts";
+		}
 		if(bombInfo.IsBombPresent())
 		{
 			if(bombState == "NA")
