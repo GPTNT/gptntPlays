@@ -12,6 +12,7 @@ using System.ComponentModel;
 using Assets.Scripts.Input;
 using System.IO;
 using System.Text;
+using Newtonsoft.Json;
 // using Org.BouncyCastle.Asn1.X509;
 
 public class ExampleWebService : MonoBehaviour
@@ -33,6 +34,8 @@ public class ExampleWebService : MonoBehaviour
     Queue<Action> actions;
 	string timestamp;
 	string destinationLogPath;
+
+	public string otherSeed;
 
     public int timeStepSize = 250;
 	float bombRotationX = 0f;
@@ -84,6 +87,10 @@ public class ExampleWebService : MonoBehaviour
 
 	void Awake()
     {
+		using (FileStream fs = new FileStream(sourceLogPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+		{
+			lastPosition = fs.Length;
+		}
 		actions = new Queue<Action>();
         bombInfo = GetComponent<KMBombInfo>();
         bombInfo.OnBombExploded += OnBombExplodes;
@@ -108,7 +115,6 @@ public class ExampleWebService : MonoBehaviour
 		destinationLogPath = $"{timestamp}log.txt";
 		gptntStates.logFilePath = destinationLogPath;
 		StartCoroutine(CopyLogPeriodically());
-		GptntDebug.Log($"states destination: {gptntStates.logFilePath}");
 	}
 
 
@@ -155,8 +161,7 @@ public class ExampleWebService : MonoBehaviour
 			onBottomFromLeftSide = false;
 			onBottomFromRightSide = false;
 			inMiddle = true;
-			StartCoroutine(gptntStates.populate(2f));
-			GptntDebug.Log(gptntStates.serialNumber);
+			StartCoroutine(gptntStates.populate(10f));
 		}
 
 		if (actions.Count > 0)
@@ -479,6 +484,9 @@ public class ExampleWebService : MonoBehaviour
             case "/selectables":
                 responseString = HandleBombChildren();
                 break;
+			case "/state":
+				responseString = HandleGetState();
+				break;
             default:
                 responseString = "Unknown route.";
                 break;
@@ -874,7 +882,8 @@ public class ExampleWebService : MonoBehaviour
 	private string HandleStartMission(HttpListenerRequest request)
     {
         string seed = request.QueryString.Get("seed");
-        int timeLimit = int.Parse(request.QueryString.Get("timeLimit"));
+		otherSeed = seed;
+		int timeLimit = int.Parse(request.QueryString.Get("timeLimit"));
         int numStrikes = int.Parse(request.QueryString.Get("numStrikes"));
         int needyTime = int.Parse(request.QueryString.Get("needyTime"));
         bool isFront = bool.Parse(request.QueryString.Get("isFront"));
@@ -883,10 +892,27 @@ public class ExampleWebService : MonoBehaviour
         List<String> components = componentsString.Split(',').ToList();
         Time.timeScale = float.Parse(request.QueryString.Get("timeScale"));
         timeStepSize = int.Parse(request.QueryString.Get("timeStepSize"));
-
         return StartMission(seed, timeLimit, numStrikes, needyTime, isFront, optWidgets, components);
     }
 
+	private string HandleGetState()
+	{
+		if (!gptntStates.readyToGive)
+		{
+			return "Bomb states not ready yet";
+		}
+		else
+		{
+			gptntStates.bombState = new BombState();
+			gptntStates.bombState.Widgets = new List<BaseWidgetState> { };
+			gptntStates.bombState.Modules = new List<BaseModuleState> { };
+			gptntStates.getModuleData();
+			string json = JsonConvert.SerializeObject(gptntStates.bombState, Formatting.Indented);
+			return json;
+		}
+
+		return "";
+	}
 	private string HandleRotation(HttpListenerRequest request)
 	{
 		string direction = request.QueryString.Get("action");
