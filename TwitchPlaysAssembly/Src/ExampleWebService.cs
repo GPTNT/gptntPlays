@@ -596,7 +596,13 @@ public class ExampleWebService : MonoBehaviour
 			}
 		}
 		GptntDebug.Log("last response is: " + response);
-		return response;
+
+		gptntStates.bombState = new BombState();
+		gptntStates.bombState.Widgets = new List<BaseWidgetState> { };
+		gptntStates.bombState.Modules = new List<BaseModuleState> { };
+		gptntStates.getModuleData();
+		string json = JsonConvert.SerializeObject(gptntStates.bombState, Formatting.Indented);
+		return json;
 	}
 
 	private string HandleZoomOut()
@@ -677,7 +683,6 @@ public class ExampleWebService : MonoBehaviour
 			return json;
 		}
 
-		return "";
 	}
 	private string HandleRotation(HttpListenerRequest request)
 	{
