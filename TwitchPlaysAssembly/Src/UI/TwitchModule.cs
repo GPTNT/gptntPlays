@@ -9,11 +9,11 @@ using UnityEngine.UI;
 public class TwitchModule : MonoBehaviour
 {
 	#region Public Fields
-	//public CanvasGroup CanvasGroupMultiDecker { get => _data.canvasGroupMultiDecker; set => _data.canvasGroupMultiDecker = value; }
-	//public CanvasGroup CanvasGroupUnsupported { get => _data.canvasGroupUnsupported; set => _data.canvasGroupUnsupported = value; }
+	public CanvasGroup CanvasGroupMultiDecker { get => _data.canvasGroupMultiDecker; set => _data.canvasGroupMultiDecker = value; }
+	public CanvasGroup CanvasGroupUnsupported { get => _data.canvasGroupUnsupported; set => _data.canvasGroupUnsupported = value; }
 	//public Text IDTextMultiDecker { get => _data.idTextMultiDecker; set => _data.idTextMultiDecker = value; }
 	public Text IDTextUnsupported { get => _data.idTextUnsupported; set => _data.idTextUnsupported = value; }
-	//public Image ClaimedUserMultiDecker { get => _data.claimedUserMultiDecker; set => _data.claimedUserMultiDecker = value; }
+	public Image ClaimedUserMultiDecker { get => _data.claimedUserMultiDecker; set => _data.claimedUserMultiDecker = value; }
 	public Color ClaimedBackgroundColour { get => _data.claimedBackgroundColour; set => _data.claimedBackgroundColour = value; }
 	public Color SolvedBackgroundColor { get => _data.solvedBackgroundColor; set => _data.solvedBackgroundColor = value; }
 	public Color MarkedBackgroundColor { get => _data.markedBackgroundColor; set => _data.markedBackgroundColor = value; }
@@ -51,6 +51,7 @@ public class TwitchModule : MonoBehaviour
 
 	[HideInInspector]
 	public List<ClaimQueueItem> ClaimQueue = new List<ClaimQueueItem>();
+
 
 	public string Code { get; set; }
 	public CameraPriority CameraPriority
@@ -175,6 +176,8 @@ public class TwitchModule : MonoBehaviour
 	{
 		_anarchyMode = TwitchPlaySettings.data.AnarchyMode;
 
+		CanvasGroupMultiDecker.alpha = 0;
+		CanvasGroupUnsupported.alpha = 0;
 		//IDTextMultiDecker.text = Code;
 
 		SetBannerBaseAlpha(1.0f);
