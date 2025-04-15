@@ -107,7 +107,6 @@ public class TwitchBomb : MonoBehaviour
 		//EdgeworkText.text = TwitchPlaySettings.data.BlankBombEdgework;
 
 		CanvasGroup.alpha = BombID == 0 ? 1 : 0;
-		FindObjectOfType<ExampleWebService>().bombStarted = true;
 	}
 
 	private void Update()
