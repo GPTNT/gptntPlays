@@ -1,18 +1,12 @@
 ﻿using System.IO;
 using System;
 using UnityEngine;
-using System.Collections;
-using System.Text.RegularExpressions;
 using System.Collections.Generic;
 using Assets.Scripts.Missions;
 using System.Reflection;
 using BombGame;
-using System.Drawing;
 using Assets.Scripts.Components.VennWire;
-using System.Linq;
-using TMPro;
-using Events;
-using Assets.Scripts.Rules;
+
 
 public class GptntStates : MonoBehaviour 
 {
@@ -29,14 +23,16 @@ public class GptntStates : MonoBehaviour
 	{
 		bombInfo = GetComponent<KMBombInfo>();
 
+
 		bombInfo.OnBombExploded += () =>
 		{
 			bombState.isDetonated = true;
 			bombState.CurrentStrikes = twitchBomb.Bomb.NumStrikes;
-			bombState.TimeRemaining = twitchBomb.Bomb.GetTimer().TimeRemaining;
-			if (bombState.TimeRemaining < 0)
+			bombState.TimerState.secondsRemaining = twitchBomb.Bomb.GetTimer().TimeRemaining;
+			bombState.Timestamp = Time.time - StartTime;
+			if (bombState.TimerState.secondsRemaining < 0)
 			{
-				bombState.TimeRemaining = 0;
+				bombState.TimerState.secondsRemaining = 0;
 			}
 			else
 			{
@@ -49,7 +45,8 @@ public class GptntStates : MonoBehaviour
 		{
 			bombState.isSolved = true;
 			bombState.CurrentStrikes = twitchBomb.Bomb.NumStrikes;
-			bombState.TimeRemaining = twitchBomb.Bomb.GetTimer().TimeRemaining;
+			bombState.Timestamp = Time.time - StartTime;
+			bombState.TimerState.secondsRemaining = twitchBomb.Bomb.GetTimer().TimeRemaining;
 		};
 	}
 
@@ -73,7 +70,7 @@ public class GptntStates : MonoBehaviour
 		bombState.Timestamp = Time.time - StartTime;
 		try
 		{
-			bombState.TimeRemaining = bomb.GetTimer().TimeRemaining;
+			bombState.TimerState.secondsRemaining = bomb.GetTimer().TimeRemaining;
 		}
 		catch (Exception ex)
 		{
@@ -238,9 +235,54 @@ public class GptntStates : MonoBehaviour
 
 		foreach (BombComponent comp in bomb.BombComponents)
 		{
+			Transform closest = null;
+			float minDistance = float.MaxValue;
+			bool onFront = false;
+			int closestIndex = -1;
+
+			var frontAnchors = bomb.Faces[0].Anchors;
+			for (int i = 0; i < frontAnchors.Count; i++)
+			{
+				var anchor = frontAnchors[i];
+				float distance = Vector3.Distance(comp.transform.position, anchor.position);
+				if (distance < minDistance)
+				{
+					minDistance = distance;
+					onFront = true;
+					closest = anchor;
+					closestIndex = i;
+				}
+			}
+
+			var backAnchors = bomb.Faces[1].Anchors;
+			for (int i = 0; i < backAnchors.Count; i++)
+			{
+				var anchor = backAnchors[i];
+				float distance = Vector3.Distance(comp.transform.position, anchor.position);
+				if (distance < minDistance)
+				{
+					minDistance = distance;
+					onFront = false;
+					closest = anchor;
+					closestIndex = i;
+				}
+			}
+
+
+
 			bool isSolved = comp.IsSolved;
 			FieldInfo fieldInfo3 = typeof(BombComponent).GetField("isFocused", BindingFlags.NonPublic | BindingFlags.Instance);
 			bool isFocused = (bool) fieldInfo3.GetValue(comp);
+
+			if (comp.ComponentType == ComponentTypeEnum.Timer)
+			{
+				TimerComponent time = (TimerComponent) comp;
+				TimerModuleState timerState = new TimerModuleState();
+				timerState.secondsRemaining = bomb.GetTimer().TimeRemaining;
+				timerState.onFront = onFront;
+				timerState.index = closestIndex;
+				bombState.TimerState =  timerState;
+			}
 
 
 
@@ -279,6 +321,8 @@ public class GptntStates : MonoBehaviour
 				simonState.solveProgress = solveProgress;
 				simonState.IsSolved = isSolved;
 				simonState.InFocus = isFocused;
+				simonState.onFront = onFront;
+				simonState.index = closestIndex;
 				bombState.Modules.Add(simonState);
 
 
@@ -313,6 +357,8 @@ public class GptntStates : MonoBehaviour
 
 				wireSetState.IsSolved = isSolved;
 				wireSetState.InFocus = isFocused;
+				wireSetState.onFront = onFront;
+				wireSetState.index = closestIndex;
 				bombState.Modules.Add(wireSetState);
 			}
 			else if (comp.ComponentType == ComponentTypeEnum.BigButton)
@@ -336,6 +382,8 @@ public class GptntStates : MonoBehaviour
 				}
 				buttonState.IsSolved = isSolved;
 				buttonState.InFocus = isFocused;
+				buttonState.onFront = onFront;
+				buttonState.index = closestIndex;
 				bombState.Modules.Add(buttonState);
 
 			}
@@ -369,15 +417,12 @@ public class GptntStates : MonoBehaviour
 				}
 				keypadState.IsSolved = isSolved;
 				keypadState.InFocus = isFocused;
+				keypadState.onFront = onFront;
+				keypadState.index = closestIndex;
 				keypadState.topLeft = KeypadButtons[0];
 				keypadState.topRight = KeypadButtons[1];
 				keypadState.bottomLeft = KeypadButtons[2];
 				keypadState.bottomRight = KeypadButtons[3];
-
-				GptntDebug.Log($"TOP LEFT: {keypadState.topLeft}");
-				GptntDebug.Log($"TOP RIGHT: {keypadState.topRight}");
-				GptntDebug.Log($"BOTTOM LEFT: {keypadState.bottomLeft}");
-				GptntDebug.Log($"BOTTOM RIGHT: {keypadState.bottomRight}");
 
 
 				bombState.Modules.Add(keypadState);
@@ -401,6 +446,9 @@ public class GptntStates : MonoBehaviour
 				whoFirstState.ButtonWords = buttonValues;
 				whoFirstState.DisplayWord = displayWord;
 				whoFirstState.IsSolved = isSolved;
+				whoFirstState.InFocus = isFocused;
+				whoFirstState.onFront = onFront;
+				whoFirstState.index = closestIndex;
 				bombState.Modules.Add(whoFirstState);
 			}
 
@@ -419,6 +467,8 @@ public class GptntStates : MonoBehaviour
 				memoryState.ButtonNumbers = buttonValues;
 				memoryState.IsSolved = isSolved;
 				memoryState.InFocus = isFocused;
+				memoryState.onFront = onFront;
+				memoryState.index = closestIndex;
 				bombState.Modules.Add(memoryState);
 			}
 			
@@ -435,6 +485,8 @@ public class GptntStates : MonoBehaviour
 				morseState.Sequence = word;
 				morseState.IsSolved = isSolved;
 				morseState.InFocus = isFocused;
+				morseState.onFront = onFront;
+				morseState.index = closestIndex;
 				bombState.Modules.Add(morseState);
 			}
 
@@ -474,6 +526,8 @@ public class GptntStates : MonoBehaviour
 
 				compState.IsSolved = isSolved;
 				compState.InFocus = isFocused;
+				compState.onFront = onFront;
+				compState.index = closestIndex;
 				bombState.Modules.Add(compState);
 			}
 
@@ -517,6 +571,8 @@ public class GptntStates : MonoBehaviour
 
 				wireSeqState.IsSolved = isSolved;
 				wireSeqState.InFocus = isFocused;
+				wireSeqState.onFront = onFront;
+				wireSeqState.index = closestIndex;
 				bombState.Modules.Add(wireSeqState);
 			}
 
@@ -572,6 +628,8 @@ public class GptntStates : MonoBehaviour
 
 				mazeState.IsSolved = isSolved;
 				mazeState.InFocus = isFocused;
+				mazeState.onFront = onFront;
+				mazeState.index = closestIndex;
 				bombState.Modules.Add(mazeState);
 			}
 
@@ -589,11 +647,12 @@ public class GptntStates : MonoBehaviour
 
 				passState.IsSolved = isSolved;
 				passState.InFocus = isFocused;
+				passState.onFront = onFront;
+				passState.index = closestIndex;
 				bombState.Modules.Add(passState);
 			}
 		}
 		readyToGive = true;
-		// TODO: readyToGive needs to be reset when the bomb is finished, ask Kareem about how to know if a module is infocus
 	}
 
 
@@ -603,14 +662,6 @@ public class GptntStates : MonoBehaviour
 		Bomb bomb = twitchBomb.Bomb;
 		bombState.Modules = new List<BaseModuleState> { };
 		bombState.Timestamp = Time.time - StartTime;
-		try
-		{
-			bombState.TimeRemaining = bomb.GetTimer().TimeRemaining;
-		}
-		catch (Exception ex)
-		{
-			GptntDebug.Log("Error setting TimeRemaining: " + ex);
-		}
 
 		try
 		{
@@ -624,7 +675,49 @@ public class GptntStates : MonoBehaviour
 
 		foreach (BombComponent comp in bomb.BombComponents)
 		{
-			GptntDebug.Log($"GO: {comp.transform.name}, PARENT GO: {comp.transform.parent.name} GRANDPARENT GO: {comp.transform.parent.name}");
+			Transform closest = null;
+			float minDistance = float.MaxValue;
+			bool onFront = false;
+			int closestIndex = -1;
+
+			var frontAnchors = bomb.Faces[0].Anchors;
+			for (int i = 0; i < frontAnchors.Count; i++)
+			{
+				var anchor = frontAnchors[i];
+				float distance = Vector3.Distance(comp.transform.position, anchor.position);
+				if (distance < minDistance)
+				{
+					minDistance = distance;
+					onFront = true;
+					closest = anchor;
+					closestIndex = i;
+				}
+			}
+
+			var backAnchors = bomb.Faces[1].Anchors;
+			for (int i = 0; i < backAnchors.Count; i++)
+			{
+				var anchor = backAnchors[i];
+				float distance = Vector3.Distance(comp.transform.position, anchor.position);
+				if (distance < minDistance)
+				{
+					minDistance = distance;
+					onFront = false;
+					closest = anchor;
+					closestIndex = i;
+				}
+			}
+
+			if (comp.ComponentType == ComponentTypeEnum.Timer)
+			{
+				TimerComponent time = (TimerComponent) comp;
+				TimerModuleState timerState = new TimerModuleState();
+				timerState.secondsRemaining = bomb.GetTimer().TimeRemaining;
+				timerState.onFront = onFront;
+				timerState.index = closestIndex;
+				bombState.TimerState = timerState;
+			}
+
 			bool isSolved = comp.IsSolved;
 			FieldInfo fieldInfo3 = typeof(BombComponent).GetField("isFocused", BindingFlags.NonPublic | BindingFlags.Instance);
 			bool isFocused = (bool) fieldInfo3.GetValue(comp);
@@ -666,6 +759,8 @@ public class GptntStates : MonoBehaviour
 				simonState.solveProgress = solveProgress;
 				simonState.IsSolved = isSolved;
 				simonState.InFocus = isFocused;
+				simonState.onFront = onFront;
+				simonState.index = closestIndex;
 				bombState.Modules.Add(simonState);
 
 
@@ -700,6 +795,8 @@ public class GptntStates : MonoBehaviour
 
 				wireSetState.IsSolved = isSolved;
 				wireSetState.InFocus = isFocused;
+				wireSetState.onFront = onFront;
+				wireSetState.index = closestIndex;
 				bombState.Modules.Add(wireSetState);
 			}
 			else if (comp.ComponentType == ComponentTypeEnum.BigButton)
@@ -723,6 +820,8 @@ public class GptntStates : MonoBehaviour
 				}
 				buttonState.IsSolved = isSolved;
 				buttonState.InFocus = isFocused;
+				buttonState.onFront = onFront;
+				buttonState.index = closestIndex;
 				bombState.Modules.Add(buttonState);
 
 			}
@@ -756,15 +855,12 @@ public class GptntStates : MonoBehaviour
 				}
 				keypadState.IsSolved = isSolved;
 				keypadState.InFocus = isFocused;
+				keypadState.onFront = onFront;
+				keypadState.index = closestIndex;
 				keypadState.topLeft = KeypadButtons[0];
 				keypadState.topRight = KeypadButtons[1];
 				keypadState.bottomLeft = KeypadButtons[2];
 				keypadState.bottomRight = KeypadButtons[3];
-
-				GptntDebug.Log($"TOP LEFT: {keypadState.topLeft}");
-				GptntDebug.Log($"TOP RIGHT: {keypadState.topRight}");
-				GptntDebug.Log($"BOTTOM LEFT: {keypadState.bottomLeft}");
-				GptntDebug.Log($"BOTTOM RIGHT: {keypadState.bottomRight}");
 
 
 				bombState.Modules.Add(keypadState);
@@ -788,6 +884,9 @@ public class GptntStates : MonoBehaviour
 				whoFirstState.ButtonWords = buttonValues;
 				whoFirstState.DisplayWord = displayWord;
 				whoFirstState.IsSolved = isSolved;
+				whoFirstState.InFocus = isFocused;
+				whoFirstState.onFront = onFront;
+				whoFirstState.index = closestIndex;
 				bombState.Modules.Add(whoFirstState);
 			}
 
@@ -806,6 +905,8 @@ public class GptntStates : MonoBehaviour
 				memoryState.ButtonNumbers = buttonValues;
 				memoryState.IsSolved = isSolved;
 				memoryState.InFocus = isFocused;
+				memoryState.onFront = onFront;
+				memoryState.index = closestIndex;
 				bombState.Modules.Add(memoryState);
 			}
 
@@ -822,6 +923,8 @@ public class GptntStates : MonoBehaviour
 				morseState.Sequence = word;
 				morseState.IsSolved = isSolved;
 				morseState.InFocus = isFocused;
+				morseState.onFront = onFront;
+				morseState.index = closestIndex;
 				bombState.Modules.Add(morseState);
 			}
 
@@ -861,6 +964,8 @@ public class GptntStates : MonoBehaviour
 
 				compState.IsSolved = isSolved;
 				compState.InFocus = isFocused;
+				compState.onFront = onFront;
+				compState.index = closestIndex;
 				bombState.Modules.Add(compState);
 			}
 
@@ -904,6 +1009,8 @@ public class GptntStates : MonoBehaviour
 
 				wireSeqState.IsSolved = isSolved;
 				wireSeqState.InFocus = isFocused;
+				wireSeqState.onFront = onFront;
+				wireSeqState.index = closestIndex;
 				bombState.Modules.Add(wireSeqState);
 			}
 
@@ -959,6 +1066,8 @@ public class GptntStates : MonoBehaviour
 
 				mazeState.IsSolved = isSolved;
 				mazeState.InFocus = isFocused;
+				mazeState.onFront = onFront;
+				mazeState.index = closestIndex;
 				bombState.Modules.Add(mazeState);
 			}
 
@@ -976,6 +1085,8 @@ public class GptntStates : MonoBehaviour
 
 				passState.IsSolved = isSolved;
 				passState.InFocus = isFocused;
+				passState.onFront = onFront;
+				passState.index = closestIndex;
 				bombState.Modules.Add(passState);
 			}
 		}
@@ -988,6 +1099,8 @@ public class BaseModuleState
 {
 	public bool IsSolved { get; set; }
 	public bool InFocus { get; set; }
+	public bool onFront { get; set; }
+	public int index { get; set; }
 }
 
 // --- Button Module ---
@@ -1112,6 +1225,13 @@ public class WhosOnFirstModuleState : BaseModuleState
 	public int Stage { get; set; }
 }
 
+public class TimerModuleState
+{
+	public float secondsRemaining { get; set; }
+	public bool onFront { get; set; }
+	public int index { get; set; }
+}
+
 // --- Needy Modules ---
 public class DischargeModuleState : BaseModuleState
 {
@@ -1163,13 +1283,12 @@ public class SerialNumberWidgetState : BaseWidgetState
 public class BombState
 {
 	public int Seed { get; set; }
-	public float TimeRemaining { get; set; } = 300;
 	public float Timestamp { get; set; }
 	public int MaxStrikes { get; set; } = 3;
 	public int CurrentStrikes { get; set; } = 0;
 	public bool isDetonated { get; set; }
 	public bool isSolved { get; set; }
-
+	public TimerModuleState TimerState { get; set; }
 	public List<BaseWidgetState> Widgets { get; set; }
 	public List<BaseModuleState> Modules { get; set; }
 }
