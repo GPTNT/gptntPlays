@@ -12,6 +12,7 @@ using Assets.Scripts.Components.VennWire;
 using System.Linq;
 using TMPro;
 using Events;
+using Assets.Scripts.Rules;
 
 public class GptntStates : MonoBehaviour 
 {
@@ -220,7 +221,6 @@ public class GptntStates : MonoBehaviour
 						indicatorWidgetState.Label = indicatorWidget.Label;
 						indicatorWidgetState.LightActivated = indicatorWidget.On;
 						indicatorWidgetState.Position = widgetFace;
-						GptntDebug.Log("IndicatorWidget - Face: " + indicatorWidgetState.Position + ", Label: " + indicatorWidgetState.Label + ", Lit: " + indicatorWidgetState.LightActivated);
 						bombState.Widgets.Add(indicatorWidgetState);
 					}
 					catch (Exception ex)
@@ -344,31 +344,42 @@ public class GptntStates : MonoBehaviour
 				KeypadComponent keypad = (KeypadComponent) comp;
 
 				KeypadModuleState keypadState = new KeypadModuleState();
-				keypadState.KeypadButtons = new KeyPadButtonState[4];
+				KeyPadButtonState[] KeypadButtons = new KeyPadButtonState[4];
 
 				for (int i = 0; i < 4; i++)
 				{
 					KeypadButton button = keypad.buttons[i];
-					keypadState.KeypadButtons[i] = new KeyPadButtonState();
-					keypadState.KeypadButtons[i].Symbol = button.GetValue();
+					KeypadButtons[i] = new KeyPadButtonState();
+					KeypadButtons[i].Symbol = button.GetValue();
 					if (button.LED_Correct.active)
 					{
-						keypadState.KeypadButtons[i].Colour = "Green";
+						KeypadButtons[i].Colour = "Green";
 
 
 					}
 					else if (button.LED_Wrong.active)
 					{
-						keypadState.KeypadButtons[i].Colour = "Red";
+						KeypadButtons[i].Colour = "Red";
 
 					}
 					else
 					{
-						keypadState.KeypadButtons[i].Colour = null;
+						KeypadButtons[i].Colour = null;
 					}
 				}
 				keypadState.IsSolved = isSolved;
 				keypadState.InFocus = isFocused;
+				keypadState.topLeft = KeypadButtons[0];
+				keypadState.topRight = KeypadButtons[1];
+				keypadState.bottomLeft = KeypadButtons[2];
+				keypadState.bottomRight = KeypadButtons[3];
+
+				GptntDebug.Log($"TOP LEFT: {keypadState.topLeft}");
+				GptntDebug.Log($"TOP RIGHT: {keypadState.topRight}");
+				GptntDebug.Log($"BOTTOM LEFT: {keypadState.bottomLeft}");
+				GptntDebug.Log($"BOTTOM RIGHT: {keypadState.bottomRight}");
+
+
 				bombState.Modules.Add(keypadState);
 
 
@@ -719,31 +730,42 @@ public class GptntStates : MonoBehaviour
 				KeypadComponent keypad = (KeypadComponent) comp;
 
 				KeypadModuleState keypadState = new KeypadModuleState();
-				keypadState.KeypadButtons = new KeyPadButtonState[4];
+				KeyPadButtonState[] KeypadButtons = new KeyPadButtonState[4];
 
 				for (int i = 0; i < 4; i++)
 				{
 					KeypadButton button = keypad.buttons[i];
-					keypadState.KeypadButtons[i] = new KeyPadButtonState();
-					keypadState.KeypadButtons[i].Symbol = button.GetValue();
+					KeypadButtons[i] = new KeyPadButtonState();
+					KeypadButtons[i].Symbol = button.GetValue();
 					if (button.LED_Correct.active)
 					{
-						keypadState.KeypadButtons[i].Colour = "Green";
+						KeypadButtons[i].Colour = "Green";
 
 
 					}
 					else if (button.LED_Wrong.active)
 					{
-						keypadState.KeypadButtons[i].Colour = "Red";
+						KeypadButtons[i].Colour = "Red";
 
 					}
 					else
 					{
-						keypadState.KeypadButtons[i].Colour = null;
+						KeypadButtons[i].Colour = null;
 					}
 				}
 				keypadState.IsSolved = isSolved;
 				keypadState.InFocus = isFocused;
+				keypadState.topLeft = KeypadButtons[0];
+				keypadState.topRight = KeypadButtons[1];
+				keypadState.bottomLeft = KeypadButtons[2];
+				keypadState.bottomRight = KeypadButtons[3];
+
+				GptntDebug.Log($"TOP LEFT: {keypadState.topLeft}");
+				GptntDebug.Log($"TOP RIGHT: {keypadState.topRight}");
+				GptntDebug.Log($"BOTTOM LEFT: {keypadState.bottomLeft}");
+				GptntDebug.Log($"BOTTOM RIGHT: {keypadState.bottomRight}");
+
+
 				bombState.Modules.Add(keypadState);
 
 
@@ -977,7 +999,7 @@ public class ButtonModuleState : BaseModuleState
 }
 
 // --- Keypad Module ---
-public class KeyPadButtonState : BaseModuleState
+public class KeyPadButtonState
 {
 	public string Symbol { get; set; }
 	public string Colour { get; set; }
@@ -985,7 +1007,11 @@ public class KeyPadButtonState : BaseModuleState
 
 public class KeypadModuleState : BaseModuleState
 {
-	public KeyPadButtonState[] KeypadButtons { get; set; }
+	public KeyPadButtonState topLeft { get; set; }
+	public KeyPadButtonState topRight { get; set; }
+	public KeyPadButtonState bottomLeft { get; set; }
+	public KeyPadButtonState bottomRight { get; set; }
+
 }
 
 // --- Simon Says ---
