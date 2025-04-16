@@ -29,10 +29,8 @@ public class Segmentation : MonoBehaviour
 	private List<Renderer[]> renderersWithChildren;
 	private List<GameObject> objectsOnSegmentationLayer;
 
-	private void Start()
+	public void Init(int width, int height)
 	{
-		int width = Screen.width;
-		int height = Screen.height;
 		renderTexture = new RenderTexture(width, height, 24);
 		tex = new Texture2D(width, height);
 		rect = new Rect(0, 0, width, height);

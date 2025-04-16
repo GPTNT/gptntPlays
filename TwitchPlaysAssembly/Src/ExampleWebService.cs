@@ -9,6 +9,7 @@ using Assets.Scripts.Missions;
 using System.IO;
 using System.Text;
 using Newtonsoft.Json;
+using KModkit;
 
 public class ExampleWebService : MonoBehaviour
 {
@@ -46,6 +47,8 @@ public class ExampleWebService : MonoBehaviour
 	private RenderTexture rawScreenRenderTexture;
 	private Texture2D tex;
 	private Rect rect;
+
+	private Resolution[] resolution;
 
 	void Awake()
 	{
@@ -105,13 +108,26 @@ public class ExampleWebService : MonoBehaviour
 				gptntStates.GetInitialBombState();
 			}
 		};
-		int width = Screen.width;
-		int height = Screen.height;
+
+		int width = 512;
+		int height = 384;
+
+		string widthEnv = Environment.GetEnvironmentVariable("GAME_WIDTH");
+		string heightEnv = Environment.GetEnvironmentVariable("GAME_HEIGHT");
+
+		if (int.TryParse(widthEnv, out int parsedWidth)) width = parsedWidth;
+		if (int.TryParse(heightEnv, out int parsedHeight)) height = parsedHeight;
+
+		Screen.SetResolution(width, height, false);
+		segmentation.Init(width, height);
+		
 		rawScreenRenderTexture = new RenderTexture(width, height, 24);
 		rawScreenRenderTexture.Create();
 
 		tex = new Texture2D(width, height, TextureFormat.RGB24, false);
 		rect = new Rect(0, 0, width, height);
+
+		resolution = Screen.resolutions;
 	}
 
 	private void Reset()
@@ -302,10 +318,6 @@ public class ExampleWebService : MonoBehaviour
 				);
 			gptntActions.Click(mouseInput.x, mouseInput.y);
 			gptntActions.Release();
-		}
-		if (Input.GetKeyDown(KeyCode.Y))
-		{
-			GetActiveSelectables();
 		}
 		if (Input.GetKeyDown(KeyCode.U))
 		{
