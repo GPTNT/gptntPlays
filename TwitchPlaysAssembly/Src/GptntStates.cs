@@ -483,6 +483,7 @@ public class GptntStates : MonoBehaviour
 				
 				morseState.Frequency = currentFrequency;
 				morseState.Sequence = word;
+				morseState.CorrectFrequency = morse.ChosenFrequency;
 				morseState.IsSolved = isSolved;
 				morseState.InFocus = isFocused;
 				morseState.onFront = onFront;
@@ -1207,6 +1208,7 @@ public class MorseCodeModuleState : BaseModuleState
 {
 	public string Sequence { get; set; }
 	public float Frequency { get; set; }
+	public float CorrectFrequency { get; set; }
 }
 
 // --- Password ---
