@@ -16,7 +16,7 @@ GameObject:
   - component: {fileID: 114679433292821144}
   - component: {fileID: 114644498815997642}
   - component: {fileID: 114569536059629964}
-  - component: {fileID: 114690007393336494}
+  - component: {fileID: 114753622449213914}
   m_Layer: 0
   m_Name: ExampleWebService
   m_TagString: Untagged
@@ -145,9 +145,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   shader: {fileID: 4800000, guid: da01d6839a720493093d1917dc450dc1, type: 3}
---- !u!114 &114690007393336494
+--- !u!114 &114753622449213914
 MonoBehaviour:
-  m_ObjectHideFlags: 0
+  m_ObjectHideFlags: 1
   m_PrefabParentObject: {fileID: 0}
   m_PrefabInternal: {fileID: 100100000}
   m_GameObject: {fileID: 161788}
