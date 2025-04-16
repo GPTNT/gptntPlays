@@ -15,6 +15,7 @@ public class GptntStates : MonoBehaviour
 	private string line;
 	public BombState bombState;
 	float StartTime;
+	public ExampleWebService webService;
 	TwitchBomb twitchBomb;
 	public bool readyToGive = false;
 	KMBombInfo bombInfo;
@@ -22,6 +23,7 @@ public class GptntStates : MonoBehaviour
 	public void Start()
 	{
 		bombInfo = GetComponent<KMBombInfo>();
+		webService = GetComponent<ExampleWebService>();
 
 
 		bombInfo.OnBombExploded += () =>
@@ -59,6 +61,15 @@ public class GptntStates : MonoBehaviour
 	{
 		ResetClock();
 		bombState = new BombState();
+		string gameState = webService.gameState;
+		if (gameState.Equals("Lights On"))
+		{
+			bombState.areLightsOn = true;
+		}
+		else
+		{
+			bombState.areLightsOn = false;
+		}
 		bombState.isSolved = false;
 		bombState.isDetonated = false;
 		bombState.Widgets = new List<BaseWidgetState> { };
@@ -481,7 +492,7 @@ public class GptntStates : MonoBehaviour
 
 				MorseCodeModuleState morseState = new MorseCodeModuleState();
 				
-				morseState.Frequency = currentFrequency;
+				morseState.CurrentFrequency = currentFrequency;
 				morseState.Sequence = word;
 				morseState.CorrectFrequency = morse.ChosenFrequency;
 				morseState.IsSolved = isSolved;
@@ -663,6 +674,15 @@ public class GptntStates : MonoBehaviour
 		Bomb bomb = twitchBomb.Bomb;
 		bombState.Modules = new List<BaseModuleState> { };
 		bombState.Timestamp = Time.time - StartTime;
+		string gameState = webService.gameState;
+		if (gameState.Equals("Lights On"))
+		{
+			bombState.areLightsOn = true;
+		}
+		else
+		{
+			bombState.areLightsOn = false;
+		}
 
 		try
 		{
@@ -920,7 +940,7 @@ public class GptntStates : MonoBehaviour
 
 				MorseCodeModuleState morseState = new MorseCodeModuleState();
 
-				morseState.Frequency = currentFrequency;
+				morseState.CurrentFrequency = currentFrequency;
 				morseState.Sequence = word;
 				morseState.IsSolved = isSolved;
 				morseState.InFocus = isFocused;
@@ -1207,7 +1227,7 @@ public class MemoryModuleState : BaseModuleState
 public class MorseCodeModuleState : BaseModuleState
 {
 	public string Sequence { get; set; }
-	public float Frequency { get; set; }
+	public float CurrentFrequency { get; set; }
 	public float CorrectFrequency { get; set; }
 }
 
@@ -1290,6 +1310,7 @@ public class BombState
 	public int CurrentStrikes { get; set; } = 0;
 	public bool isDetonated { get; set; }
 	public bool isSolved { get; set; }
+	public bool areLightsOn { get; set; }
 	public TimerModuleState TimerState { get; set; }
 	public List<BaseWidgetState> Widgets { get; set; }
 	public List<BaseModuleState> Modules { get; set; }

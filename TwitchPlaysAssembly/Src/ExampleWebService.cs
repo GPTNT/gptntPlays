@@ -24,7 +24,7 @@ public class ExampleWebService : MonoBehaviour
 	KMMission mission;
 	GptntActions gptntActions;
 	GptntStates gptntStates;
-	private string gameState;
+	public string gameState;
 
 	Thread workerThread;
 	Worker workerObject;
@@ -575,7 +575,7 @@ public class ExampleWebService : MonoBehaviour
 
 	private string HandleAction(HttpListenerRequest request, HttpListenerResponse response)
 	{
-		if(!gameState.Equals("Lights On"))
+		if(!gameState.EqualsAny("Lights On", "Lights Off"))
 		{
 			response.StatusCode = (int) HttpStatusCode.BadRequest;
 			return "Cannot send action to the game in " + gameState + " state";
@@ -958,7 +958,7 @@ public class ExampleWebService : MonoBehaviour
 
 	protected string GetBombInfo(HttpListenerResponse response)
 	{
-		if(!gameState.Equals("Lights On"))
+		if(!gameState.EqualsAny("Lights On", "Lights Off"))
 		{
 			response.StatusCode = (int) HttpStatusCode.BadRequest;
 			return "Cannot get bomb info before the game starts";
