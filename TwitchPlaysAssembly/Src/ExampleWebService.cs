@@ -97,7 +97,7 @@ public class ExampleWebService : MonoBehaviour
 			bomb = FindObjectOfType<TwitchBomb>();
 			gptntActions.bomb = bomb;
 			gptntActions.InitRotation();
-			gameState = gameState.EqualsAny("Gameplay", "Lights On", "Lights Off") ? (lightsOn ? "Lights On" : "Lights Off") : gameState;
+			gameState = gameState.EqualsAny("Gameplay", "Lights On", "Lights Off") ? (on ? "Lights On" : "Lights Off") : gameState;
 
 			if (gameState.Equals("Lights On"))
 			{
@@ -483,35 +483,14 @@ public class ExampleWebService : MonoBehaviour
 
 	private string HandleReset()
 	{
-		actions.Enqueue(() => StartCoroutine(GoToSetup()));
+		if(!gameState.Equals("Setup"))
+			GoToSetup();
 		return "Nuh uh";
 	}
 
-	private IEnumerator GoToSetup()
+	private void GoToSetup()
 	{
-		while (!gameState.Equals("Setup"))
-		{
-			switch (gameState)
-			{
-				case "Lights On":
-				case "Lights Off":
-					// force fail bomb
-					CauseStrike("Reset");
-					break;
-				case "PostGame":
-					// PostGameCommands.Continue()
-					Selectable continueBtn = FindObjectOfType<ResultPage>()?.ContinueButton;
-					if (!continueBtn)
-						continue;
-					continueBtn.Trigger(); // if the button is clicked while the text animation shows, it shortcuts the typing 
-					continueBtn.Trigger(); // click again
-					break;
-				default:
-					// transitioning, wait
-					break;
-			}
-			yield return null;
-		}
+		SceneManager.Instance.ReturnToSetupState();
 	}
 
 	private string HandleHealth()
@@ -808,7 +787,7 @@ public class ExampleWebService : MonoBehaviour
 		response.ContentType = "image/png";
 		return Convert.ToBase64String(imageBytes);
 	}
-
+	
 	private string HandleSegmentation(HttpListenerResponse response)
 	{
 		byte[] imageBytes = null;
@@ -1042,8 +1021,6 @@ public class ExampleWebService : MonoBehaviour
 		byte[] img = RenderTextureToPNGBytes(rawScreenRenderTexture);
 		Camera.main.targetTexture = null;
 		callback(img);
-		
-		//rawScreenRenderTexture.Release();
 	}
 
 	private Texture2D ConvertRenderTextureToTexture2D(RenderTexture rt)
