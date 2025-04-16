@@ -64,11 +64,11 @@ public class GptntStates : MonoBehaviour
 		string gameState = webService.gameState;
 		if (gameState.Equals("Lights On"))
 		{
-			bombState.areLightsOn = true;
+			bombState.isLightOn = true;
 		}
 		else
 		{
-			bombState.areLightsOn = false;
+			bombState.isLightOn = false;
 		}
 		bombState.isSolved = false;
 		bombState.isDetonated = false;
@@ -677,11 +677,11 @@ public class GptntStates : MonoBehaviour
 		string gameState = webService.gameState;
 		if (gameState.Equals("Lights On"))
 		{
-			bombState.areLightsOn = true;
+			bombState.isLightOn = true;
 		}
 		else
 		{
-			bombState.areLightsOn = false;
+			bombState.isLightOn = false;
 		}
 
 		try
@@ -1310,7 +1310,7 @@ public class BombState
 	public int CurrentStrikes { get; set; } = 0;
 	public bool isDetonated { get; set; }
 	public bool isSolved { get; set; }
-	public bool areLightsOn { get; set; }
+	public bool isLightOn { get; set; }
 	public TimerModuleState TimerState { get; set; }
 	public List<BaseWidgetState> Widgets { get; set; }
 	public List<BaseModuleState> Modules { get; set; }
