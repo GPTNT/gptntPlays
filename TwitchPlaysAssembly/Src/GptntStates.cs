@@ -624,6 +624,7 @@ public class GptntStates : MonoBehaviour
 
 		foreach (BombComponent comp in bomb.BombComponents)
 		{
+			GptntDebug.Log($"GO: {comp.transform.name}, PARENT GO: {comp.transform.parent.name} GRANDPARENT GO: {comp.transform.parent.name}");
 			bool isSolved = comp.IsSolved;
 			FieldInfo fieldInfo3 = typeof(BombComponent).GetField("isFocused", BindingFlags.NonPublic | BindingFlags.Instance);
 			bool isFocused = (bool) fieldInfo3.GetValue(comp);
