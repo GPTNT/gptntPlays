@@ -29,16 +29,16 @@ public class GptntStates : MonoBehaviour
 		bombInfo.OnBombExploded += () =>
 		{
 			bombState.isDetonated = true;
-			bombState.CurrentStrikes = twitchBomb.Bomb.NumStrikes;
-			bombState.TimerState.secondsRemaining = twitchBomb.Bomb.GetTimer().TimeRemaining;
-			bombState.Timestamp = Time.time - StartTime;
-			if (bombState.TimerState.secondsRemaining < 0)
+			bombState.currentStrikes = twitchBomb.Bomb.NumStrikes;
+			bombState.timerModule.secondsRemaining = twitchBomb.Bomb.GetTimer().TimeRemaining;
+			bombState.timestamp = Time.time - StartTime;
+			if (bombState.timerModule.secondsRemaining < 0)
 			{
-				bombState.TimerState.secondsRemaining = 0;
+				bombState.timerModule.secondsRemaining = 0;
 			}
 			else
 			{
-				bombState.CurrentStrikes++;
+				bombState.currentStrikes++;
 			}
 
 		};
@@ -46,9 +46,9 @@ public class GptntStates : MonoBehaviour
 		bombInfo.OnBombSolved += () =>
 		{
 			bombState.isSolved = true;
-			bombState.CurrentStrikes = twitchBomb.Bomb.NumStrikes;
-			bombState.Timestamp = Time.time - StartTime;
-			bombState.TimerState.secondsRemaining = twitchBomb.Bomb.GetTimer().TimeRemaining;
+			bombState.currentStrikes = twitchBomb.Bomb.NumStrikes;
+			bombState.timestamp = Time.time - StartTime;
+			bombState.timerModule.secondsRemaining = twitchBomb.Bomb.GetTimer().TimeRemaining;
 		};
 	}
 
@@ -72,16 +72,16 @@ public class GptntStates : MonoBehaviour
 		}
 		bombState.isSolved = false;
 		bombState.isDetonated = false;
-		bombState.Widgets = new List<BaseWidgetState> { };
-		bombState.Modules = new List<BaseModuleState> { };
+		bombState.widgets = new List<BaseWidgetState> { };
+		bombState.modules = new List<BaseModuleState> { };
 		twitchBomb = FindObjectOfType<TwitchBomb>();
 		Bomb bomb = twitchBomb.Bomb;
 
-		bombState.Seed = bomb.Seed;
-		bombState.Timestamp = Time.time - StartTime;
+		bombState.seed = bomb.Seed;
+		bombState.timestamp = Time.time - StartTime;
 		try
 		{
-			bombState.TimerState.secondsRemaining = bomb.GetTimer().TimeRemaining;
+			bombState.timerModule.secondsRemaining = bomb.GetTimer().TimeRemaining;
 		}
 		catch (Exception ex)
 		{
@@ -90,7 +90,7 @@ public class GptntStates : MonoBehaviour
 
 		try
 		{
-			bombState.CurrentStrikes = bomb.NumStrikes;
+			bombState.currentStrikes = bomb.NumStrikes;
 		}
 		catch (Exception ex)
 		{
@@ -99,7 +99,7 @@ public class GptntStates : MonoBehaviour
 
 		try
 		{
-			bombState.MaxStrikes = bomb.NumStrikesToLose;
+			bombState.maxStrikes = bomb.NumStrikesToLose;
 		}
 		catch (Exception ex)
 		{
@@ -112,19 +112,19 @@ public class GptntStates : MonoBehaviour
 			string widgetFace;
 			if (widget.transform.parent.name.Equals("BottomFaces"))
 			{
-				widgetFace = "Bottom";
+				widgetFace = "bottom";
 			}
 			else if (widget.transform.parent.name.Equals("TopFaces"))
 			{
-				widgetFace = "Top";
+				widgetFace = "top";
 			}
 			else if (widget.transform.parent.name.Equals("RightFaces"))
 			{
-				widgetFace = "Right";
+				widgetFace = "right";
 			}
 			else
 			{
-				widgetFace = "Left";
+				widgetFace = "left";
 			}
 			try
 			{
@@ -136,9 +136,10 @@ public class GptntStates : MonoBehaviour
 						FieldInfo fieldInfo = typeof(SerialNumber).GetField("serialString", BindingFlags.NonPublic | BindingFlags.Instance);
 						string serialString = (string) fieldInfo.GetValue(serialNumber);
 						SerialNumberWidgetState serialState = new SerialNumberWidgetState();
-						serialState.SerialNumber = serialString;
-						serialState.Position = widgetFace;
-						bombState.Widgets.Add(serialState);
+						serialState.serialNumber = serialString;
+						serialState.position = widgetFace;
+						serialState.name = "SerialNumber";
+						bombState.widgets.Add(serialState);
 					}
 					catch (Exception ex)
 					{
@@ -157,16 +158,17 @@ public class GptntStates : MonoBehaviour
 
 						if (batteryType.Equals(BatteryWidget.BatteryTypeEnum.DoubleA))
 						{
-							batteryState.BatteryType = "AA";
-							batteryState.BatteriesCount = 2;
+							batteryState.batteryType = "AA";
+							batteryState.batteriesCount = 2;
 						}
 						else if (batteryType.Equals(BatteryWidget.BatteryTypeEnum.DCell))
 						{
-							batteryState.BatteryType = "D";
-							batteryState.BatteriesCount = 1;
+							batteryState.batteryType = "D";
+							batteryState.batteriesCount = 1;
 						}
-						batteryState.Position = widgetFace;
-						bombState.Widgets.Add(batteryState);
+						batteryState.position = widgetFace;
+						batteryState.name = "Battery";
+						bombState.widgets.Add(batteryState);
 					}
 					catch (Exception ex)
 					{
@@ -210,9 +212,10 @@ public class GptntStates : MonoBehaviour
 							ports.Add("Stereo RCA");
 						}
 
-						portWidgetState.PortTypes = ports;
-						portWidgetState.Position = widgetFace;
-						bombState.Widgets.Add(portWidgetState);
+						portWidgetState.portType = ports;
+						portWidgetState.position = widgetFace;
+						portWidgetState.name = "Port";
+						bombState.widgets.Add(portWidgetState);
 					}
 					catch (Exception ex)
 					{
@@ -226,10 +229,11 @@ public class GptntStates : MonoBehaviour
 					{
 						IndicatorWidget indicatorWidget = (IndicatorWidget) widget;
 						IndicatorWidgetState indicatorWidgetState = new IndicatorWidgetState();
-						indicatorWidgetState.Label = indicatorWidget.Label;
-						indicatorWidgetState.LightActivated = indicatorWidget.On;
-						indicatorWidgetState.Position = widgetFace;
-						bombState.Widgets.Add(indicatorWidgetState);
+						indicatorWidgetState.label = indicatorWidget.Label;
+						indicatorWidgetState.lightActivated = indicatorWidget.On;
+						indicatorWidgetState.position = widgetFace;
+						indicatorWidgetState.name = "Indicator";
+						bombState.widgets.Add(indicatorWidgetState);
 					}
 					catch (Exception ex)
 					{
@@ -292,7 +296,8 @@ public class GptntStates : MonoBehaviour
 				timerState.secondsRemaining = bomb.GetTimer().TimeRemaining;
 				timerState.onFront = onFront;
 				timerState.index = closestIndex;
-				bombState.TimerState =  timerState;
+				timerState.name = "Timer";
+				bombState.timerModule =  timerState;
 			}
 
 
@@ -328,13 +333,14 @@ public class GptntStates : MonoBehaviour
 				}
 
 
-				simonState.BeepSequence = beepSequence;
+				simonState.beepSequence = beepSequence;
 				simonState.solveProgress = solveProgress;
-				simonState.IsSolved = isSolved;
-				simonState.InFocus = isFocused;
+				simonState.isSolved = isSolved;
+				simonState.inFocus = isFocused;
 				simonState.onFront = onFront;
 				simonState.index = closestIndex;
-				bombState.Modules.Add(simonState);
+				simonState.name = "Simon";
+				bombState.modules.Add(simonState);
 
 
 			}
@@ -354,23 +360,24 @@ public class GptntStates : MonoBehaviour
 				bool[] is_snipped = new bool[6];
 
 				WireSetModuleState wireSetState = new WireSetModuleState();
-				wireSetState.Wires = new WireSetWireState[6];
+				wireSetState.wires = new WireSetWireState[6];
 				// Just assign the spaces that contain wires
 				int indicesIndex = 0;
 				foreach (SnippableWire wire in wireset.wires)
 				{
-					wireSetState.Wires[indices[indicesIndex]] = new WireSetWireState();
-					wireSetState.Wires[indices[indicesIndex]].Colour = wire.GetColor().ToString();
-					wireSetState.Wires[indices[indicesIndex]].IsCut = wire.Snipped;
-					wireSetState.Wires[indices[indicesIndex]].Position = indices[indicesIndex];
+					wireSetState.wires[indices[indicesIndex]] = new WireSetWireState();
+					wireSetState.wires[indices[indicesIndex]].color = wire.GetColor().ToString();
+					wireSetState.wires[indices[indicesIndex]].isCut = wire.Snipped;
+					wireSetState.wires[indices[indicesIndex]].position = indices[indicesIndex];
 					indicesIndex++;
 				}
 
-				wireSetState.IsSolved = isSolved;
-				wireSetState.InFocus = isFocused;
+				wireSetState.isSolved = isSolved;
+				wireSetState.inFocus = isFocused;
 				wireSetState.onFront = onFront;
 				wireSetState.index = closestIndex;
-				bombState.Modules.Add(wireSetState);
+				wireSetState.name = "Wires";
+				bombState.modules.Add(wireSetState);
 			}
 			else if (comp.ComponentType == ComponentTypeEnum.BigButton)
 			{
@@ -380,22 +387,23 @@ public class GptntStates : MonoBehaviour
 				string stripColor = button.IndicatorColor.ToString();
 
 				ButtonModuleState buttonState =	new ButtonModuleState();
-				buttonState.ButtonColor = buttonColor;
-				buttonState.ButtonWord = buttonMessage;
-				buttonState.IsHeld = button.IsHolding;
-				if (buttonState.IsHeld)
+				buttonState.buttonColor = buttonColor;
+				buttonState.buttonWord = buttonMessage;
+				buttonState.isHeld = button.IsHolding;
+				if (buttonState.isHeld)
 				{
-					buttonState.StripColour = stripColor;
+					buttonState.stripColor = stripColor;
 				}
 				else
 				{
-					buttonState.StripColour = null;
+					buttonState.stripColor = null;
 				}
-				buttonState.IsSolved = isSolved;
-				buttonState.InFocus = isFocused;
+				buttonState.isSolved = isSolved;
+				buttonState.inFocus = isFocused;
 				buttonState.onFront = onFront;
 				buttonState.index = closestIndex;
-				bombState.Modules.Add(buttonState);
+				buttonState.name = "BigButton";
+				bombState.modules.Add(buttonState);
 
 			}
 			else if (comp.ComponentType == ComponentTypeEnum.Keypad)
@@ -409,34 +417,34 @@ public class GptntStates : MonoBehaviour
 				{
 					KeypadButton button = keypad.buttons[i];
 					KeypadButtons[i] = new KeyPadButtonState();
-					KeypadButtons[i].Symbol = button.GetValue();
+					KeypadButtons[i].symbol = button.GetValue();
 					if (button.LED_Correct.active)
 					{
-						KeypadButtons[i].Colour = "Green";
+						KeypadButtons[i].color = "Green";
 
 
 					}
 					else if (button.LED_Wrong.active)
 					{
-						KeypadButtons[i].Colour = "Red";
+						KeypadButtons[i].color = "Red";
 
 					}
 					else
 					{
-						KeypadButtons[i].Colour = null;
+						KeypadButtons[i].color = null;
 					}
 				}
-				keypadState.IsSolved = isSolved;
-				keypadState.InFocus = isFocused;
+				keypadState.isSolved = isSolved;
+				keypadState.inFocus = isFocused;
 				keypadState.onFront = onFront;
 				keypadState.index = closestIndex;
 				keypadState.topLeft = KeypadButtons[0];
 				keypadState.topRight = KeypadButtons[1];
 				keypadState.bottomLeft = KeypadButtons[2];
 				keypadState.bottomRight = KeypadButtons[3];
+				keypadState.name = "KeyPad";
 
-
-				bombState.Modules.Add(keypadState);
+				bombState.modules.Add(keypadState);
 
 
 			}
@@ -453,34 +461,36 @@ public class GptntStates : MonoBehaviour
 				string displayWord = whoFirst.DisplayText.text;
 
 				WhosOnFirstModuleState whoFirstState = new WhosOnFirstModuleState();
-				whoFirstState.Stage = stage;
-				whoFirstState.ButtonWords = buttonValues;
-				whoFirstState.DisplayWord = displayWord;
-				whoFirstState.IsSolved = isSolved;
-				whoFirstState.InFocus = isFocused;
+				whoFirstState.stage = stage;
+				whoFirstState.buttonWords = buttonValues;
+				whoFirstState.displayWord = displayWord;
+				whoFirstState.isSolved = isSolved;
+				whoFirstState.inFocus = isFocused;
 				whoFirstState.onFront = onFront;
 				whoFirstState.index = closestIndex;
-				bombState.Modules.Add(whoFirstState);
+				whoFirstState.name = "WhosOnFirst";
+				bombState.modules.Add(whoFirstState);
 			}
 
 			else if (comp.ComponentType == ComponentTypeEnum.Memory)
 			{
 				MemoryComponent memory = (MemoryComponent) comp;
 				MemoryModuleState memoryState = new MemoryModuleState();
-				memoryState.Stage = memory.CurrentStage;
-				memoryState.DisplayNumber = int.Parse(memory.DisplayText.text);
+				memoryState.stage = memory.CurrentStage;
+				memoryState.displayNumber = int.Parse(memory.DisplayText.text);
 				int[] buttonValues = new int[4];
 				foreach (KeypadButton button in memory.Buttons)
 				{
 					buttonValues[button.ButtonIndex] = int.Parse(button.Text.text);
 
 				}
-				memoryState.ButtonNumbers = buttonValues;
-				memoryState.IsSolved = isSolved;
-				memoryState.InFocus = isFocused;
+				memoryState.buttonNumbers = buttonValues;
+				memoryState.isSolved = isSolved;
+				memoryState.inFocus = isFocused;
 				memoryState.onFront = onFront;
 				memoryState.index = closestIndex;
-				bombState.Modules.Add(memoryState);
+				memoryState.name = "Memory";
+				bombState.modules.Add(memoryState);
 			}
 			
 			else if (comp.ComponentType == ComponentTypeEnum.Morse)
@@ -492,14 +502,15 @@ public class GptntStates : MonoBehaviour
 
 				MorseCodeModuleState morseState = new MorseCodeModuleState();
 				
-				morseState.CurrentFrequency = currentFrequency;
-				morseState.Sequence = word;
-				morseState.CorrectFrequency = morse.ChosenFrequency;
-				morseState.IsSolved = isSolved;
-				morseState.InFocus = isFocused;
+				morseState.currentFrequency = currentFrequency;
+				morseState.sequence = word;
+				morseState.correctFrequency = morse.ChosenFrequency;
+				morseState.isSolved = isSolved;
+				morseState.inFocus = isFocused;
 				morseState.onFront = onFront;
 				morseState.index = closestIndex;
-				bombState.Modules.Add(morseState);
+				morseState.name = "Morse";
+				bombState.modules.Add(morseState);
 			}
 
 			else if (comp.ComponentType == ComponentTypeEnum.Venn)
@@ -521,26 +532,27 @@ public class GptntStates : MonoBehaviour
 				}
 
 				ComplicatedWiresModuleState compState = new ComplicatedWiresModuleState();
-				compState.Wires = new ComplicatedWireState[6];
+				compState.wires = new ComplicatedWireState[6];
 
 				int indicesIndex = 0;
 				foreach (VennSnippableWire wire in venn.ActiveWires)
 				{
-					compState.Wires[indices[indicesIndex]] = new ComplicatedWireState();
-					compState.Wires[indices[indicesIndex]].HasStar = wire.HasSymbol;
-					compState.Wires[indices[indicesIndex]].IsLedOn = wire.IsLEDOn;
-					compState.Wires[indices[indicesIndex]].IsCut = wire.Snipped;
-					compState.Wires[indices[indicesIndex]].Colour = wire.Color.ToString();
-					compState.Wires[indices[indicesIndex]].Position = indices[indicesIndex];
+					compState.wires[indices[indicesIndex]] = new ComplicatedWireState();
+					compState.wires[indices[indicesIndex]].hasStar = wire.HasSymbol;
+					compState.wires[indices[indicesIndex]].isLedOn = wire.IsLEDOn;
+					compState.wires[indices[indicesIndex]].isCut = wire.Snipped;
+					compState.wires[indices[indicesIndex]].color = wire.Color.ToString();
+					compState.wires[indices[indicesIndex]].position = indices[indicesIndex];
 
 					indicesIndex++;
 				}
 
-				compState.IsSolved = isSolved;
-				compState.InFocus = isFocused;
+				compState.isSolved = isSolved;
+				compState.inFocus = isFocused;
 				compState.onFront = onFront;
 				compState.index = closestIndex;
-				bombState.Modules.Add(compState);
+				compState.name = "Venn";
+				bombState.modules.Add(compState);
 			}
 
 			else if (comp.ComponentType == ComponentTypeEnum.WireSequence)
@@ -549,8 +561,8 @@ public class GptntStates : MonoBehaviour
 				FieldInfo fieldInfo = typeof(WireSequenceComponent).GetField("currentPage", BindingFlags.NonPublic | BindingFlags.Instance);
 
 				WireSequenceModuleState wireSeqState = new WireSequenceModuleState();
-				wireSeqState.Panel = (int) fieldInfo.GetValue(wireSeq);
-				wireSeqState.Wires = new WireSequenceWireState[12];
+				wireSeqState.panel = (int) fieldInfo.GetValue(wireSeq);
+				wireSeqState.wires = new WireSequenceWireState[12];
 
 				FieldInfo fieldInfo2 = typeof(WireSequenceComponent).GetField("wireSequence", BindingFlags.NonPublic | BindingFlags.Instance);
 				List<WireSequenceComponent.WireConfiguration> configs = (List<WireSequenceComponent.WireConfiguration>) fieldInfo2.GetValue(wireSeq);
@@ -559,41 +571,42 @@ public class GptntStates : MonoBehaviour
 					WireSequenceComponent.WireConfiguration config = configs[i];
 					if (!config.NoWire)
 					{
-						wireSeqState.Wires[i] = new WireSequenceWireState();
-						wireSeqState.Wires[i].StartPositionNumber = i;
+						wireSeqState.wires[i] = new WireSequenceWireState();
+						wireSeqState.wires[i].startPositionNumber = i;
 						if (config.To == 0)
 						{
-							wireSeqState.Wires[i].EndPositionLetter = "A";
+							wireSeqState.wires[i].endPositionLetter = "A";
 
 						}
 						else if (config.To == 1)
 						{
-							wireSeqState.Wires[i].EndPositionLetter = "B";
+							wireSeqState.wires[i].endPositionLetter = "B";
 
 						}
 						else
 						{
-							wireSeqState.Wires[i].EndPositionLetter = "C";
+							wireSeqState.wires[i].endPositionLetter = "C";
 
 						}
-						wireSeqState.Wires[i].Colour = config.Wire.GetColor().ToString();
-						wireSeqState.Wires[i].IsCut = config.Wire.Snipped;
+						wireSeqState.wires[i].color = config.Wire.GetColor().ToString();
+						wireSeqState.wires[i].isCut = config.Wire.Snipped;
 					}
 				}
 
-				wireSeqState.IsSolved = isSolved;
-				wireSeqState.InFocus = isFocused;
+				wireSeqState.isSolved = isSolved;
+				wireSeqState.inFocus = isFocused;
 				wireSeqState.onFront = onFront;
 				wireSeqState.index = closestIndex;
-				bombState.Modules.Add(wireSeqState);
+				wireSeqState.name = "WireSequence";
+				bombState.modules.Add(wireSeqState);
 			}
 
 			else if (comp.ComponentType == ComponentTypeEnum.Maze)
 			{
 				InvisibleWallsComponent invis = (InvisibleWallsComponent) comp;
 				MazeModuleState mazeState = new MazeModuleState();
-				mazeState.NumColumns = 6;
-				mazeState.NumRows = 6;
+				mazeState.numColumns = 6;
+				mazeState.numRows = 6;
 
 
 				int StartX = invis.CurrentCell.X;
@@ -624,25 +637,26 @@ public class GptntStates : MonoBehaviour
 					}
 				}
 
-				mazeState.SquarePosition = new MazeCoordinate();
-				mazeState.SquarePosition.Column = StartX;
-				mazeState.SquarePosition.Row = startY;
-				mazeState.TrianglePosition = new MazeCoordinate();
-				mazeState.TrianglePosition.Column = goalX;
-				mazeState.TrianglePosition.Row = goalY;
-				mazeState.CirclePositions = new MazeCoordinate[2];
-				mazeState.CirclePositions[0] = new MazeCoordinate();
-				mazeState.CirclePositions[0].Column = circle1X;
-				mazeState.CirclePositions[0].Row = circle1Y;
-				mazeState.CirclePositions[1] = new MazeCoordinate();
-				mazeState.CirclePositions[1].Column = circle2X;
-				mazeState.CirclePositions[1].Row = circle2Y;
+				mazeState.squarePosition = new MazeCoordinate();
+				mazeState.squarePosition.column = StartX;
+				mazeState.squarePosition.row = startY;
+				mazeState.trianglePosition = new MazeCoordinate();
+				mazeState.trianglePosition.column = goalX;
+				mazeState.trianglePosition.row = goalY;
+				mazeState.circlePositions = new MazeCoordinate[2];
+				mazeState.circlePositions[0] = new MazeCoordinate();
+				mazeState.circlePositions[0].column = circle1X;
+				mazeState.circlePositions[0].row = circle1Y;
+				mazeState.circlePositions[1] = new MazeCoordinate();
+				mazeState.circlePositions[1].column = circle2X;
+				mazeState.circlePositions[1].row = circle2Y;
 
-				mazeState.IsSolved = isSolved;
-				mazeState.InFocus = isFocused;
+				mazeState.isSolved = isSolved;
+				mazeState.inFocus = isFocused;
 				mazeState.onFront = onFront;
 				mazeState.index = closestIndex;
-				bombState.Modules.Add(mazeState);
+				mazeState.name = "Maze";
+				bombState.modules.Add(mazeState);
 			}
 
 			else if (comp.ComponentType == ComponentTypeEnum.Password)
@@ -657,11 +671,12 @@ public class GptntStates : MonoBehaviour
 				passState.currentWord = layout.GetCurrentWord();
 				passState.goalWord = pass.CorrectWord;
 
-				passState.IsSolved = isSolved;
-				passState.InFocus = isFocused;
+				passState.isSolved = isSolved;
+				passState.inFocus = isFocused;
 				passState.onFront = onFront;
 				passState.index = closestIndex;
-				bombState.Modules.Add(passState);
+				passState.name = "Password";
+				bombState.modules.Add(passState);
 			}
 		}
 		readyToGive = true;
@@ -672,8 +687,8 @@ public class GptntStates : MonoBehaviour
 	{
 		TwitchBomb twitchBomb = FindObjectOfType<TwitchBomb>();
 		Bomb bomb = twitchBomb.Bomb;
-		bombState.Modules = new List<BaseModuleState> { };
-		bombState.Timestamp = Time.time - StartTime;
+		bombState.modules = new List<BaseModuleState> { };
+		bombState.timestamp = Time.time - StartTime;
 		string gameState = webService.gameState;
 		if (gameState.Equals("Lights On"))
 		{
@@ -686,7 +701,7 @@ public class GptntStates : MonoBehaviour
 
 		try
 		{
-			bombState.CurrentStrikes = bomb.NumStrikes;
+			bombState.currentStrikes = bomb.NumStrikes;
 		}
 		catch (Exception ex)
 		{
@@ -729,6 +744,12 @@ public class GptntStates : MonoBehaviour
 				}
 			}
 
+
+
+			bool isSolved = comp.IsSolved;
+			FieldInfo fieldInfo3 = typeof(BombComponent).GetField("isFocused", BindingFlags.NonPublic | BindingFlags.Instance);
+			bool isFocused = (bool) fieldInfo3.GetValue(comp);
+
 			if (comp.ComponentType == ComponentTypeEnum.Timer)
 			{
 				TimerComponent time = (TimerComponent) comp;
@@ -736,12 +757,9 @@ public class GptntStates : MonoBehaviour
 				timerState.secondsRemaining = bomb.GetTimer().TimeRemaining;
 				timerState.onFront = onFront;
 				timerState.index = closestIndex;
-				bombState.TimerState = timerState;
+				timerState.name = "Timer";
+				bombState.timerModule = timerState;
 			}
-
-			bool isSolved = comp.IsSolved;
-			FieldInfo fieldInfo3 = typeof(BombComponent).GetField("isFocused", BindingFlags.NonPublic | BindingFlags.Instance);
-			bool isFocused = (bool) fieldInfo3.GetValue(comp);
 
 
 
@@ -776,13 +794,14 @@ public class GptntStates : MonoBehaviour
 				}
 
 
-				simonState.BeepSequence = beepSequence;
+				simonState.beepSequence = beepSequence;
 				simonState.solveProgress = solveProgress;
-				simonState.IsSolved = isSolved;
-				simonState.InFocus = isFocused;
+				simonState.isSolved = isSolved;
+				simonState.inFocus = isFocused;
 				simonState.onFront = onFront;
 				simonState.index = closestIndex;
-				bombState.Modules.Add(simonState);
+				simonState.name = "Simon";
+				bombState.modules.Add(simonState);
 
 
 			}
@@ -802,23 +821,24 @@ public class GptntStates : MonoBehaviour
 				bool[] is_snipped = new bool[6];
 
 				WireSetModuleState wireSetState = new WireSetModuleState();
-				wireSetState.Wires = new WireSetWireState[6];
+				wireSetState.wires = new WireSetWireState[6];
 				// Just assign the spaces that contain wires
 				int indicesIndex = 0;
 				foreach (SnippableWire wire in wireset.wires)
 				{
-					wireSetState.Wires[indices[indicesIndex]] = new WireSetWireState();
-					wireSetState.Wires[indices[indicesIndex]].Colour = wire.GetColor().ToString();
-					wireSetState.Wires[indices[indicesIndex]].IsCut = wire.Snipped;
-					wireSetState.Wires[indices[indicesIndex]].Position = indices[indicesIndex];
+					wireSetState.wires[indices[indicesIndex]] = new WireSetWireState();
+					wireSetState.wires[indices[indicesIndex]].color = wire.GetColor().ToString();
+					wireSetState.wires[indices[indicesIndex]].isCut = wire.Snipped;
+					wireSetState.wires[indices[indicesIndex]].position = indices[indicesIndex];
 					indicesIndex++;
 				}
 
-				wireSetState.IsSolved = isSolved;
-				wireSetState.InFocus = isFocused;
+				wireSetState.isSolved = isSolved;
+				wireSetState.inFocus = isFocused;
 				wireSetState.onFront = onFront;
 				wireSetState.index = closestIndex;
-				bombState.Modules.Add(wireSetState);
+				wireSetState.name = "Wires";
+				bombState.modules.Add(wireSetState);
 			}
 			else if (comp.ComponentType == ComponentTypeEnum.BigButton)
 			{
@@ -828,22 +848,23 @@ public class GptntStates : MonoBehaviour
 				string stripColor = button.IndicatorColor.ToString();
 
 				ButtonModuleState buttonState = new ButtonModuleState();
-				buttonState.ButtonColor = buttonColor;
-				buttonState.ButtonWord = buttonMessage;
-				buttonState.IsHeld = button.IsHolding;
-				if (buttonState.IsHeld)
+				buttonState.buttonColor = buttonColor;
+				buttonState.buttonWord = buttonMessage;
+				buttonState.isHeld = button.IsHolding;
+				if (buttonState.isHeld)
 				{
-					buttonState.StripColour = stripColor;
+					buttonState.stripColor = stripColor;
 				}
 				else
 				{
-					buttonState.StripColour = null;
+					buttonState.stripColor = null;
 				}
-				buttonState.IsSolved = isSolved;
-				buttonState.InFocus = isFocused;
+				buttonState.isSolved = isSolved;
+				buttonState.inFocus = isFocused;
 				buttonState.onFront = onFront;
 				buttonState.index = closestIndex;
-				bombState.Modules.Add(buttonState);
+				buttonState.name = "BigButton";
+				bombState.modules.Add(buttonState);
 
 			}
 			else if (comp.ComponentType == ComponentTypeEnum.Keypad)
@@ -856,35 +877,67 @@ public class GptntStates : MonoBehaviour
 				for (int i = 0; i < 4; i++)
 				{
 					KeypadButton button = keypad.buttons[i];
+					string symbol = button.GetValue();
 					KeypadButtons[i] = new KeyPadButtonState();
-					KeypadButtons[i].Symbol = button.GetValue();
+
+					if (symbol == "©") KeypadButtons[i].symbol = "copyright";
+					else if (symbol == "★") KeypadButtons[i].symbol = "star";
+					else if (symbol == "☆") KeypadButtons[i].symbol = "hollow-star";
+					else if (symbol == "ټ") KeypadButtons[i].symbol = "pashto-teh";
+					else if (symbol == "Җ") KeypadButtons[i].symbol = "zh";
+					else if (symbol == "Ω") KeypadButtons[i].symbol = "omega";
+					else if (symbol == "Ѭ") KeypadButtons[i].symbol = "ligature-iotated-e";
+					else if (symbol == "Ѽ") KeypadButtons[i].symbol = "ot";
+					else if (symbol == "ϗ") KeypadButtons[i].symbol = "kai";
+					else if (symbol == "ϫ") KeypadButtons[i].symbol = "egyptian-kai";
+					else if (symbol == "Ϭ") KeypadButtons[i].symbol = "lunate-sampi";
+					else if (symbol == "Ϟ") KeypadButtons[i].symbol = "qoppa";
+					else if (symbol == "Ѧ") KeypadButtons[i].symbol = "little-yus";
+					else if (symbol == "ӕ") KeypadButtons[i].symbol = "ae";
+					else if (symbol == "Ԇ") KeypadButtons[i].symbol = "ha-with-descender";
+					else if (symbol == "Ӭ") KeypadButtons[i].symbol = "e-with-diaeresis";
+					else if (symbol == "\u0488") KeypadButtons[i].symbol = "thousand-sign";
+					else if (symbol == "Ҋ") KeypadButtons[i].symbol = "short-i";
+					else if (symbol == "ѯ") KeypadButtons[i].symbol = "ksi";
+					else if (symbol == "¿") KeypadButtons[i].symbol = "inverted-question";
+					else if (symbol == "¶") KeypadButtons[i].symbol = "pilcrow";
+					else if (symbol == "Ͼ") KeypadButtons[i].symbol = "lunate-epsilon";
+					else if (symbol == "Ͽ") KeypadButtons[i].symbol = "reversed-lunate-epsilon";
+					else if (symbol == "Ψ") KeypadButtons[i].symbol = "psi";
+					else if (symbol == "Ѫ") KeypadButtons[i].symbol = "big-yus";
+					else if (symbol == "Ҩ") KeypadButtons[i].symbol = "qa";
+					else if (symbol == "҂") KeypadButtons[i].symbol = "titlo";
+					else if (symbol == "Ϙ") KeypadButtons[i].symbol = "archaic-koppa";
+					else if (symbol == "ζ") KeypadButtons[i].symbol = "zeta";
+					else if (symbol == "ƛ") KeypadButtons[i].symbol = "lambda-bar";
+					else if (symbol == "ѣ") KeypadButtons[i].symbol = "yat";
 					if (button.LED_Correct.active)
 					{
-						KeypadButtons[i].Colour = "Green";
+						KeypadButtons[i].color = "Green";
 
 
 					}
 					else if (button.LED_Wrong.active)
 					{
-						KeypadButtons[i].Colour = "Red";
+						KeypadButtons[i].color = "Red";
 
 					}
 					else
 					{
-						KeypadButtons[i].Colour = null;
+						KeypadButtons[i].color = null;
 					}
 				}
-				keypadState.IsSolved = isSolved;
-				keypadState.InFocus = isFocused;
+				keypadState.isSolved = isSolved;
+				keypadState.inFocus = isFocused;
 				keypadState.onFront = onFront;
 				keypadState.index = closestIndex;
 				keypadState.topLeft = KeypadButtons[0];
 				keypadState.topRight = KeypadButtons[1];
 				keypadState.bottomLeft = KeypadButtons[2];
 				keypadState.bottomRight = KeypadButtons[3];
+				keypadState.name = "KeyPad";
 
-
-				bombState.Modules.Add(keypadState);
+				bombState.modules.Add(keypadState);
 
 
 			}
@@ -901,34 +954,36 @@ public class GptntStates : MonoBehaviour
 				string displayWord = whoFirst.DisplayText.text;
 
 				WhosOnFirstModuleState whoFirstState = new WhosOnFirstModuleState();
-				whoFirstState.Stage = stage;
-				whoFirstState.ButtonWords = buttonValues;
-				whoFirstState.DisplayWord = displayWord;
-				whoFirstState.IsSolved = isSolved;
-				whoFirstState.InFocus = isFocused;
+				whoFirstState.stage = stage;
+				whoFirstState.buttonWords = buttonValues;
+				whoFirstState.displayWord = displayWord;
+				whoFirstState.isSolved = isSolved;
+				whoFirstState.inFocus = isFocused;
 				whoFirstState.onFront = onFront;
 				whoFirstState.index = closestIndex;
-				bombState.Modules.Add(whoFirstState);
+				whoFirstState.name = "WhosOnFirst";
+				bombState.modules.Add(whoFirstState);
 			}
 
 			else if (comp.ComponentType == ComponentTypeEnum.Memory)
 			{
 				MemoryComponent memory = (MemoryComponent) comp;
 				MemoryModuleState memoryState = new MemoryModuleState();
-				memoryState.Stage = memory.CurrentStage;
-				memoryState.DisplayNumber = int.Parse(memory.DisplayText.text);
+				memoryState.stage = memory.CurrentStage;
+				memoryState.displayNumber = int.Parse(memory.DisplayText.text);
 				int[] buttonValues = new int[4];
 				foreach (KeypadButton button in memory.Buttons)
 				{
 					buttonValues[button.ButtonIndex] = int.Parse(button.Text.text);
 
 				}
-				memoryState.ButtonNumbers = buttonValues;
-				memoryState.IsSolved = isSolved;
-				memoryState.InFocus = isFocused;
+				memoryState.buttonNumbers = buttonValues;
+				memoryState.isSolved = isSolved;
+				memoryState.inFocus = isFocused;
 				memoryState.onFront = onFront;
 				memoryState.index = closestIndex;
-				bombState.Modules.Add(memoryState);
+				memoryState.name = "Memory";
+				bombState.modules.Add(memoryState);
 			}
 
 			else if (comp.ComponentType == ComponentTypeEnum.Morse)
@@ -940,13 +995,15 @@ public class GptntStates : MonoBehaviour
 
 				MorseCodeModuleState morseState = new MorseCodeModuleState();
 
-				morseState.CurrentFrequency = currentFrequency;
-				morseState.Sequence = word;
-				morseState.IsSolved = isSolved;
-				morseState.InFocus = isFocused;
+				morseState.currentFrequency = currentFrequency;
+				morseState.sequence = word;
+				morseState.correctFrequency = morse.ChosenFrequency;
+				morseState.isSolved = isSolved;
+				morseState.inFocus = isFocused;
 				morseState.onFront = onFront;
 				morseState.index = closestIndex;
-				bombState.Modules.Add(morseState);
+				morseState.name = "Morse";
+				bombState.modules.Add(morseState);
 			}
 
 			else if (comp.ComponentType == ComponentTypeEnum.Venn)
@@ -968,26 +1025,27 @@ public class GptntStates : MonoBehaviour
 				}
 
 				ComplicatedWiresModuleState compState = new ComplicatedWiresModuleState();
-				compState.Wires = new ComplicatedWireState[6];
+				compState.wires = new ComplicatedWireState[6];
 
 				int indicesIndex = 0;
 				foreach (VennSnippableWire wire in venn.ActiveWires)
 				{
-					compState.Wires[indices[indicesIndex]] = new ComplicatedWireState();
-					compState.Wires[indices[indicesIndex]].HasStar = wire.HasSymbol;
-					compState.Wires[indices[indicesIndex]].IsLedOn = wire.IsLEDOn;
-					compState.Wires[indices[indicesIndex]].IsCut = wire.Snipped;
-					compState.Wires[indices[indicesIndex]].Colour = wire.Color.ToString();
-					compState.Wires[indices[indicesIndex]].Position = indices[indicesIndex];
+					compState.wires[indices[indicesIndex]] = new ComplicatedWireState();
+					compState.wires[indices[indicesIndex]].hasStar = wire.HasSymbol;
+					compState.wires[indices[indicesIndex]].isLedOn = wire.IsLEDOn;
+					compState.wires[indices[indicesIndex]].isCut = wire.Snipped;
+					compState.wires[indices[indicesIndex]].color = wire.Color.ToString();
+					compState.wires[indices[indicesIndex]].position = indices[indicesIndex];
 
 					indicesIndex++;
 				}
 
-				compState.IsSolved = isSolved;
-				compState.InFocus = isFocused;
+				compState.isSolved = isSolved;
+				compState.inFocus = isFocused;
 				compState.onFront = onFront;
 				compState.index = closestIndex;
-				bombState.Modules.Add(compState);
+				compState.name = "Venn";
+				bombState.modules.Add(compState);
 			}
 
 			else if (comp.ComponentType == ComponentTypeEnum.WireSequence)
@@ -996,8 +1054,8 @@ public class GptntStates : MonoBehaviour
 				FieldInfo fieldInfo = typeof(WireSequenceComponent).GetField("currentPage", BindingFlags.NonPublic | BindingFlags.Instance);
 
 				WireSequenceModuleState wireSeqState = new WireSequenceModuleState();
-				wireSeqState.Panel = (int) fieldInfo.GetValue(wireSeq);
-				wireSeqState.Wires = new WireSequenceWireState[12];
+				wireSeqState.panel = (int) fieldInfo.GetValue(wireSeq);
+				wireSeqState.wires = new WireSequenceWireState[12];
 
 				FieldInfo fieldInfo2 = typeof(WireSequenceComponent).GetField("wireSequence", BindingFlags.NonPublic | BindingFlags.Instance);
 				List<WireSequenceComponent.WireConfiguration> configs = (List<WireSequenceComponent.WireConfiguration>) fieldInfo2.GetValue(wireSeq);
@@ -1006,41 +1064,42 @@ public class GptntStates : MonoBehaviour
 					WireSequenceComponent.WireConfiguration config = configs[i];
 					if (!config.NoWire)
 					{
-						wireSeqState.Wires[i] = new WireSequenceWireState();
-						wireSeqState.Wires[i].StartPositionNumber = i;
+						wireSeqState.wires[i] = new WireSequenceWireState();
+						wireSeqState.wires[i].startPositionNumber = i;
 						if (config.To == 0)
 						{
-							wireSeqState.Wires[i].EndPositionLetter = "A";
+							wireSeqState.wires[i].endPositionLetter = "A";
 
 						}
 						else if (config.To == 1)
 						{
-							wireSeqState.Wires[i].EndPositionLetter = "B";
+							wireSeqState.wires[i].endPositionLetter = "B";
 
 						}
 						else
 						{
-							wireSeqState.Wires[i].EndPositionLetter = "C";
+							wireSeqState.wires[i].endPositionLetter = "C";
 
 						}
-						wireSeqState.Wires[i].Colour = config.Wire.GetColor().ToString();
-						wireSeqState.Wires[i].IsCut = config.Wire.Snipped;
+						wireSeqState.wires[i].color = config.Wire.GetColor().ToString();
+						wireSeqState.wires[i].isCut = config.Wire.Snipped;
 					}
 				}
 
-				wireSeqState.IsSolved = isSolved;
-				wireSeqState.InFocus = isFocused;
+				wireSeqState.isSolved = isSolved;
+				wireSeqState.inFocus = isFocused;
 				wireSeqState.onFront = onFront;
 				wireSeqState.index = closestIndex;
-				bombState.Modules.Add(wireSeqState);
+				wireSeqState.name = "WireSequence";
+				bombState.modules.Add(wireSeqState);
 			}
 
 			else if (comp.ComponentType == ComponentTypeEnum.Maze)
 			{
 				InvisibleWallsComponent invis = (InvisibleWallsComponent) comp;
 				MazeModuleState mazeState = new MazeModuleState();
-				mazeState.NumColumns = 6;
-				mazeState.NumRows = 6;
+				mazeState.numColumns = 6;
+				mazeState.numRows = 6;
 
 
 				int StartX = invis.CurrentCell.X;
@@ -1071,25 +1130,26 @@ public class GptntStates : MonoBehaviour
 					}
 				}
 
-				mazeState.SquarePosition = new MazeCoordinate();
-				mazeState.SquarePosition.Column = StartX;
-				mazeState.SquarePosition.Row = startY;
-				mazeState.TrianglePosition = new MazeCoordinate();
-				mazeState.TrianglePosition.Column = goalX;
-				mazeState.TrianglePosition.Row = goalY;
-				mazeState.CirclePositions = new MazeCoordinate[2];
-				mazeState.CirclePositions[0] = new MazeCoordinate();
-				mazeState.CirclePositions[0].Column = circle1X;
-				mazeState.CirclePositions[0].Row = circle1Y;
-				mazeState.CirclePositions[1] = new MazeCoordinate();
-				mazeState.CirclePositions[1].Column = circle2X;
-				mazeState.CirclePositions[1].Row = circle2Y;
+				mazeState.squarePosition = new MazeCoordinate();
+				mazeState.squarePosition.column = StartX;
+				mazeState.squarePosition.row = startY;
+				mazeState.trianglePosition = new MazeCoordinate();
+				mazeState.trianglePosition.column = goalX;
+				mazeState.trianglePosition.row = goalY;
+				mazeState.circlePositions = new MazeCoordinate[2];
+				mazeState.circlePositions[0] = new MazeCoordinate();
+				mazeState.circlePositions[0].column = circle1X;
+				mazeState.circlePositions[0].row = circle1Y;
+				mazeState.circlePositions[1] = new MazeCoordinate();
+				mazeState.circlePositions[1].column = circle2X;
+				mazeState.circlePositions[1].row = circle2Y;
 
-				mazeState.IsSolved = isSolved;
-				mazeState.InFocus = isFocused;
+				mazeState.isSolved = isSolved;
+				mazeState.inFocus = isFocused;
 				mazeState.onFront = onFront;
 				mazeState.index = closestIndex;
-				bombState.Modules.Add(mazeState);
+				mazeState.name = "Maze";
+				bombState.modules.Add(mazeState);
 			}
 
 			else if (comp.ComponentType == ComponentTypeEnum.Password)
@@ -1104,40 +1164,42 @@ public class GptntStates : MonoBehaviour
 				passState.currentWord = layout.GetCurrentWord();
 				passState.goalWord = pass.CorrectWord;
 
-				passState.IsSolved = isSolved;
-				passState.InFocus = isFocused;
+				passState.isSolved = isSolved;
+				passState.inFocus = isFocused;
 				passState.onFront = onFront;
 				passState.index = closestIndex;
-				bombState.Modules.Add(passState);
+				passState.name = "Password";
+				bombState.modules.Add(passState);
 			}
 		}
 		readyToGive = true;
-		// TODO: readyToGive needs to be reset when the bomb is finished, ask Kareem about how to know if a module is infocus
 	}
 }
 
 public class BaseModuleState
 {
-	public bool IsSolved { get; set; }
-	public bool InFocus { get; set; }
+	public bool isSolved { get; set; }
+	public bool inFocus { get; set; }
 	public bool onFront { get; set; }
 	public int index { get; set; }
+	public string name { get; set; }
+
 }
 
 // --- Button Module ---
 public class ButtonModuleState : BaseModuleState
 {
-	public string ButtonColor { get; set; }
-	public string ButtonWord { get; set; }
-	public bool IsHeld { get; set; }
-	public string StripColour { get; set; }
+	public string buttonColor { get; set; }
+	public string buttonWord { get; set; }
+	public bool isHeld { get; set; }
+	public string stripColor { get; set; }
 }
 
 // --- Keypad Module ---
 public class KeyPadButtonState
 {
-	public string Symbol { get; set; }
-	public string Colour { get; set; }
+	public string symbol { get; set; }
+	public string color { get; set; }
 }
 
 public class KeypadModuleState : BaseModuleState
@@ -1152,83 +1214,83 @@ public class KeypadModuleState : BaseModuleState
 // --- Simon Says ---
 public class SimonSaysModuleState : BaseModuleState
 {
-	public List<string> BeepSequence { get; set; }
+	public List<string> beepSequence { get; set; }
 	public int solveProgress { get; set; }
 }
 
 // --- Wire base + variants ---
 public class BaseWire
 {
-	public bool IsCut { get; set; }
-	public string Colour { get; set; }
+	public bool isCut { get; set; }
+	public string color { get; set; }
 }
 
 public class WireSetWireState : BaseWire
 {
-	public int Position { get; set; }
+	public int position { get; set; }
 }
 
 public class ComplicatedWireState : BaseWire
 {
-	public int Position { get; set; }
-	public bool IsLedOn { get; set; }
-	public bool HasStar { get; set; }
+	public int position { get; set; }
+	public bool isLedOn { get; set; }
+	public bool hasStar { get; set; }
 }
 
 public class WireSequenceWireState : BaseWire
 {
-	public int StartPositionNumber { get; set; }
-	public string EndPositionLetter { get; set; }
+	public int startPositionNumber { get; set; }
+	public string endPositionLetter { get; set; }
 }
 
 // --- Wire Modules ---
 public class WireSetModuleState : BaseModuleState
 {
-	public WireSetWireState[] Wires { get; set; }
+	public WireSetWireState[] wires { get; set; }
 }
 
 public class ComplicatedWiresModuleState : BaseModuleState
 {
-	public ComplicatedWireState[] Wires { get; set; }
+	public ComplicatedWireState[] wires { get; set; }
 }
 
 public class WireSequenceModuleState : BaseModuleState
 {
-	public int Panel { get; set; }
-	public WireSequenceWireState[] Wires { get; set; }
+	public int panel { get; set; }
+	public WireSequenceWireState[] wires { get; set; }
 }
 
 // --- Maze ---
 public class MazeCoordinate
 {
-	public int Row { get; set; }
-	public int Column { get; set; }
+	public int row { get; set; }
+	public int column { get; set; }
 }
 
 public class MazeModuleState : BaseModuleState
 {
-	public int NumRows { get; set; }
-	public int NumColumns { get; set; }
+	public int numRows { get; set; }
+	public int numColumns { get; set; }
 
-	public MazeCoordinate TrianglePosition { get; set; }
-	public MazeCoordinate SquarePosition { get; set; }
-	public MazeCoordinate[] CirclePositions { get; set; }
+	public MazeCoordinate trianglePosition { get; set; }
+	public MazeCoordinate squarePosition { get; set; }
+	public MazeCoordinate[] circlePositions { get; set; }
 }
 
 // --- Memory ---
 public class MemoryModuleState : BaseModuleState
 {
-	public int DisplayNumber { get; set; }
-	public int[] ButtonNumbers { get; set; }
-	public int Stage { get; set; }
+	public int displayNumber { get; set; }
+	public int[] buttonNumbers { get; set; }
+	public int stage { get; set; }
 }
 
 // --- Morse Code ---
 public class MorseCodeModuleState : BaseModuleState
 {
-	public string Sequence { get; set; }
-	public float CurrentFrequency { get; set; }
-	public float CorrectFrequency { get; set; }
+	public string sequence { get; set; }
+	public float currentFrequency { get; set; }
+	public float correctFrequency { get; set; }
 }
 
 // --- Password ---
@@ -1242,9 +1304,9 @@ public class PasswordModuleState : BaseModuleState
 // --- Who’s On First ---
 public class WhosOnFirstModuleState : BaseModuleState
 {
-	public string DisplayWord { get; set; }
-	public string[] ButtonWords { get; set; }
-	public int Stage { get; set; }
+	public string displayWord { get; set; }
+	public string[] buttonWords { get; set; }
+	public int stage { get; set; }
 }
 
 public class TimerModuleState
@@ -1252,66 +1314,70 @@ public class TimerModuleState
 	public float secondsRemaining { get; set; }
 	public bool onFront { get; set; }
 	public int index { get; set; }
+	public string name { get; set; }
+
+
 }
 
 // --- Needy Modules ---
 public class DischargeModuleState : BaseModuleState
 {
-	public bool IsBeingNeedy { get; set; }
-	public int SecondsUntilDischarge { get; set; }
+	public bool isBeingNeedy { get; set; }
+	public int secondsUntilDischarge { get; set; }
 }
 
 public class KnobModuleState : BaseModuleState
 {
-	public bool IsBeingNeedy { get; set; }
-	public string KnobPosition { get; set; }
-	public Dictionary<int, bool> LedPosition { get; set; }
+	public bool isBeingNeedy { get; set; }
+	public string knobPosition { get; set; }
+	public Dictionary<int, bool> ledPosition { get; set; }
 }
 
 public class GasModuleState : BaseModuleState
 {
-	public bool IsBeingNeedy { get; set; }
-	public string Message { get; set; }
-	public int Timer { get; set; }
+	public bool isBeingNeedy { get; set; }
+	public string message { get; set; }
+	public int timer { get; set; }
 }
 
 public class BaseWidgetState
 {
-	public string Position { get; set; }
+	public string position { get; set; }
+	public string name { get; set; }
 }
 
 public class BatteryWidgetState : BaseWidgetState
 {
-	public int BatteriesCount { get; set; }
-	public string BatteryType { get; set; }
+	public int batteriesCount { get; set; }
+	public string batteryType { get; set; }
 }
 
 public class IndicatorWidgetState : BaseWidgetState
 {
-	public bool LightActivated { get; set; }
-	public string Label { get; set; }
+	public bool lightActivated { get; set; }
+	public string label { get; set; }
 }
 
 public class PortWidgetState : BaseWidgetState
 {
-	public List<string> PortTypes { get; set; }
+	public List<string> portType { get; set; }
 }
 
 public class SerialNumberWidgetState : BaseWidgetState
 {
-	public string SerialNumber { get; set; }
+	public string serialNumber { get; set; }
 }
 
 public class BombState
 {
-	public int Seed { get; set; }
-	public float Timestamp { get; set; }
-	public int MaxStrikes { get; set; } = 3;
-	public int CurrentStrikes { get; set; } = 0;
+	public int seed { get; set; }
+	public float timestamp { get; set; }
+	public int maxStrikes { get; set; } = 3;
+	public int currentStrikes { get; set; } = 0;
 	public bool isDetonated { get; set; }
 	public bool isSolved { get; set; }
 	public bool isLightOn { get; set; }
-	public TimerModuleState TimerState { get; set; }
-	public List<BaseWidgetState> Widgets { get; set; }
-	public List<BaseModuleState> Modules { get; set; }
+	public TimerModuleState timerModule { get; set; }
+	public List<BaseWidgetState> widgets { get; set; }
+	public List<BaseModuleState> modules { get; set; }
 }
