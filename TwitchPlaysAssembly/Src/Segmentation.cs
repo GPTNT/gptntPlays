@@ -32,6 +32,8 @@ public class Segmentation : MonoBehaviour
 	public void Init(int width, int height)
 	{
 		renderTexture = new RenderTexture(width, height, 24);
+		renderTexture.antiAliasing = 1;
+		renderTexture.filterMode = FilterMode.Point;
 		tex = new Texture2D(width, height);
 		rect = new Rect(0, 0, width, height);
 		if (!shader) GptntDebug.Log("Shader is null");

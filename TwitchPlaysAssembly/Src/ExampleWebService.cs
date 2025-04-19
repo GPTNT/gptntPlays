@@ -24,7 +24,7 @@ public class ExampleWebService : MonoBehaviour
 	KMMission mission;
 	GptntActions gptntActions;
 	GptntStates gptntStates;
-	public string gameState;
+	public volatile string gameState;
 
 	Thread workerThread;
 	Worker workerObject;
@@ -47,8 +47,6 @@ public class ExampleWebService : MonoBehaviour
 	private RenderTexture rawScreenRenderTexture;
 	private Texture2D tex;
 	private Rect rect;
-
-	private Resolution[] resolution;
 
 	void Awake()
 	{
@@ -126,8 +124,6 @@ public class ExampleWebService : MonoBehaviour
 
 		tex = new Texture2D(width, height, TextureFormat.RGB24, false);
 		rect = new Rect(0, 0, width, height);
-
-		resolution = Screen.resolutions;
 	}
 
 	private void Reset()
@@ -452,13 +448,13 @@ public class ExampleWebService : MonoBehaviour
 				responseString = GetBombInfo(response);
 				break;
 			case "/startmission":
-				responseString = HandleStartMission(request, response);
+				responseString = HandleStartMission(request, response); // Main thread
 				break;
 			case "/causestrike":
 				responseString = HandleCauseStrike(request, response);
 				break;
 			case "/screenshot":
-				responseString = HandleScreenshot(response);
+				responseString = HandleScreenshot(response); // Main thread
 				break;
 			case "/settimescale":
 				responseString = HandleSetTimescale(request);
@@ -470,10 +466,10 @@ public class ExampleWebService : MonoBehaviour
 				responseString = HandleTimeStep(request);
 				break;
 			case "/action":
-				responseString = HandleAction(request, response);
+				responseString = HandleAction(request, response); // Main thread
 				break;
 			case "/observation":
-				responseString = HandleObservation(response);
+				responseString = HandleObservation(response); // Main thread
 				break;
 			case "/health":
 				responseString = HandleHealth();
@@ -541,38 +537,6 @@ public class ExampleWebService : MonoBehaviour
 			.Replace("\t", "\\t");
 	}
 
-	private string HandleHandleRelease()
-	{
-		string response = null;
-		var waitHandle = new ManualResetEvent(false);
-		MainThreadQueue.Enqueue(() =>
-		{
-			HandleRelease((value) =>
-			{
-				response = value;
-				waitHandle.Set();
-			});
-		});
-
-		waitHandle.WaitOne();
-		return response;
-	}
-
-	private string HandleClickAndRelease(HttpListenerRequest request, HttpListenerResponse response)
-	{
-		string responseString = null;
-		var waitHandle = new ManualResetEvent(false);
-		MainThreadQueue.Enqueue(() =>
-		{
-			responseString = HandleClicking(request, response);
-			HandleRelease((str) => { responseString += " " + str; });
-			waitHandle.Set();
-		}
-		);
-		waitHandle.WaitOne();
-		return responseString;
-	}
-
 	private string HandleAction(HttpListenerRequest request, HttpListenerResponse response)
 	{
 		if(!gameState.EqualsAny("Lights On", "Lights Off"))
@@ -581,78 +545,77 @@ public class ExampleWebService : MonoBehaviour
 			return "Cannot send action to the game in " + gameState + " state";
 		}
 
-		string action_type = request.QueryString.Get("action");
 		string responseString = null;
 
-		if (action_type == "release") // has to be run in the main thread
-		{
-			responseString = HandleHandleRelease();
-		}
-		else
-		{
-			switch (action_type)
-			{
-				case "hold":
-					responseString = HandleClicking(request, response);
-					break;
-				case "click":
-					responseString = HandleClickAndRelease(request, response);
-					break;
-				case "out":
-					responseString = HandleZoomOut();
-					break;
-				default:
-					responseString = HandleRotationOnMainThread(request);
-					break;
-			}
-		}
-		GptntDebug.Log("last response is: " + responseString);
+		responseString = HandleActionOnMainThread(request, response);
+
 		if(response.StatusCode != (int) HttpStatusCode.OK)
 		{
 			return responseString;
 		}
 
-		string json;
-		try
-		{
-			gptntStates.GetInitialBombState();
-			json = JsonConvert.SerializeObject(gptntStates.bombState, Formatting.Indented);
-			return json;
-		}
-		catch (Exception e)
-		{
-
-		}
-
-		gptntStates.GetInitialBombState();
-		json = JsonConvert.SerializeObject(gptntStates.bombState, Formatting.Indented);
-		return json;
+		return responseString;
 	}
 
-	private string HandleZoomOut()
+	private string HandleActionOnMainThread(HttpListenerRequest request, HttpListenerResponse response)
 	{
-		return gptntActions.ZoomOut();
+		string actionType = request.QueryString.Get("action");
+		string responseString = null;
+		var waitHandle = new ManualResetEvent(false);
+			MainThreadQueue.Enqueue(() =>
+			{
+				switch (actionType)
+				{
+					case "click":
+						responseString = HandleClick(request, response);
+						break;
+					case "hold":
+						responseString = HandleHold(request, response);
+						break;
+					case "release":
+						responseString = HandleClickEnd();
+						break;
+					case "out":
+						responseString = HandleZoomOut();
+						break;
+					default:
+						responseString = HandleRotate(request);
+						break;
+				}
+				waitHandle.Set();
+			}
+		);
+
+		waitHandle.WaitOne();
+		return responseString;
 	}
 
-	private string HandleRelease(Action<string> callback)
+	private string HandleClick(HttpListenerRequest request, HttpListenerResponse response)
 	{
-		string response = gptntActions.Release();
-		callback("Released selectable");
-		return response;
+		string responseString = "";
+		responseString += HandleClickStart(request, response);
+		responseString += HandleClickEnd();
+
+		return responseString;
 	}
 
-	private string HandleClicking(HttpListenerRequest request, HttpListenerResponse response)
+	private string HandleHold(HttpListenerRequest request, HttpListenerResponse response)
+	{
+		return HandleClickStart(request, response);
+	}
+
+	private string HandleClickStart(HttpListenerRequest request, HttpListenerResponse response)
 	{
 		float x, y;
 
 		try
 		{
 			x = (float) Convert.ToDouble(request.QueryString.Get("x_pos"));
-			y = 1-(float) Convert.ToDouble(request.QueryString.Get("y_pos"));
-			if(x < 0 || x > 1 || y < 0 || y > 1)
+			y = 1 - (float) Convert.ToDouble(request.QueryString.Get("y_pos"));
+			if (x < 0 || x > 1 || y < 0 || y > 1)
 			{
 				throw new Exception("Coordinates must be between 0-1");
-			} 
+			}
 		}
 		catch (Exception ex)
 		{
@@ -661,6 +624,16 @@ public class ExampleWebService : MonoBehaviour
 			return "Could not parse x and y coordinates: " + ex;
 		}
 		return gptntActions.Click(x, y);
+	}
+
+	private string HandleClickEnd()
+	{
+		return gptntActions.Release(); ;
+	}
+
+	private string HandleZoomOut()
+	{
+		return gptntActions.ZoomOut();
 	}
 
 	private string HandleStartMission(HttpListenerRequest request, HttpListenerResponse response)
@@ -682,20 +655,6 @@ public class ExampleWebService : MonoBehaviour
 		Time.timeScale = float.Parse(request.QueryString.Get("timeScale"));
 		timeStepSize = int.Parse(request.QueryString.Get("timeStepSize"));
 		return StartMission(seed, timeLimit, numStrikes, needyTime, isFront, optWidgets, components);
-	}
-
-	private string HandleRotationOnMainThread(HttpListenerRequest request)
-	{
-		string result = null;
-		var waitHandle = new ManualResetEvent(false);
-
-		MainThreadQueue.Enqueue(() =>
-		{
-			result = HandleRotation(request);
-			waitHandle.Set();
-		});
-		waitHandle.WaitOne(); // wait until HandleRotation finishes
-		return result;
 	}
 
 	private string HandleGetState()
@@ -721,7 +680,7 @@ public class ExampleWebService : MonoBehaviour
 		}
 
 	}
-	private string HandleRotation(HttpListenerRequest request)
+	private string HandleRotate(HttpListenerRequest request)
 	{
 		string direction = request.QueryString.Get("action");
 		if (direction.Equals("flip"))
