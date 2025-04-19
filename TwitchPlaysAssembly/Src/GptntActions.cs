@@ -104,6 +104,7 @@ public class GptntActions : MonoBehaviour
 					lastUsedSelectable = selectable;
 				else
 					lastUsedSelectable = null;
+				selectable.SetHighlight(false);
 			}
 			return "clicked on: " + selectable.name;
 		}
