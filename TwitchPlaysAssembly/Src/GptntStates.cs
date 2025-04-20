@@ -20,6 +20,7 @@ public class GptntStates : MonoBehaviour
 	public bool readyToGive = false;
 	KMBombInfo bombInfo;
 
+
 	public void Start()
 	{
 		bombInfo = GetComponent<KMBombInfo>();
@@ -62,14 +63,7 @@ public class GptntStates : MonoBehaviour
 		ResetClock();
 		bombState = new BombState();
 		string gameState = webService.gameState;
-		if (gameState.Equals("Lights On"))
-		{
-			bombState.isLightOn = true;
-		}
-		else
-		{
-			bombState.isLightOn = false;
-		}
+		bombState.isLightOn = gameState.Equals("Lights On");
 		bombState.isSolved = false;
 		bombState.isDetonated = false;
 		bombState.widgets = new List<BaseWidgetState> { };
@@ -685,19 +679,13 @@ public class GptntStates : MonoBehaviour
 
 	public void UpdateBombState()
 	{
-		TwitchBomb twitchBomb = FindObjectOfType<TwitchBomb>();
 		Bomb bomb = twitchBomb.Bomb;
-		bombState.modules = new List<BaseModuleState> { };
+		if (!bomb)
+			return;
+		bombState.modules = new List<BaseModuleState>();
 		bombState.timestamp = Time.time - StartTime;
 		string gameState = webService.gameState;
-		if (gameState.Equals("Lights On"))
-		{
-			bombState.isLightOn = true;
-		}
-		else
-		{
-			bombState.isLightOn = false;
-		}
+		bombState.isLightOn = gameState.Equals("Lights On");
 
 		try
 		{
@@ -707,7 +695,7 @@ public class GptntStates : MonoBehaviour
 		{
 			GptntDebug.Log("Error setting CurrentStrikes: " + ex);
 		}
-
+		
 
 		foreach (BombComponent comp in bomb.BombComponents)
 		{
