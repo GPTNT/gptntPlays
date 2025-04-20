@@ -492,13 +492,8 @@ public class ExampleWebService : MonoBehaviour
 	private string HandleReset()
 	{
 		if(!gameState.Equals("Setup"))
-			GoToSetup();
+			SceneManager.Instance.ReturnToSetupState();
 		return "Nuh uh";
-	}
-
-	private void GoToSetup()
-	{
-		SceneManager.Instance.ReturnToSetupState();
 	}
 
 	private string HandleHealth()
@@ -582,11 +577,13 @@ public class ExampleWebService : MonoBehaviour
 						responseString = HandleRotate(request);
 						break;
 				}
+				
+				responseString = JsonConvert.SerializeObject(gptntStates.UpdateBombState(), Formatting.Indented);
 				waitHandle.Set();
 			}
 		);
 
-		waitHandle.WaitOne();
+		waitHandle.WaitOne(500);
 		return responseString;
 	}
 
@@ -657,27 +654,33 @@ public class ExampleWebService : MonoBehaviour
 		return StartMission(seed, timeLimit, numStrikes, needyTime, isFront, optWidgets, components);
 	}
 
-	private string HandleGetState()
+	private string HandleGetState(HttpListenerResponse response)
 	{
 		if (!gptntStates.readyToGive)
-		{
-			return "Bomb states not ready yet";
-		}
-		else
+			response.StatusCode = (int) HttpStatusCode.BadRequest;
+
+		string responseString = null;
+		var waitHandle = new ManualResetEvent(false);
+		MainThreadQueue.Enqueue(() =>
 		{
 			try
 			{
-				gptntStates.UpdateBombState();
-
+				responseString = JsonConvert.SerializeObject(gptntStates.UpdateBombState(), Formatting.Indented);
 			}
-			catch (Exception e)
+			finally
 			{
-				GptntDebug.Log("update failed, returning last version");
+				waitHandle.Set();
 			}
+		});
 
-			string json = JsonConvert.SerializeObject(gptntStates.bombState, Formatting.Indented);
-			return json;
+		waitHandle.WaitOne();
+		if (responseString == null)
+		{
+			response.StatusCode = (int) HttpStatusCode.InternalServerError;
+			responseString = "Could not serialize bomb state";
 		}
+
+		return responseString;
 
 	}
 	private string HandleRotate(HttpListenerRequest request)

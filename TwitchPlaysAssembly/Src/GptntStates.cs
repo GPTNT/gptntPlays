@@ -14,7 +14,6 @@ public class GptntStates : MonoBehaviour
 	public long lastPosition = 0;
 	private string line;
 	public BombState bombState;
-	float StartTime;
 	public ExampleWebService webService;
 	TwitchBomb twitchBomb;
 	public bool readyToGive = false;
@@ -32,7 +31,6 @@ public class GptntStates : MonoBehaviour
 			bombState.isDetonated = true;
 			bombState.currentStrikes = twitchBomb.Bomb.NumStrikes;
 			bombState.timerModule.secondsRemaining = twitchBomb.Bomb.GetTimer().TimeRemaining;
-			bombState.timestamp = Time.time - StartTime;
 			if (bombState.timerModule.secondsRemaining < 0)
 			{
 				bombState.timerModule.secondsRemaining = 0;
@@ -48,31 +46,24 @@ public class GptntStates : MonoBehaviour
 		{
 			bombState.isSolved = true;
 			bombState.currentStrikes = twitchBomb.Bomb.NumStrikes;
-			bombState.timestamp = Time.time - StartTime;
 			bombState.timerModule.secondsRemaining = twitchBomb.Bomb.GetTimer().TimeRemaining;
 		};
 	}
 
-	public void ResetClock()
-	{
-		StartTime = Time.time;
-	}
-
 	public void GetInitialBombState()
 	{
-		ResetClock();
 		bombState = new BombState();
 		string gameState = webService.gameState;
 		bombState.isLightOn = gameState.Equals("Lights On");
 		bombState.isSolved = false;
 		bombState.isDetonated = false;
-		bombState.widgets = new List<BaseWidgetState> { };
-		bombState.modules = new List<BaseModuleState> { };
+		bombState.widgets = new List<BaseWidgetState>();
+		bombState.modules = new List<BaseModuleState>();
+		bombState.strikes = new List<string>();
 		twitchBomb = FindObjectOfType<TwitchBomb>();
 		Bomb bomb = twitchBomb.Bomb;
 
 		bombState.seed = bomb.Seed;
-		bombState.timestamp = Time.time - StartTime;
 		try
 		{
 			bombState.timerModule.secondsRemaining = bomb.GetTimer().TimeRemaining;
@@ -335,7 +326,7 @@ public class GptntStates : MonoBehaviour
 				simonState.index = closestIndex;
 				simonState.name = "Simon";
 				bombState.modules.Add(simonState);
-
+				comp.OnStrike += (_) => { bombState.strikes.Add(simonState.name); return false; };
 
 			}
 			else if (comp.ComponentType == ComponentTypeEnum.Wires)
@@ -372,6 +363,7 @@ public class GptntStates : MonoBehaviour
 				wireSetState.index = closestIndex;
 				wireSetState.name = "Wires";
 				bombState.modules.Add(wireSetState);
+				comp.OnStrike += (_) => { bombState.strikes.Add(wireSetState.name); return false; };
 			}
 			else if (comp.ComponentType == ComponentTypeEnum.BigButton)
 			{
@@ -398,6 +390,7 @@ public class GptntStates : MonoBehaviour
 				buttonState.index = closestIndex;
 				buttonState.name = "BigButton";
 				bombState.modules.Add(buttonState);
+				comp.OnStrike += (_) => { bombState.strikes.Add(buttonState.name); return false; };
 
 			}
 			else if (comp.ComponentType == ComponentTypeEnum.Keypad)
@@ -437,8 +430,8 @@ public class GptntStates : MonoBehaviour
 				keypadState.bottomLeft = KeypadButtons[2];
 				keypadState.bottomRight = KeypadButtons[3];
 				keypadState.name = "KeyPad";
-
 				bombState.modules.Add(keypadState);
+				comp.OnStrike += (_) => { bombState.strikes.Add(keypadState.name); return false; };
 
 
 			}
@@ -464,6 +457,7 @@ public class GptntStates : MonoBehaviour
 				whoFirstState.index = closestIndex;
 				whoFirstState.name = "WhosOnFirst";
 				bombState.modules.Add(whoFirstState);
+				comp.OnStrike += (_) => { bombState.strikes.Add(whoFirstState.name); return false; };
 			}
 
 			else if (comp.ComponentType == ComponentTypeEnum.Memory)
@@ -485,6 +479,7 @@ public class GptntStates : MonoBehaviour
 				memoryState.index = closestIndex;
 				memoryState.name = "Memory";
 				bombState.modules.Add(memoryState);
+				comp.OnStrike += (_) => { bombState.strikes.Add(memoryState.name); return false; };
 			}
 			
 			else if (comp.ComponentType == ComponentTypeEnum.Morse)
@@ -505,6 +500,7 @@ public class GptntStates : MonoBehaviour
 				morseState.index = closestIndex;
 				morseState.name = "Morse";
 				bombState.modules.Add(morseState);
+				comp.OnStrike += (_) => { bombState.strikes.Add(morseState.name); return false; };
 			}
 
 			else if (comp.ComponentType == ComponentTypeEnum.Venn)
@@ -547,6 +543,7 @@ public class GptntStates : MonoBehaviour
 				compState.index = closestIndex;
 				compState.name = "Venn";
 				bombState.modules.Add(compState);
+				comp.OnStrike += (_) => { bombState.strikes.Add(compState.name); return false; };
 			}
 
 			else if (comp.ComponentType == ComponentTypeEnum.WireSequence)
@@ -593,6 +590,7 @@ public class GptntStates : MonoBehaviour
 				wireSeqState.index = closestIndex;
 				wireSeqState.name = "WireSequence";
 				bombState.modules.Add(wireSeqState);
+				comp.OnStrike += (_) => { bombState.strikes.Add(wireSeqState.name); return false; };
 			}
 
 			else if (comp.ComponentType == ComponentTypeEnum.Maze)
@@ -651,6 +649,7 @@ public class GptntStates : MonoBehaviour
 				mazeState.index = closestIndex;
 				mazeState.name = "Maze";
 				bombState.modules.Add(mazeState);
+				comp.OnStrike += (_) => { bombState.strikes.Add(mazeState.name); return false; };
 			}
 
 			else if (comp.ComponentType == ComponentTypeEnum.Password)
@@ -671,19 +670,19 @@ public class GptntStates : MonoBehaviour
 				passState.index = closestIndex;
 				passState.name = "Password";
 				bombState.modules.Add(passState);
+				comp.OnStrike += (_) => { bombState.strikes.Add(passState.name); return false; };
 			}
 		}
 		readyToGive = true;
 	}
 
 
-	public void UpdateBombState()
+	public BombState UpdateBombState()
 	{
 		Bomb bomb = twitchBomb.Bomb;
 		if (!bomb)
-			return;
+			return bombState;
 		bombState.modules = new List<BaseModuleState>();
-		bombState.timestamp = Time.time - StartTime;
 		string gameState = webService.gameState;
 		bombState.isLightOn = gameState.Equals("Lights On");
 
@@ -749,8 +748,6 @@ public class GptntStates : MonoBehaviour
 				bombState.timerModule = timerState;
 			}
 
-
-
 			if (comp.ComponentType == ComponentTypeEnum.Simon)
 			{
 				SimonComponent simon = (SimonComponent) comp;
@@ -790,9 +787,8 @@ public class GptntStates : MonoBehaviour
 				simonState.index = closestIndex;
 				simonState.name = "Simon";
 				bombState.modules.Add(simonState);
-
-
 			}
+
 			else if (comp.ComponentType == ComponentTypeEnum.Wires)
 			{
 				WireSetComponent wireset = (WireSetComponent) comp;
@@ -828,6 +824,7 @@ public class GptntStates : MonoBehaviour
 				wireSetState.name = "Wires";
 				bombState.modules.Add(wireSetState);
 			}
+
 			else if (comp.ComponentType == ComponentTypeEnum.BigButton)
 			{
 				ButtonComponent button = (ButtonComponent) comp;
@@ -855,6 +852,7 @@ public class GptntStates : MonoBehaviour
 				bombState.modules.Add(buttonState);
 
 			}
+
 			else if (comp.ComponentType == ComponentTypeEnum.Keypad)
 			{
 				KeypadComponent keypad = (KeypadComponent) comp;
@@ -929,6 +927,7 @@ public class GptntStates : MonoBehaviour
 
 
 			}
+
 			else if (comp.ComponentType == ComponentTypeEnum.WhosOnFirst)
 			{
 				WhosOnFirstComponent whoFirst = (WhosOnFirstComponent) comp;
@@ -1161,6 +1160,7 @@ public class GptntStates : MonoBehaviour
 			}
 		}
 		readyToGive = true;
+		return bombState;
 	}
 }
 
@@ -1171,7 +1171,6 @@ public class BaseModuleState
 	public bool onFront { get; set; }
 	public int index { get; set; }
 	public string name { get; set; }
-
 }
 
 // --- Button Module ---
@@ -1359,7 +1358,6 @@ public class SerialNumberWidgetState : BaseWidgetState
 public class BombState
 {
 	public int seed { get; set; }
-	public float timestamp { get; set; }
 	public int maxStrikes { get; set; } = 3;
 	public int currentStrikes { get; set; } = 0;
 	public bool isDetonated { get; set; }
@@ -1368,4 +1366,5 @@ public class BombState
 	public TimerModuleState timerModule { get; set; }
 	public List<BaseWidgetState> widgets { get; set; }
 	public List<BaseModuleState> modules { get; set; }
+	public List<string> strikes { get; set; }
 }
