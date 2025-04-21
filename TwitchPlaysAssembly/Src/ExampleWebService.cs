@@ -478,7 +478,7 @@ public class ExampleWebService : MonoBehaviour
 				responseString = HandleReset();
 				break;
 			case "/state":
-				responseString = HandleGetState();
+				responseString = HandleGetState(response);
 				break;
 			default:
 				responseString = "Unknown route.";
