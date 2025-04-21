@@ -214,6 +214,7 @@ public class Segmentation : MonoBehaviour
 		duplicateCam.rect = mainCam.rect;
 		duplicateCam.depth = mainCam.depth + 1;
 		duplicateCam.clearFlags = CameraClearFlags.Color;
+		duplicateCam.allowMSAA = false;
 		duplicateCam.backgroundColor = Color.black;
 		duplicateCam.targetTexture = renderTexture;
 		duplicateCam.SetReplacementShader(shader, "");
