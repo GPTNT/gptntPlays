@@ -921,7 +921,7 @@ public class GptntStates : MonoBehaviour
 				keypadState.topRight = KeypadButtons[1];
 				keypadState.bottomLeft = KeypadButtons[2];
 				keypadState.bottomRight = KeypadButtons[3];
-				keypadState.name = "KeyPad";
+				keypadState.name = "Keypad";
 
 				bombState.modules.Add(keypadState);
 
