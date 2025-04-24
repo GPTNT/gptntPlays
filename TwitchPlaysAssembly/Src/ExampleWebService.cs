@@ -471,6 +471,9 @@ public class ExampleWebService : MonoBehaviour
 			case "/observation":
 				responseString = HandleObservation(response); // Main thread
 				break;
+			case "/fullobservation":
+				responseString = HandleFullObservation(response); // Main thread
+				break;
 			case "/health":
 				responseString = HandleHealth();
 				break;
@@ -520,6 +523,27 @@ public class ExampleWebService : MonoBehaviour
 		return json;
 	}
 
+	private string HandleFullObservation(HttpListenerResponse response)
+	{
+		string screenshot = HandleScreenshot(response);
+		string segmentation = HandleSegmentation(response);
+		string state = HandleGetState(response);
+
+		if (response.StatusCode != (int) HttpStatusCode.OK)
+		{
+			return screenshot + " " + segmentation;
+		}
+
+		string json = "{"
+		+ "\"screenshot\":\"" + EscapeJsonString(screenshot) + "\","
+		+ "\"segmentation\":\"" + EscapeJsonString(segmentation) + "\""
+		+ "\"state\":\"" + state +"\""
+		+ "}";
+
+		response.ContentType = "application/json";
+		return json;
+	}
+
 	// Helper function to parse string to json
 	private string EscapeJsonString(string str)
 	{
@@ -554,37 +578,47 @@ public class ExampleWebService : MonoBehaviour
 
 	private string HandleActionOnMainThread(HttpListenerRequest request, HttpListenerResponse response)
 	{
-		string actionType = request.QueryString.Get("action");
+		
 		string responseString = null;
 		var waitHandle = new ManualResetEvent(false);
 			MainThreadQueue.Enqueue(() =>
 			{
-				switch (actionType)
+				StartCoroutine(HandleActionCoroutine(request, response, () =>
 				{
-					case "click":
-						responseString = HandleClick(request, response);
-						break;
-					case "hold":
-						responseString = HandleHold(request, response);
-						break;
-					case "release":
-						responseString = HandleClickEnd();
-						break;
-					case "out":
-						responseString = HandleZoomOut();
-						break;
-					default:
-						responseString = HandleRotate(request);
-						break;
-				}
-				
-				responseString = JsonConvert.SerializeObject(gptntStates.UpdateBombState(), Formatting.Indented);
-				waitHandle.Set();
+					responseString = JsonConvert.SerializeObject(gptntStates.UpdateBombState(), Formatting.Indented);
+					waitHandle.Set();
+				}));
 			}
 		);
 
-		waitHandle.WaitOne(500);
+		waitHandle.WaitOne();
 		return responseString;
+	}
+
+	private IEnumerator HandleActionCoroutine(HttpListenerRequest request, HttpListenerResponse response, Action callback)
+	{
+		string actionType = request.QueryString.Get("action");
+		float seconds = (float) Convert.ToDouble(request.QueryString.Get("s"));
+		switch (actionType)
+		{
+			case "click":
+				HandleClick(request, response);
+				break;
+			case "hold":
+				HandleHold(request, response);
+				break;
+			case "release":
+				HandleClickEnd();
+				break;
+			case "out":
+				HandleZoomOut();
+				break;
+			default:
+				 HandleRotate(request);
+				break;
+		}
+		yield return new WaitForSeconds(seconds);
+		callback();
 	}
 
 	private string HandleClick(HttpListenerRequest request, HttpListenerResponse response)
@@ -764,6 +798,13 @@ public class ExampleWebService : MonoBehaviour
 	
 	private string HandleSegmentation(HttpListenerResponse response)
 	{
+
+		if(!gameState.Equals("Lights On"))
+		{
+			response.ContentType = "image/png";
+			return "";
+		}
+
 		byte[] imageBytes = null;
 		var waitHandle = new ManualResetEvent(false);
 
