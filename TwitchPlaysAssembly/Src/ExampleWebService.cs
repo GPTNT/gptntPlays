@@ -7,9 +7,7 @@ using System.Linq;
 using System.Collections;
 using Assets.Scripts.Missions;
 using System.IO;
-using System.Text;
 using Newtonsoft.Json;
-using KModkit;
 
 public class ExampleWebService : MonoBehaviour
 {
@@ -653,6 +651,7 @@ public class ExampleWebService : MonoBehaviour
 
 	private string HandleZoomOut()
 	{
+		gptntStates.OnZoomOut();
 		return gptntActions.ZoomOut();
 	}
 

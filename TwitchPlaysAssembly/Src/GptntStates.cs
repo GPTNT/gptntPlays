@@ -1,12 +1,14 @@
-﻿using System.IO;
-using System;
+﻿using System;
 using UnityEngine;
 using System.Collections.Generic;
 using Assets.Scripts.Missions;
 using System.Reflection;
 using BombGame;
 using Assets.Scripts.Components.VennWire;
-
+using System.Linq;
+using Newtonsoft.Json;
+using UnityEngine.UI;
+using System.Runtime.InteropServices;
 
 public class GptntStates : MonoBehaviour 
 {
@@ -325,6 +327,7 @@ public class GptntStates : MonoBehaviour
 				simonState.onFront = onFront;
 				simonState.index = closestIndex;
 				simonState.name = "Simon";
+				simonState.component = comp;
 				bombState.modules.Add(simonState);
 				comp.OnStrike += (_) => { bombState.strikes.Add(simonState.name); return false; };
 
@@ -362,6 +365,7 @@ public class GptntStates : MonoBehaviour
 				wireSetState.onFront = onFront;
 				wireSetState.index = closestIndex;
 				wireSetState.name = "Wires";
+				wireSetState.component = comp;
 				bombState.modules.Add(wireSetState);
 				comp.OnStrike += (_) => { bombState.strikes.Add(wireSetState.name); return false; };
 			}
@@ -389,6 +393,7 @@ public class GptntStates : MonoBehaviour
 				buttonState.onFront = onFront;
 				buttonState.index = closestIndex;
 				buttonState.name = "BigButton";
+				buttonState.component = comp;
 				bombState.modules.Add(buttonState);
 				comp.OnStrike += (_) => { bombState.strikes.Add(buttonState.name); return false; };
 
@@ -429,7 +434,8 @@ public class GptntStates : MonoBehaviour
 				keypadState.topRight = KeypadButtons[1];
 				keypadState.bottomLeft = KeypadButtons[2];
 				keypadState.bottomRight = KeypadButtons[3];
-				keypadState.name = "KeyPad";
+				keypadState.name = "Keypad";
+				keypadState.component = comp;
 				bombState.modules.Add(keypadState);
 				comp.OnStrike += (_) => { bombState.strikes.Add(keypadState.name); return false; };
 
@@ -456,6 +462,7 @@ public class GptntStates : MonoBehaviour
 				whoFirstState.onFront = onFront;
 				whoFirstState.index = closestIndex;
 				whoFirstState.name = "WhosOnFirst";
+				whoFirstState.component = comp;
 				bombState.modules.Add(whoFirstState);
 				comp.OnStrike += (_) => { bombState.strikes.Add(whoFirstState.name); return false; };
 			}
@@ -478,6 +485,7 @@ public class GptntStates : MonoBehaviour
 				memoryState.onFront = onFront;
 				memoryState.index = closestIndex;
 				memoryState.name = "Memory";
+				memoryState.component = comp;
 				bombState.modules.Add(memoryState);
 				comp.OnStrike += (_) => { bombState.strikes.Add(memoryState.name); return false; };
 			}
@@ -499,6 +507,7 @@ public class GptntStates : MonoBehaviour
 				morseState.onFront = onFront;
 				morseState.index = closestIndex;
 				morseState.name = "Morse";
+				morseState.component = comp;
 				bombState.modules.Add(morseState);
 				comp.OnStrike += (_) => { bombState.strikes.Add(morseState.name); return false; };
 			}
@@ -542,6 +551,7 @@ public class GptntStates : MonoBehaviour
 				compState.onFront = onFront;
 				compState.index = closestIndex;
 				compState.name = "Venn";
+				compState.component = comp;
 				bombState.modules.Add(compState);
 				comp.OnStrike += (_) => { bombState.strikes.Add(compState.name); return false; };
 			}
@@ -589,6 +599,7 @@ public class GptntStates : MonoBehaviour
 				wireSeqState.onFront = onFront;
 				wireSeqState.index = closestIndex;
 				wireSeqState.name = "WireSequence";
+				wireSeqState.component = comp;
 				bombState.modules.Add(wireSeqState);
 				comp.OnStrike += (_) => { bombState.strikes.Add(wireSeqState.name); return false; };
 			}
@@ -648,6 +659,7 @@ public class GptntStates : MonoBehaviour
 				mazeState.onFront = onFront;
 				mazeState.index = closestIndex;
 				mazeState.name = "Maze";
+				mazeState.component = comp;
 				bombState.modules.Add(mazeState);
 				comp.OnStrike += (_) => { bombState.strikes.Add(mazeState.name); return false; };
 			}
@@ -669,6 +681,7 @@ public class GptntStates : MonoBehaviour
 				passState.onFront = onFront;
 				passState.index = closestIndex;
 				passState.name = "Password";
+				passState.component = comp;
 				bombState.modules.Add(passState);
 				comp.OnStrike += (_) => { bombState.strikes.Add(passState.name); return false; };
 			}
@@ -676,13 +689,11 @@ public class GptntStates : MonoBehaviour
 		readyToGive = true;
 	}
 
-
 	public BombState UpdateBombState()
 	{
 		Bomb bomb = twitchBomb.Bomb;
 		if (!bomb)
 			return bombState;
-		bombState.modules = new List<BaseModuleState>();
 		string gameState = webService.gameState;
 		bombState.isLightOn = gameState.Equals("Lights On");
 
@@ -698,52 +709,12 @@ public class GptntStates : MonoBehaviour
 
 		foreach (BombComponent comp in bomb.BombComponents)
 		{
-			Transform closest = null;
-			float minDistance = float.MaxValue;
-			bool onFront = false;
-			int closestIndex = -1;
-
-			var frontAnchors = bomb.Faces[0].Anchors;
-			for (int i = 0; i < frontAnchors.Count; i++)
-			{
-				var anchor = frontAnchors[i];
-				float distance = Vector3.Distance(comp.transform.position, anchor.position);
-				if (distance < minDistance)
-				{
-					minDistance = distance;
-					onFront = true;
-					closest = anchor;
-					closestIndex = i;
-				}
-			}
-
-			var backAnchors = bomb.Faces[1].Anchors;
-			for (int i = 0; i < backAnchors.Count; i++)
-			{
-				var anchor = backAnchors[i];
-				float distance = Vector3.Distance(comp.transform.position, anchor.position);
-				if (distance < minDistance)
-				{
-					minDistance = distance;
-					onFront = false;
-					closest = anchor;
-					closestIndex = i;
-				}
-			}
-
-
-
 			bool isSolved = comp.IsSolved;
-			FieldInfo fieldInfo3 = typeof(BombComponent).GetField("isFocused", BindingFlags.NonPublic | BindingFlags.Instance);
-			bool isFocused = (bool) fieldInfo3.GetValue(comp);
 
 			if (comp.ComponentType == ComponentTypeEnum.Timer)
 			{
-				TimerComponent time = (TimerComponent) comp;
-				TimerModuleState timerState = new TimerModuleState();
+				TimerModuleState timerState = bombState.timerModule;
 				timerState.secondsRemaining = bomb.GetTimer().TimeRemaining;
-				timerState.onFront = onFront;
-				timerState.index = closestIndex;
 				timerState.name = "Timer";
 				bombState.timerModule = timerState;
 			}
@@ -756,7 +727,7 @@ public class GptntStates : MonoBehaviour
 				FieldInfo fieldInfo2 = typeof(SimonComponent).GetField("solveProgress", BindingFlags.NonPublic | BindingFlags.Instance);
 				int solveProgress = (int) fieldInfo2.GetValue(simon);
 
-				SimonSaysModuleState simonState = new SimonSaysModuleState();
+				SimonSaysModuleState simonState = bombState.modules.OfType<SimonSaysModuleState>().FirstOrDefault();
 				List<string> beepSequence = new List<string>();
 				foreach (int beep in sequence)
 				{
@@ -782,11 +753,6 @@ public class GptntStates : MonoBehaviour
 				simonState.beepSequence = beepSequence;
 				simonState.solveProgress = solveProgress;
 				simonState.isSolved = isSolved;
-				simonState.inFocus = isFocused;
-				simonState.onFront = onFront;
-				simonState.index = closestIndex;
-				simonState.name = "Simon";
-				bombState.modules.Add(simonState);
 			}
 
 			else if (comp.ComponentType == ComponentTypeEnum.Wires)
@@ -803,8 +769,7 @@ public class GptntStates : MonoBehaviour
 				}
 				WireColor[] colors = new WireColor[6];
 				bool[] is_snipped = new bool[6];
-
-				WireSetModuleState wireSetState = new WireSetModuleState();
+				WireSetModuleState wireSetState = bombState.modules.OfType<WireSetModuleState>().FirstOrDefault();
 				wireSetState.wires = new WireSetWireState[6];
 				// Just assign the spaces that contain wires
 				int indicesIndex = 0;
@@ -818,11 +783,6 @@ public class GptntStates : MonoBehaviour
 				}
 
 				wireSetState.isSolved = isSolved;
-				wireSetState.inFocus = isFocused;
-				wireSetState.onFront = onFront;
-				wireSetState.index = closestIndex;
-				wireSetState.name = "Wires";
-				bombState.modules.Add(wireSetState);
 			}
 
 			else if (comp.ComponentType == ComponentTypeEnum.BigButton)
@@ -832,7 +792,7 @@ public class GptntStates : MonoBehaviour
 				string buttonMessage = button.ButtonInstruction.ToString();
 				string stripColor = button.IndicatorColor.ToString();
 
-				ButtonModuleState buttonState = new ButtonModuleState();
+				ButtonModuleState buttonState = bombState.modules.OfType<ButtonModuleState>().FirstOrDefault();
 				buttonState.buttonColor = buttonColor;
 				buttonState.buttonWord = buttonMessage;
 				buttonState.isHeld = button.IsHolding;
@@ -845,19 +805,13 @@ public class GptntStates : MonoBehaviour
 					buttonState.stripColor = null;
 				}
 				buttonState.isSolved = isSolved;
-				buttonState.inFocus = isFocused;
-				buttonState.onFront = onFront;
-				buttonState.index = closestIndex;
-				buttonState.name = "BigButton";
-				bombState.modules.Add(buttonState);
-
 			}
 
 			else if (comp.ComponentType == ComponentTypeEnum.Keypad)
 			{
 				KeypadComponent keypad = (KeypadComponent) comp;
 
-				KeypadModuleState keypadState = new KeypadModuleState();
+				KeypadModuleState keypadState = bombState.modules.OfType<KeypadModuleState>().FirstOrDefault();
 				KeyPadButtonState[] KeypadButtons = new KeyPadButtonState[4];
 
 				for (int i = 0; i < 4; i++)
@@ -914,18 +868,10 @@ public class GptntStates : MonoBehaviour
 					}
 				}
 				keypadState.isSolved = isSolved;
-				keypadState.inFocus = isFocused;
-				keypadState.onFront = onFront;
-				keypadState.index = closestIndex;
 				keypadState.topLeft = KeypadButtons[0];
 				keypadState.topRight = KeypadButtons[1];
 				keypadState.bottomLeft = KeypadButtons[2];
 				keypadState.bottomRight = KeypadButtons[3];
-				keypadState.name = "Keypad";
-
-				bombState.modules.Add(keypadState);
-
-
 			}
 
 			else if (comp.ComponentType == ComponentTypeEnum.WhosOnFirst)
@@ -940,22 +886,17 @@ public class GptntStates : MonoBehaviour
 				}
 				string displayWord = whoFirst.DisplayText.text;
 
-				WhosOnFirstModuleState whoFirstState = new WhosOnFirstModuleState();
+				WhosOnFirstModuleState whoFirstState = bombState.modules.OfType<WhosOnFirstModuleState>().FirstOrDefault();
 				whoFirstState.stage = stage;
 				whoFirstState.buttonWords = buttonValues;
 				whoFirstState.displayWord = displayWord;
 				whoFirstState.isSolved = isSolved;
-				whoFirstState.inFocus = isFocused;
-				whoFirstState.onFront = onFront;
-				whoFirstState.index = closestIndex;
-				whoFirstState.name = "WhosOnFirst";
-				bombState.modules.Add(whoFirstState);
 			}
 
 			else if (comp.ComponentType == ComponentTypeEnum.Memory)
 			{
 				MemoryComponent memory = (MemoryComponent) comp;
-				MemoryModuleState memoryState = new MemoryModuleState();
+				MemoryModuleState memoryState = bombState.modules.OfType<MemoryModuleState>().FirstOrDefault();
 				memoryState.stage = memory.CurrentStage;
 				memoryState.displayNumber = int.Parse(memory.DisplayText.text);
 				int[] buttonValues = new int[4];
@@ -966,11 +907,6 @@ public class GptntStates : MonoBehaviour
 				}
 				memoryState.buttonNumbers = buttonValues;
 				memoryState.isSolved = isSolved;
-				memoryState.inFocus = isFocused;
-				memoryState.onFront = onFront;
-				memoryState.index = closestIndex;
-				memoryState.name = "Memory";
-				bombState.modules.Add(memoryState);
 			}
 
 			else if (comp.ComponentType == ComponentTypeEnum.Morse)
@@ -980,17 +916,12 @@ public class GptntStates : MonoBehaviour
 				FieldInfo fieldInfo = typeof(MorseCodeComponent).GetField("chosenWord", BindingFlags.NonPublic | BindingFlags.Instance);
 				string word = (string) fieldInfo.GetValue(morse);
 
-				MorseCodeModuleState morseState = new MorseCodeModuleState();
+				MorseCodeModuleState morseState = bombState.modules.OfType<MorseCodeModuleState>().FirstOrDefault();
 
 				morseState.currentFrequency = currentFrequency;
 				morseState.sequence = word;
 				morseState.correctFrequency = morse.ChosenFrequency;
 				morseState.isSolved = isSolved;
-				morseState.inFocus = isFocused;
-				morseState.onFront = onFront;
-				morseState.index = closestIndex;
-				morseState.name = "Morse";
-				bombState.modules.Add(morseState);
 			}
 
 			else if (comp.ComponentType == ComponentTypeEnum.Venn)
@@ -1011,7 +942,7 @@ public class GptntStates : MonoBehaviour
 					}
 				}
 
-				ComplicatedWiresModuleState compState = new ComplicatedWiresModuleState();
+				ComplicatedWiresModuleState compState = bombState.modules.OfType<ComplicatedWiresModuleState>().FirstOrDefault();
 				compState.wires = new ComplicatedWireState[6];
 
 				int indicesIndex = 0;
@@ -1028,11 +959,6 @@ public class GptntStates : MonoBehaviour
 				}
 
 				compState.isSolved = isSolved;
-				compState.inFocus = isFocused;
-				compState.onFront = onFront;
-				compState.index = closestIndex;
-				compState.name = "Venn";
-				bombState.modules.Add(compState);
 			}
 
 			else if (comp.ComponentType == ComponentTypeEnum.WireSequence)
@@ -1040,7 +966,7 @@ public class GptntStates : MonoBehaviour
 				WireSequenceComponent wireSeq = (WireSequenceComponent) comp;
 				FieldInfo fieldInfo = typeof(WireSequenceComponent).GetField("currentPage", BindingFlags.NonPublic | BindingFlags.Instance);
 
-				WireSequenceModuleState wireSeqState = new WireSequenceModuleState();
+				WireSequenceModuleState wireSeqState = bombState.modules.OfType<WireSequenceModuleState>().FirstOrDefault();
 				wireSeqState.panel = (int) fieldInfo.GetValue(wireSeq);
 				wireSeqState.wires = new WireSequenceWireState[12];
 
@@ -1074,17 +1000,12 @@ public class GptntStates : MonoBehaviour
 				}
 
 				wireSeqState.isSolved = isSolved;
-				wireSeqState.inFocus = isFocused;
-				wireSeqState.onFront = onFront;
-				wireSeqState.index = closestIndex;
-				wireSeqState.name = "WireSequence";
-				bombState.modules.Add(wireSeqState);
 			}
 
 			else if (comp.ComponentType == ComponentTypeEnum.Maze)
 			{
 				InvisibleWallsComponent invis = (InvisibleWallsComponent) comp;
-				MazeModuleState mazeState = new MazeModuleState();
+				MazeModuleState mazeState = bombState.modules.OfType<MazeModuleState>().FirstOrDefault();
 				mazeState.numColumns = 6;
 				mazeState.numRows = 6;
 
@@ -1132,11 +1053,6 @@ public class GptntStates : MonoBehaviour
 				mazeState.circlePositions[1].row = circle2Y;
 
 				mazeState.isSolved = isSolved;
-				mazeState.inFocus = isFocused;
-				mazeState.onFront = onFront;
-				mazeState.index = closestIndex;
-				mazeState.name = "Maze";
-				bombState.modules.Add(mazeState);
 			}
 
 			else if (comp.ComponentType == ComponentTypeEnum.Password)
@@ -1145,22 +1061,47 @@ public class GptntStates : MonoBehaviour
 				FieldInfo fieldInfo = typeof(PasswordComponent).GetField("m_CurrentLayout", BindingFlags.NonPublic | BindingFlags.Instance);
 				PasswordLayout layout = (PasswordLayout) fieldInfo.GetValue(pass);
 
-				PasswordModuleState passState = new PasswordModuleState();
+				PasswordModuleState passState = bombState.modules.OfType<PasswordModuleState>().FirstOrDefault();
 
 
 				passState.currentWord = layout.GetCurrentWord();
 				passState.goalWord = pass.CorrectWord;
 
 				passState.isSolved = isSolved;
-				passState.inFocus = isFocused;
-				passState.onFront = onFront;
-				passState.index = closestIndex;
-				passState.name = "Password";
-				bombState.modules.Add(passState);
 			}
 		}
 		readyToGive = true;
+		GptntDebug.Log("returning bombState");
 		return bombState;
+	}
+
+	public void OnZoomOut()
+	{
+		foreach (BaseModuleState moduleState in bombState.modules)
+		{
+			moduleState.inFocus = false;
+		}
+	}
+
+	public void UpdateZoomIn(Selectable selectable)
+	{
+		if (selectable != null)
+		{
+			GetModuleStateFromSelectable(selectable).inFocus = true;
+			GptntDebug.Log(GetModuleStateFromSelectable(selectable).name + " Is now in focus");
+		}
+	}
+
+	private BaseModuleState GetModuleStateFromSelectable(Selectable selectable)
+	{
+		BombComponent selectableComponent = selectable.GetComponent<BombComponent>();
+		if (!selectableComponent)
+		{
+			GptntDebug.Log("No Component Found");
+			return null;
+		}
+		GptntDebug.Log("Updated: " + bombState.modules.FirstOrDefault(module => module.component == selectableComponent).name);
+		return bombState.modules.FirstOrDefault(module => module.component == selectableComponent);
 	}
 }
 
@@ -1171,6 +1112,9 @@ public class BaseModuleState
 	public bool onFront { get; set; }
 	public int index { get; set; }
 	public string name { get; set; }
+	[JsonIgnore]
+	public BombComponent component { get; set; }
+
 }
 
 // --- Button Module ---
