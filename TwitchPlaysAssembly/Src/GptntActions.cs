@@ -76,7 +76,9 @@ public class GptntActions : MonoBehaviour
 
 			if (selectable.FocusOnInteraction)
 			{
-				GptntDebug.Log("The selectable can be focused: " + selectable.name);
+				// This means the selectable is a module, update the bomb state
+				FindObjectOfType<GptntStates>().UpdateZoomIn(selectable);
+				GptntDebug.Log("The selectable can be focused: " + selectable.name); 
 				FloatingHoldable floating = KTInputManager.Instance.SelectableManager.GetCurrentFloatingHoldable();
 
 				KTInputManager.Instance.SelectableManager.UnlockSelection();
