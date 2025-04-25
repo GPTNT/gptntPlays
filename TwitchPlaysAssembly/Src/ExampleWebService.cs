@@ -578,47 +578,36 @@ public class ExampleWebService : MonoBehaviour
 
 	private string HandleActionOnMainThread(HttpListenerRequest request, HttpListenerResponse response)
 	{
-		
+		string actionType = request.QueryString.Get("action");
 		string responseString = null;
 		var waitHandle = new ManualResetEvent(false);
 			MainThreadQueue.Enqueue(() =>
 			{
-				StartCoroutine(HandleActionCoroutine(request, response, () =>
+				switch (actionType)
 				{
-					responseString = JsonConvert.SerializeObject(gptntStates.UpdateBombState(), Formatting.Indented);
-					waitHandle.Set();
-				}));
+					case "click":
+						HandleClick(request, response);
+						break;
+					case "hold":
+						HandleHold(request, response);
+						break;
+					case "release":
+						HandleClickEnd();
+						break;
+					case "out":
+						HandleZoomOut();
+						break;
+					default:
+						HandleRotate(request);
+						break;
+				}
+				responseString = JsonConvert.SerializeObject(gptntStates.UpdateBombState(), Formatting.Indented);
+				waitHandle.Set();
 			}
 		);
 
 		waitHandle.WaitOne();
 		return responseString;
-	}
-
-	private IEnumerator HandleActionCoroutine(HttpListenerRequest request, HttpListenerResponse response, Action callback)
-	{
-		string actionType = request.QueryString.Get("action");
-		float seconds = (float) Convert.ToDouble(request.QueryString.Get("s"));
-		switch (actionType)
-		{
-			case "click":
-				HandleClick(request, response);
-				break;
-			case "hold":
-				HandleHold(request, response);
-				break;
-			case "release":
-				HandleClickEnd();
-				break;
-			case "out":
-				HandleZoomOut();
-				break;
-			default:
-				 HandleRotate(request);
-				break;
-		}
-		yield return new WaitForSeconds(seconds);
-		callback();
 	}
 
 	private string HandleClick(HttpListenerRequest request, HttpListenerResponse response)
