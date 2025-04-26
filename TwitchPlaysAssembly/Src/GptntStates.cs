@@ -877,36 +877,45 @@ public class GptntStates : MonoBehaviour
 			else if (comp.ComponentType == ComponentTypeEnum.WhosOnFirst)
 			{
 				WhosOnFirstComponent whoFirst = (WhosOnFirstComponent) comp;
-				int stage = whoFirst.CurrentStage;
-				string[] buttonValues = new string[6];
-				foreach (KeypadButton button in whoFirst.Buttons)
+				if (whoFirst.ButtonsEmerged)
 				{
-					buttonValues[button.ButtonIndex] = button.Text.text;
+					int stage = whoFirst.CurrentStage;
+					string[] buttonValues = new string[6];
+					foreach (KeypadButton button in whoFirst.Buttons)
+					{
+						buttonValues[button.ButtonIndex] = button.Text.text;
 
+					}
+					string displayWord = whoFirst.DisplayText.text;
+
+					WhosOnFirstModuleState whoFirstState = bombState.modules.OfType<WhosOnFirstModuleState>().FirstOrDefault();
+					whoFirstState.stage = stage;
+					whoFirstState.buttonWords = buttonValues;
+					whoFirstState.displayWord = displayWord;
+					whoFirstState.isSolved = isSolved;
 				}
-				string displayWord = whoFirst.DisplayText.text;
 
-				WhosOnFirstModuleState whoFirstState = bombState.modules.OfType<WhosOnFirstModuleState>().FirstOrDefault();
-				whoFirstState.stage = stage;
-				whoFirstState.buttonWords = buttonValues;
-				whoFirstState.displayWord = displayWord;
-				whoFirstState.isSolved = isSolved;
 			}
 
 			else if (comp.ComponentType == ComponentTypeEnum.Memory)
 			{
 				MemoryComponent memory = (MemoryComponent) comp;
-				MemoryModuleState memoryState = bombState.modules.OfType<MemoryModuleState>().FirstOrDefault();
-				memoryState.stage = memory.CurrentStage;
-				memoryState.displayNumber = int.Parse(memory.DisplayText.text);
-				int[] buttonValues = new int[4];
-				foreach (KeypadButton button in memory.Buttons)
+				FieldInfo fieldInfo = typeof(MemoryComponent).GetField("buttonsEmerged", BindingFlags.NonPublic | BindingFlags.Instance);
+				bool buttonsEmerged = (bool) fieldInfo.GetValue(memory);
+				if (buttonsEmerged) 
 				{
-					buttonValues[button.ButtonIndex] = int.Parse(button.Text.text);
-
+					MemoryModuleState memoryState = bombState.modules.OfType<MemoryModuleState>().FirstOrDefault();
+					memoryState.stage = memory.CurrentStage;
+					memoryState.displayNumber = int.Parse(memory.DisplayText.text);
+					int[] buttonValues = new int[4];
+					foreach (KeypadButton button in memory.Buttons)
+					{
+						buttonValues[button.ButtonIndex] = int.Parse(button.Text.text);
+					}
+					memoryState.buttonNumbers = buttonValues;
+					memoryState.isSolved = isSolved;
 				}
-				memoryState.buttonNumbers = buttonValues;
-				memoryState.isSolved = isSolved;
+
 			}
 
 			else if (comp.ComponentType == ComponentTypeEnum.Morse)
