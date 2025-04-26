@@ -727,7 +727,7 @@ public class GptntStates : MonoBehaviour
 				FieldInfo fieldInfo2 = typeof(SimonComponent).GetField("solveProgress", BindingFlags.NonPublic | BindingFlags.Instance);
 				int solveProgress = (int) fieldInfo2.GetValue(simon);
 
-				SimonSaysModuleState simonState = bombState.modules.OfType<SimonSaysModuleState>().FirstOrDefault();
+				SimonSaysModuleState simonState = (SimonSaysModuleState) bombState.modules.FirstOrDefault(module => module.component == comp);
 				List<string> beepSequence = new List<string>();
 				foreach (int beep in sequence)
 				{
@@ -769,7 +769,7 @@ public class GptntStates : MonoBehaviour
 				}
 				WireColor[] colors = new WireColor[6];
 				bool[] is_snipped = new bool[6];
-				WireSetModuleState wireSetState = bombState.modules.OfType<WireSetModuleState>().FirstOrDefault();
+				WireSetModuleState wireSetState = (WireSetModuleState) bombState.modules.FirstOrDefault(module => module.component == comp);
 				wireSetState.wires = new WireSetWireState[6];
 				// Just assign the spaces that contain wires
 				int indicesIndex = 0;
@@ -792,7 +792,7 @@ public class GptntStates : MonoBehaviour
 				string buttonMessage = button.ButtonInstruction.ToString();
 				string stripColor = button.IndicatorColor.ToString();
 
-				ButtonModuleState buttonState = bombState.modules.OfType<ButtonModuleState>().FirstOrDefault();
+				ButtonModuleState buttonState = (ButtonModuleState) bombState.modules.FirstOrDefault(module => module.component == comp);
 				buttonState.buttonColor = buttonColor;
 				buttonState.buttonWord = buttonMessage;
 				buttonState.isHeld = button.IsHolding;
@@ -811,7 +811,7 @@ public class GptntStates : MonoBehaviour
 			{
 				KeypadComponent keypad = (KeypadComponent) comp;
 
-				KeypadModuleState keypadState = bombState.modules.OfType<KeypadModuleState>().FirstOrDefault();
+				KeypadModuleState keypadState = (KeypadModuleState) bombState.modules.FirstOrDefault(module => module.component == comp);
 				KeyPadButtonState[] KeypadButtons = new KeyPadButtonState[4];
 
 				for (int i = 0; i < 4; i++)
@@ -888,7 +888,7 @@ public class GptntStates : MonoBehaviour
 					}
 					string displayWord = whoFirst.DisplayText.text;
 
-					WhosOnFirstModuleState whoFirstState = bombState.modules.OfType<WhosOnFirstModuleState>().FirstOrDefault();
+					WhosOnFirstModuleState whoFirstState = (WhosOnFirstModuleState) bombState.modules.FirstOrDefault(module => module.component == comp);
 					whoFirstState.stage = stage;
 					whoFirstState.buttonWords = buttonValues;
 					whoFirstState.displayWord = displayWord;
@@ -904,7 +904,7 @@ public class GptntStates : MonoBehaviour
 				bool buttonsEmerged = (bool) fieldInfo.GetValue(memory);
 				if (buttonsEmerged) 
 				{
-					MemoryModuleState memoryState = bombState.modules.OfType<MemoryModuleState>().FirstOrDefault();
+					MemoryModuleState memoryState = (MemoryModuleState) bombState.modules.FirstOrDefault(module => module.component == comp);
 					memoryState.stage = memory.CurrentStage;
 					memoryState.displayNumber = int.Parse(memory.DisplayText.text);
 					int[] buttonValues = new int[4];
@@ -925,7 +925,7 @@ public class GptntStates : MonoBehaviour
 				FieldInfo fieldInfo = typeof(MorseCodeComponent).GetField("chosenWord", BindingFlags.NonPublic | BindingFlags.Instance);
 				string word = (string) fieldInfo.GetValue(morse);
 
-				MorseCodeModuleState morseState = bombState.modules.OfType<MorseCodeModuleState>().FirstOrDefault();
+				MorseCodeModuleState morseState = (MorseCodeModuleState) bombState.modules.FirstOrDefault(module => module.component == comp);
 
 				morseState.currentFrequency = currentFrequency;
 				morseState.sequence = word;
@@ -951,7 +951,7 @@ public class GptntStates : MonoBehaviour
 					}
 				}
 
-				ComplicatedWiresModuleState compState = bombState.modules.OfType<ComplicatedWiresModuleState>().FirstOrDefault();
+				ComplicatedWiresModuleState compState = (ComplicatedWiresModuleState) bombState.modules.FirstOrDefault(module => module.component == comp);
 				compState.wires = new ComplicatedWireState[6];
 
 				int indicesIndex = 0;
@@ -975,7 +975,7 @@ public class GptntStates : MonoBehaviour
 				WireSequenceComponent wireSeq = (WireSequenceComponent) comp;
 				FieldInfo fieldInfo = typeof(WireSequenceComponent).GetField("currentPage", BindingFlags.NonPublic | BindingFlags.Instance);
 
-				WireSequenceModuleState wireSeqState = bombState.modules.OfType<WireSequenceModuleState>().FirstOrDefault();
+				WireSequenceModuleState wireSeqState = (WireSequenceModuleState) bombState.modules.FirstOrDefault(module => module.component == comp);
 				wireSeqState.panel = (int) fieldInfo.GetValue(wireSeq);
 				wireSeqState.wires = new WireSequenceWireState[12];
 
@@ -1014,7 +1014,7 @@ public class GptntStates : MonoBehaviour
 			else if (comp.ComponentType == ComponentTypeEnum.Maze)
 			{
 				InvisibleWallsComponent invis = (InvisibleWallsComponent) comp;
-				MazeModuleState mazeState = bombState.modules.OfType<MazeModuleState>().FirstOrDefault();
+				MazeModuleState mazeState = (MazeModuleState) bombState.modules.FirstOrDefault(module => module.component == comp);
 				mazeState.numColumns = 6;
 				mazeState.numRows = 6;
 
@@ -1070,8 +1070,7 @@ public class GptntStates : MonoBehaviour
 				FieldInfo fieldInfo = typeof(PasswordComponent).GetField("m_CurrentLayout", BindingFlags.NonPublic | BindingFlags.Instance);
 				PasswordLayout layout = (PasswordLayout) fieldInfo.GetValue(pass);
 
-				PasswordModuleState passState = bombState.modules.OfType<PasswordModuleState>().FirstOrDefault();
-
+				PasswordModuleState passState = (PasswordModuleState) bombState.modules.FirstOrDefault(module => module.component == comp);
 
 				passState.currentWord = layout.GetCurrentWord();
 				passState.goalWord = pass.CorrectWord;

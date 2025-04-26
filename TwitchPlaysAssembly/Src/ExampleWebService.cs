@@ -315,7 +315,7 @@ public class ExampleWebService : MonoBehaviour
 		}
 		if (Input.GetKeyDown(KeyCode.U))
 		{
-			gptntStates.UpdateBombState();
+			LogClick();
 		}
 
 		if (Input.GetKeyDown(KeyCode.O))
