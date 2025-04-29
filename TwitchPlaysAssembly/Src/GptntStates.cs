@@ -303,19 +303,19 @@ public class GptntStates : MonoBehaviour
 				{
 					if (beep == 0)
 					{
-						beepSequence.Add("Red");
+						beepSequence.Add("red");
 					}
 					else if (beep == 1)
 					{
-						beepSequence.Add("Blue");
+						beepSequence.Add("blue");
 					}
 					else if (beep == 2)
 					{
-						beepSequence.Add("Green");
+						beepSequence.Add("green");
 					}
 					else if (beep == 3)
 					{
-						beepSequence.Add("Yellow");
+						beepSequence.Add("yellow");
 					}
 				}
 
@@ -354,7 +354,7 @@ public class GptntStates : MonoBehaviour
 				foreach (SnippableWire wire in wireset.wires)
 				{
 					wireSetState.wires[indices[indicesIndex]] = new WireSetWireState();
-					wireSetState.wires[indices[indicesIndex]].color = wire.GetColor().ToString();
+					wireSetState.wires[indices[indicesIndex]].color = wire.GetColor().ToString().ToLower();
 					wireSetState.wires[indices[indicesIndex]].isCut = wire.Snipped;
 					wireSetState.wires[indices[indicesIndex]].position = indices[indicesIndex];
 					indicesIndex++;
@@ -372,9 +372,9 @@ public class GptntStates : MonoBehaviour
 			else if (comp.ComponentType == ComponentTypeEnum.BigButton)
 			{
 				ButtonComponent button = (ButtonComponent) comp;
-				string buttonColor = button.ButtonColor.ToString();
+				string buttonColor = button.ButtonColor.ToString().ToLower();
 				string buttonMessage = button.ButtonInstruction.ToString();
-				string stripColor = button.IndicatorColor.ToString();
+				string stripColor = button.IndicatorColor.ToString().ToLower();
 
 				ButtonModuleState buttonState =	new ButtonModuleState();
 				buttonState.buttonColor = buttonColor;
@@ -412,13 +412,13 @@ public class GptntStates : MonoBehaviour
 					KeypadButtons[i].symbol = button.GetValue();
 					if (button.LED_Correct.active)
 					{
-						KeypadButtons[i].color = "Green";
+						KeypadButtons[i].color = "green";
 
 
 					}
 					else if (button.LED_Wrong.active)
 					{
-						KeypadButtons[i].color = "Red";
+						KeypadButtons[i].color = "red";
 
 					}
 					else
@@ -444,7 +444,7 @@ public class GptntStates : MonoBehaviour
 			else if (comp.ComponentType == ComponentTypeEnum.WhosOnFirst)
 			{
 				WhosOnFirstComponent whoFirst = (WhosOnFirstComponent) comp;
-				int stage = whoFirst.CurrentStage;
+				int stage = whoFirst.CurrentStage + 1;
 				string[] buttonValues = new string[6];
 				foreach (KeypadButton button in whoFirst.Buttons)
 				{
@@ -471,7 +471,7 @@ public class GptntStates : MonoBehaviour
 			{
 				MemoryComponent memory = (MemoryComponent) comp;
 				MemoryModuleState memoryState = new MemoryModuleState();
-				memoryState.stage = memory.CurrentStage;
+				memoryState.stage = memory.CurrentStage + 1;
 				memoryState.displayNumber = int.Parse(memory.DisplayText.text);
 				int[] buttonValues = new int[4];
 				foreach (KeypadButton button in memory.Buttons)
@@ -540,7 +540,7 @@ public class GptntStates : MonoBehaviour
 					compState.wires[indices[indicesIndex]].hasStar = wire.HasSymbol;
 					compState.wires[indices[indicesIndex]].isLedOn = wire.IsLEDOn;
 					compState.wires[indices[indicesIndex]].isCut = wire.Snipped;
-					compState.wires[indices[indicesIndex]].color = wire.Color.ToString();
+					compState.wires[indices[indicesIndex]].color = wire.Color.ToString().ToLower();
 					compState.wires[indices[indicesIndex]].position = indices[indicesIndex];
 
 					indicesIndex++;
@@ -562,7 +562,7 @@ public class GptntStates : MonoBehaviour
 				FieldInfo fieldInfo = typeof(WireSequenceComponent).GetField("currentPage", BindingFlags.NonPublic | BindingFlags.Instance);
 
 				WireSequenceModuleState wireSeqState = new WireSequenceModuleState();
-				wireSeqState.panel = (int) fieldInfo.GetValue(wireSeq);
+				wireSeqState.panel = (int) fieldInfo.GetValue(wireSeq) + 1;
 				wireSeqState.wires = new WireSequenceWireState[12];
 
 				FieldInfo fieldInfo2 = typeof(WireSequenceComponent).GetField("wireSequence", BindingFlags.NonPublic | BindingFlags.Instance);
@@ -589,7 +589,7 @@ public class GptntStates : MonoBehaviour
 							wireSeqState.wires[i].endPositionLetter = "C";
 
 						}
-						wireSeqState.wires[i].color = config.Wire.GetColor().ToString();
+						wireSeqState.wires[i].color = config.Wire.GetColor().ToString().ToLower();
 						wireSeqState.wires[i].isCut = config.Wire.Snipped;
 					}
 				}
@@ -733,19 +733,19 @@ public class GptntStates : MonoBehaviour
 				{
 					if (beep == 0)
 					{
-						beepSequence.Add("Red");
+						beepSequence.Add("red");
 					}
 					else if (beep == 1)
 					{
-						beepSequence.Add("Blue");
+						beepSequence.Add("blue");
 					}
 					else if (beep == 2)
 					{
-						beepSequence.Add("Green");
+						beepSequence.Add("green");
 					}
 					else if (beep == 3)
 					{
-						beepSequence.Add("Yellow");
+						beepSequence.Add("yellow");
 					}
 				}
 
@@ -776,7 +776,7 @@ public class GptntStates : MonoBehaviour
 				foreach (SnippableWire wire in wireset.wires)
 				{
 					wireSetState.wires[indices[indicesIndex]] = new WireSetWireState();
-					wireSetState.wires[indices[indicesIndex]].color = wire.GetColor().ToString();
+					wireSetState.wires[indices[indicesIndex]].color = wire.GetColor().ToString().ToLower();
 					wireSetState.wires[indices[indicesIndex]].isCut = wire.Snipped;
 					wireSetState.wires[indices[indicesIndex]].position = indices[indicesIndex];
 					indicesIndex++;
@@ -788,9 +788,9 @@ public class GptntStates : MonoBehaviour
 			else if (comp.ComponentType == ComponentTypeEnum.BigButton)
 			{
 				ButtonComponent button = (ButtonComponent) comp;
-				string buttonColor = button.ButtonColor.ToString();
+				string buttonColor = button.ButtonColor.ToString().ToLower();
 				string buttonMessage = button.ButtonInstruction.ToString();
-				string stripColor = button.IndicatorColor.ToString();
+				string stripColor = button.IndicatorColor.ToString().ToLower();
 
 				ButtonModuleState buttonState = (ButtonModuleState) bombState.modules.FirstOrDefault(module => module.component == comp);
 				buttonState.buttonColor = buttonColor;
@@ -853,13 +853,13 @@ public class GptntStates : MonoBehaviour
 					else if (symbol == "ѣ") KeypadButtons[i].symbol = "yat";
 					if (button.LED_Correct.active)
 					{
-						KeypadButtons[i].color = "Green";
+						KeypadButtons[i].color = "green";
 
 
 					}
 					else if (button.LED_Wrong.active)
 					{
-						KeypadButtons[i].color = "Red";
+						KeypadButtons[i].color = "red";
 
 					}
 					else
@@ -879,7 +879,7 @@ public class GptntStates : MonoBehaviour
 				WhosOnFirstComponent whoFirst = (WhosOnFirstComponent) comp;
 				if (whoFirst.ButtonsEmerged)
 				{
-					int stage = whoFirst.CurrentStage;
+					int stage = whoFirst.CurrentStage + 1;
 					string[] buttonValues = new string[6];
 					foreach (KeypadButton button in whoFirst.Buttons)
 					{
@@ -905,7 +905,7 @@ public class GptntStates : MonoBehaviour
 				if (buttonsEmerged) 
 				{
 					MemoryModuleState memoryState = (MemoryModuleState) bombState.modules.FirstOrDefault(module => module.component == comp);
-					memoryState.stage = memory.CurrentStage;
+					memoryState.stage = memory.CurrentStage + 1;
 					memoryState.displayNumber = int.Parse(memory.DisplayText.text);
 					int[] buttonValues = new int[4];
 					foreach (KeypadButton button in memory.Buttons)
@@ -961,7 +961,7 @@ public class GptntStates : MonoBehaviour
 					compState.wires[indices[indicesIndex]].hasStar = wire.HasSymbol;
 					compState.wires[indices[indicesIndex]].isLedOn = wire.IsLEDOn;
 					compState.wires[indices[indicesIndex]].isCut = wire.Snipped;
-					compState.wires[indices[indicesIndex]].color = wire.Color.ToString();
+					compState.wires[indices[indicesIndex]].color = wire.Color.ToString().ToLower();
 					compState.wires[indices[indicesIndex]].position = indices[indicesIndex];
 
 					indicesIndex++;
@@ -976,7 +976,7 @@ public class GptntStates : MonoBehaviour
 				FieldInfo fieldInfo = typeof(WireSequenceComponent).GetField("currentPage", BindingFlags.NonPublic | BindingFlags.Instance);
 
 				WireSequenceModuleState wireSeqState = (WireSequenceModuleState) bombState.modules.FirstOrDefault(module => module.component == comp);
-				wireSeqState.panel = (int) fieldInfo.GetValue(wireSeq);
+				wireSeqState.panel = (int) fieldInfo.GetValue(wireSeq) + 1;
 				wireSeqState.wires = new WireSequenceWireState[12];
 
 				FieldInfo fieldInfo2 = typeof(WireSequenceComponent).GetField("wireSequence", BindingFlags.NonPublic | BindingFlags.Instance);
@@ -1003,7 +1003,7 @@ public class GptntStates : MonoBehaviour
 							wireSeqState.wires[i].endPositionLetter = "C";
 
 						}
-						wireSeqState.wires[i].color = config.Wire.GetColor().ToString();
+						wireSeqState.wires[i].color = config.Wire.GetColor().ToString().ToLower();
 						wireSeqState.wires[i].isCut = config.Wire.Snipped;
 					}
 				}
