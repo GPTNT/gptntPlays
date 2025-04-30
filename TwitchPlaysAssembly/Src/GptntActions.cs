@@ -51,11 +51,9 @@ public class GptntActions : MonoBehaviour
 
 		if (Physics.Raycast(ray, out RaycastHit hit, Mathf.Infinity, layerMask))
 		{
-			GptntDebug.Log("First hit: " + hit.collider.gameObject.name);
 			Selectable selectable = hit.collider.transform.parent.gameObject.GetComponent<Selectable>();
 			if (!selectable)
 			{
-				GptntDebug.Log("Couldnt get from selectable parent");
 				if (hit.collider.gameObject.GetComponent<SelectableArea>())
 				{
 					selectable = hit.collider.gameObject.GetComponent<SelectableArea>().Selectable;
@@ -69,8 +67,6 @@ public class GptntActions : MonoBehaviour
 
 			if (!selectable)
 			{
-				GptntDebug.Log("Selectable not found!");
-				//GptntDebug.LogChildrenRecursive(hit.collider.transform.parent.gameObject);
 				return "Nothing clickable";
 			}
 
@@ -78,13 +74,11 @@ public class GptntActions : MonoBehaviour
 			{
 				// This means the selectable is a module, update the bomb state
 				FindObjectOfType<GptntStates>().UpdateZoomIn(selectable);
-				GptntDebug.Log("The selectable can be focused: " + selectable.name); 
 				FloatingHoldable floating = KTInputManager.Instance.SelectableManager.GetCurrentFloatingHoldable();
 
 				KTInputManager.Instance.SelectableManager.UnlockSelection();
 				KTInputManager.Instance.EnableInteraction();
 
-				GptntDebug.Log("Selected in Selectable Manager: " + selectable.Children[0]);
 
 				KTInputManager.Instance.SelectableManager.Select(selectable, false);
 				KTInputManager.Instance.SelectableManager.HandleFaceSelection();
@@ -100,33 +94,29 @@ public class GptntActions : MonoBehaviour
 			}
 			else
 			{
-				GptntDebug.Log("Not focusable: " + selectable.name + "\nInteracting: " + selectable.name);
 				selectable.HandleInteract();
 				if (selectable.HasInteractEnded)
 					lastUsedSelectable = selectable;
-				else
-					lastUsedSelectable = null;
 				selectable.SetHighlight(false);
 			}
 			return "clicked on: " + selectable.name;
 		}
 		else
 		{
-			GptntDebug.Log("No interactable hit.");
 			return "No interactable hit";
 		}
 	}
 
 	public string Release()
 	{
-		GptntDebug.Log("Called Release");
 		if (!lastUsedSelectable)
 		{
-			GptntDebug.Log("No last used selectable.");
 			return "No last used selectable.";
 		}
 		lastUsedSelectable.OnInteractEnded();
-		return "Released: " + lastUsedSelectable.name;
+		string response = "Released: " + lastUsedSelectable.name;
+		lastUsedSelectable = null;
+		return response;
 	}
 
 	public string ZoomOut()
@@ -134,14 +124,12 @@ public class GptntActions : MonoBehaviour
 		if (isZoomedIn)
 		{
 			string response = "Zooming out from: " + zoomedInto.name;
-			GptntDebug.Log(response);
 			zoomedInto.HandleDeselect();
 			KTInputManager.Instance.SelectableManager.HandleCancel();
 			isZoomedIn = false;
 			zoomedInto = null;
 			return response;
 		}
-		GptntDebug.Log("Nothing to zoom out of.");
 		return "No module zoomed into";
 	}
 	#endregion
@@ -297,8 +285,6 @@ public class GptntActions : MonoBehaviour
 				InputInterceptor.EnableInput();
 			}
 		}
-		//throw new Exception($"X rotation: {bombRotationX}\n Z rotation: {bombRotationZ}");
-		GptntDebug.Log("X: " + bombRotationX + "Z: " + bombRotationZ);
 	}
 
 	private void Rotation180()
@@ -420,98 +406,6 @@ public class GptntActions : MonoBehaviour
 			onBackFace = true;
 		}
 	}
-
-	//private void alignFace90U()
-	//{
-	//	if (inMiddle && onFrontFace)
-	//	{
-	//		GptntDebug.Log("1");
-	//		inMiddle = false;
-	//		onTopFromFront = true;
-	//		onFrontFace = false; // Changed this
-	//	}
-
-	//	else if (inMiddle && onBackFace)
-	//	{
-	//		GptntDebug.Log("2");
-	//		inMiddle = false;
-	//		onTopFromBack = true;
-	//		onBackFace = false; // Changed this
-	//	}
-
-	//	else if (onBottomFromBack)
-	//	{
-	//		GptntDebug.Log("3");
-	//		onBottomFromBack = false;
-	//		inMiddle = true;
-	//		onBackFace = true; // Changed this
-	//	}
-	//	else if (onBottomFromFront)
-	//	{
-	//		GptntDebug.Log("4");
-	//		onBottomFromFront = false;
-	//		inMiddle = true;
-	//		onFrontFace = true; // Changed this
-	//	}
-	//	else if (onBottomFromLeftSide)
-	//	{
-	//		onBottomFromLeftSide = false;
-	//		inMiddle = true;
-	//	}
-
-	//	else if (onTopFromRightSide)
-	//	{
-	//		onBottomFromRightSide = false;
-	//		inMiddle = true;
-	//	}
-	//}
-
-	//private void alignFace90D()
-	//{
-	//	GptntDebug.Log("Called alignFace90D");
-	//	if (inMiddle && onFrontFace)
-	//	{
-	//		GptntDebug.Log("1");
-	//		inMiddle = false;
-	//		onBottomFromFront = true;
-	//		onFrontFace = false; // Changed this
-	//	}
-	//	else if (inMiddle && onBackFace)
-	//	{
-	//		GptntDebug.Log("2");
-	//		inMiddle = false;
-	//		onBottomFromBack = true;
-	//		onBackFace = false; // Changed this
-	//	}
-
-	//	else if (onTopFromFront)
-	//	{
-	//		GptntDebug.Log("3");
-	//		onTopFromFront = false;
-	//		inMiddle = true;
-	//		onFrontFace = true; // Changed this
-	//	}
-
-	//	else if (onTopFromLeftSide)
-	//	{
-	//		onTopFromLeftSide = false;
-	//		inMiddle = true;
-	//	}
-
-	//	else if (onTopFromRightSide)
-	//	{
-	//		onTopFromRightSide = false;
-	//		inMiddle = true;
-	//	}
-
-	//	else if (onTopFromBack)
-	//	{
-	//		GptntDebug.Log("4");
-	//		onTopFromBack = false;
-	//		inMiddle = true;
-	//		onBackFace = true; // Changed this
-	//	}
-	//}
 
 	#endregion
 

@@ -14,6 +14,7 @@ public class ExampleWebService : MonoBehaviour
 	KMBombInfo bombInfo;
 	KMGameCommands gameCommands;
 	KMGameInfo gameInfo;
+	private bool isStarted = false;
 	string modules;
 	string solvableModules;
 	string solvedModules;
@@ -38,13 +39,14 @@ public class ExampleWebService : MonoBehaviour
 	public string sourceLogPath = @"logs/ktane.log";
 	private string lastRead = "";
 	long lastPosition = 0;
-	public bool bombStarted = false;
 
 	// Observation variables 
-	private Segmentation segmentation;
+	private GptntBuffer gptntBuffer;
 	private RenderTexture rawScreenRenderTexture;
 	private Texture2D tex;
 	private Rect rect;
+
+	private Segmentation segmentation;
 
 	void Awake()
 	{
@@ -65,10 +67,10 @@ public class ExampleWebService : MonoBehaviour
 		workerThread = new Thread(workerObject.DoWork);
 		// Start the worker thread.
 		workerThread.Start(this);
-		segmentation = GetComponent<Segmentation>();
+		gptntBuffer = GetComponent<GptntBuffer>();
 		gptntActions = GetComponent<GptntActions>();
 		gptntStates = GetComponent<GptntStates>();
-		
+		segmentation = GetComponent<Segmentation>();
 	}
 
 	private void Start()
@@ -84,12 +86,6 @@ public class ExampleWebService : MonoBehaviour
 			if (gameState.Equals("Setup"))
 			{
 				Reset();
-				gptntStates.readyToGive = false;
-			}
-
-			if (gameState.Equals("PostGame"))
-			{
-
 			}
 		};
 		gameInfo.OnLightsChange += (bool on) => {
@@ -98,10 +94,17 @@ public class ExampleWebService : MonoBehaviour
 			gptntActions.InitRotation();
 			gameState = gameState.EqualsAny("Gameplay", "Lights On", "Lights Off") ? (on ? "Lights On" : "Lights Off") : gameState;
 
-			if (gameState.Equals("Lights On"))
+			if (gameState.Equals("Lights On") && !isStarted)
 			{
+				// when the first light turns on
 				gptntStates.readyToGive = true;
+				isStarted = true;
+				StartCoroutine(gptntBuffer.StartBuffer(0.25f));
 				gptntStates.GetInitialBombState();
+				InputInterceptor.DisableInput();
+				bomb.Bomb.GetComponent<Selectable>().Trigger();
+				gptntActions.Rotate180();
+				gptntActions.Rotate180();
 			}
 		};
 
@@ -115,6 +118,7 @@ public class ExampleWebService : MonoBehaviour
 		if (int.TryParse(heightEnv, out int parsedHeight)) height = parsedHeight;
 
 		Screen.SetResolution(width, height, false);
+		gptntBuffer.Init(width, height, 10);
 		segmentation.Init(width, height);
 		
 		rawScreenRenderTexture = new RenderTexture(width, height, 24);
@@ -127,6 +131,10 @@ public class ExampleWebService : MonoBehaviour
 	private void Reset()
 	{
 		actions.Clear();
+		gptntStates.readyToGive = false;
+		isStarted = false;
+		InputInterceptor.EnableInput();
+		gptntBuffer.StopBuffer();
 	}
 	/*
 	Keys and what they do:
@@ -151,12 +159,6 @@ public class ExampleWebService : MonoBehaviour
 
 	void Update()
 	{
-		if (bombStarted)
-		{
-			GptntDebug.Log("bomb started");
-			bombStarted = false;
-		}
-
 		if (actions.Count > 0)
 		{
 			Action action = actions.Dequeue();
@@ -315,7 +317,7 @@ public class ExampleWebService : MonoBehaviour
 		}
 		if (Input.GetKeyDown(KeyCode.U))
 		{
-			LogClick();
+			LogBombPosition();
 		}
 
 		if (Input.GetKeyDown(KeyCode.O))
@@ -327,6 +329,30 @@ public class ExampleWebService : MonoBehaviour
 			SegmentSelectables(GetActiveSelectables().ToArray());
 		}
 		#endregion
+	}
+
+	private void LogBombPosition()
+	{
+		bool hasParent = bomb.Bomb.transform.parent != null;
+		Transform bombTransform = bomb.Bomb.transform;
+
+		while (hasParent)
+		{
+			GptntDebug.Log("Has parent");
+			bombTransform = bombTransform.parent;
+			hasParent = bombTransform.parent != null;
+		}
+
+		GptntDebug.Log(bombTransform.name);
+		float x = bombTransform.position.x;
+		float y = bombTransform.position.y;
+		float z = bombTransform.position.z;
+		GptntDebug.Log($"x: {x}, y: {y}, z: {z}");
+		GptntDebug.Log("Newer");
+		x = 0.1017131f;
+		y = 1.090481f;
+		z = -0.4161007f;
+		bombTransform.position = new Vector3(x, y, z);
 	}
 
 	private void LogClick()
@@ -438,7 +464,7 @@ public class ExampleWebService : MonoBehaviour
 
 		string responseString;
 		string path = request.Url.AbsolutePath.ToLowerInvariant();
-
+		if(!path.Equals("/health")) GptntDebug.Log("[HTTP Request] " + path);
 		// Route handling with switch
 		switch (path)
 		{
@@ -472,6 +498,9 @@ public class ExampleWebService : MonoBehaviour
 			case "/fullobservation":
 				responseString = HandleFullObservation(response); // Main thread
 				break;
+			case "/buffer":
+				responseString = HandleObservationBuffer(response);
+				break;
 			case "/health":
 				responseString = HandleHealth();
 				break;
@@ -500,6 +529,26 @@ public class ExampleWebService : MonoBehaviour
 	private string HandleHealth()
 	{
 		return gameState;
+	}
+
+	private string HandleObservationBuffer(HttpListenerResponse response)
+	{
+		if(!gameState.Equals("Lights On"))
+		{
+			response.StatusCode = (int) HttpStatusCode.BadRequest;
+			return "Cannot get buffer in " + gameState + " state";
+		}
+
+		string segmentation = HandleSegmentation(response);
+		if (response.StatusCode != (int) HttpStatusCode.OK)
+		{
+			return segmentation;
+		}
+
+		ObservationPayload observation = gptntBuffer.GetBufferJSON();
+		observation.segmentation = segmentation;
+
+		return JsonConvert.SerializeObject(observation);
 	}
 
 	private string HandleObservation(HttpListenerResponse response)
@@ -556,7 +605,7 @@ public class ExampleWebService : MonoBehaviour
 
 	private string HandleAction(HttpListenerRequest request, HttpListenerResponse response)
 	{
-		if(!gameState.EqualsAny("Lights On", "Lights Off"))
+		if(!gameState.EqualsAny("Lights On", "Lights Off") || !isStarted)
 		{
 			response.StatusCode = (int) HttpStatusCode.BadRequest;
 			return "Cannot send action to the game in " + gameState + " state";
@@ -581,29 +630,28 @@ public class ExampleWebService : MonoBehaviour
 		var waitHandle = new ManualResetEvent(false);
 			MainThreadQueue.Enqueue(() =>
 			{
+				GptntDebug.Log("[Action] " + actionType);
 				switch (actionType)
 				{
 					case "click":
-						HandleClick(request, response);
+						responseString = HandleClick(request, response);
 						break;
 					case "hold":
-						HandleHold(request, response);
+						responseString = HandleHold(request, response);
 						break;
 					case "release":
-						HandleClickEnd();
+						responseString = HandleClickEnd();
 						break;
 					case "out":
-						HandleZoomOut();
+						responseString = HandleZoomOut();
 						break;
 					default:
-						HandleRotate(request);
+						responseString = HandleRotate(request);
 						break;
 				}
-				responseString = JsonConvert.SerializeObject(gptntStates.UpdateBombState(), Formatting.Indented);
 				waitHandle.Set();
 			}
 		);
-
 		waitHandle.WaitOne();
 		return responseString;
 	}
@@ -641,12 +689,13 @@ public class ExampleWebService : MonoBehaviour
 			response.StatusCode = (int) HttpStatusCode.BadRequest;
 			return "Could not parse x and y coordinates: " + ex;
 		}
+		GptntDebug.Log($"[Location] x: {x}, y: {y}");
 		return gptntActions.Click(x, y);
 	}
 
 	private string HandleClickEnd()
 	{
-		return gptntActions.Release(); ;
+		return gptntActions.Release();
 	}
 
 	private string HandleZoomOut()
@@ -679,7 +728,11 @@ public class ExampleWebService : MonoBehaviour
 	private string HandleGetState(HttpListenerResponse response)
 	{
 		if (!gptntStates.readyToGive)
+		{
 			response.StatusCode = (int) HttpStatusCode.BadRequest;
+			return "Cannot get bomb state in " + gameState + " state";
+		}
+			
 
 		string responseString = null;
 		var waitHandle = new ManualResetEvent(false);
@@ -688,6 +741,12 @@ public class ExampleWebService : MonoBehaviour
 			try
 			{
 				responseString = JsonConvert.SerializeObject(gptntStates.UpdateBombState(), Formatting.Indented);
+			}
+			catch(MemoryModuleException ex)
+			{
+				GptntDebug.Log("[DEBUG] caught exception: " + ex.ToString());
+				response.StatusCode = (int) HttpStatusCode.BadRequest;
+				responseString = "";
 			}
 			finally
 			{
@@ -702,6 +761,7 @@ public class ExampleWebService : MonoBehaviour
 			responseString = "Could not serialize bomb state";
 		}
 
+		response.ContentType = "application/json";
 		return responseString;
 
 	}
