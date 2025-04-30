@@ -14,7 +14,6 @@ public class GptntStates : MonoBehaviour
 {
 	public string logFilePath;
 	public long lastPosition = 0;
-	private string line;
 	public BombState bombState;
 	public ExampleWebService webService;
 	TwitchBomb twitchBomb;
@@ -471,13 +470,20 @@ public class GptntStates : MonoBehaviour
 			{
 				MemoryComponent memory = (MemoryComponent) comp;
 				MemoryModuleState memoryState = new MemoryModuleState();
+				GptntDebug.Log("[DEBUG] Getting initial state of memory module");
+				FieldInfo fieldInfo = typeof(MemoryComponent).GetField("buttonsEmerged", BindingFlags.NonPublic | BindingFlags.Instance);
+				bool buttonsEmerged = (bool) fieldInfo.GetValue(memory);
+				if (!buttonsEmerged)
+				{
+					GptntDebug.Log("[Exception] Buttons not yet emrged");
+					throw new MemoryModuleException("Memory buttoons not yet emerged");
+				}
 				memoryState.stage = memory.CurrentStage + 1;
 				memoryState.displayNumber = int.Parse(memory.DisplayText.text);
 				int[] buttonValues = new int[4];
 				foreach (KeypadButton button in memory.Buttons)
 				{
 					buttonValues[button.ButtonIndex] = int.Parse(button.Text.text);
-
 				}
 				memoryState.buttonNumbers = buttonValues;
 				memoryState.isSolved = isSolved;
@@ -901,20 +907,21 @@ public class GptntStates : MonoBehaviour
 			{
 				MemoryComponent memory = (MemoryComponent) comp;
 				bool isInputValid = memory.IsInputValid;
-				if (isInputValid) 
+				if (!isInputValid) 
+        {
+          throw new MemoryModuleException("Memory buttoons not yet emerged");
+        }
+        
+				MemoryModuleState memoryState = (MemoryModuleState) bombState.modules.FirstOrDefault(module => module.component == comp);
+				memoryState.stage = memory.CurrentStage + 1;
+				memoryState.displayNumber = int.Parse(memory.DisplayText.text);
+				int[] buttonValues = new int[4];
+				foreach (KeypadButton button in memory.Buttons)
 				{
-					MemoryModuleState memoryState = (MemoryModuleState) bombState.modules.FirstOrDefault(module => module.component == comp);
-					memoryState.stage = memory.CurrentStage + 1;
-					memoryState.displayNumber = int.Parse(memory.DisplayText.text);
-					int[] buttonValues = new int[4];
-					foreach (KeypadButton button in memory.Buttons)
-					{
-						buttonValues[button.ButtonIndex] = int.Parse(button.Text.text);
-					}
-					memoryState.buttonNumbers = buttonValues;
-					memoryState.isSolved = isSolved;
+					buttonValues[button.ButtonIndex] = int.Parse(button.Text.text);
 				}
-
+				memoryState.buttonNumbers = buttonValues;
+				memoryState.isSolved = isSolved;
 			}
 
 			else if (comp.ComponentType == ComponentTypeEnum.Morse)
@@ -1077,8 +1084,6 @@ public class GptntStates : MonoBehaviour
 				passState.isSolved = isSolved;
 			}
 		}
-		readyToGive = true;
-		GptntDebug.Log("returning bombState");
 		return bombState;
 	}
 
@@ -1095,7 +1100,6 @@ public class GptntStates : MonoBehaviour
 		if (selectable != null)
 		{
 			GetModuleStateFromSelectable(selectable).inFocus = true;
-			GptntDebug.Log(GetModuleStateFromSelectable(selectable).name + " Is now in focus");
 		}
 	}
 
@@ -1107,9 +1111,13 @@ public class GptntStates : MonoBehaviour
 			GptntDebug.Log("No Component Found");
 			return null;
 		}
-		GptntDebug.Log("Updated: " + bombState.modules.FirstOrDefault(module => module.component == selectableComponent).name);
 		return bombState.modules.FirstOrDefault(module => module.component == selectableComponent);
 	}
+}
+
+public class MemoryModuleException : Exception
+{
+	public MemoryModuleException(string message) : base(message) { }
 }
 
 public class BaseModuleState
