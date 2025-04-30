@@ -906,27 +906,22 @@ public class GptntStates : MonoBehaviour
 			else if (comp.ComponentType == ComponentTypeEnum.Memory)
 			{
 				MemoryComponent memory = (MemoryComponent) comp;
-				FieldInfo fieldInfo = typeof(MemoryComponent).GetField("buttonsEmerged", BindingFlags.NonPublic | BindingFlags.Instance);
-				bool buttonsEmerged = (bool) fieldInfo.GetValue(memory);
-				if(!buttonsEmerged && bombState == null)
+				bool isInputValid = memory.IsInputValid;
+				if (!isInputValid) 
+        {
+          throw new MemoryModuleException("Memory buttoons not yet emerged");
+        }
+        
+				MemoryModuleState memoryState = (MemoryModuleState) bombState.modules.FirstOrDefault(module => module.component == comp);
+				memoryState.stage = memory.CurrentStage + 1;
+				memoryState.displayNumber = int.Parse(memory.DisplayText.text);
+				int[] buttonValues = new int[4];
+				foreach (KeypadButton button in memory.Buttons)
 				{
-					throw new MemoryModuleException("Memory buttoons not yet emerged");  
+					buttonValues[button.ButtonIndex] = int.Parse(button.Text.text);
 				}
-
-				if (buttonsEmerged) 
-				{
-					MemoryModuleState memoryState = (MemoryModuleState) bombState.modules.FirstOrDefault(module => module.component == comp);
-					memoryState.stage = memory.CurrentStage + 1;
-					memoryState.displayNumber = int.Parse(memory.DisplayText.text);
-					int[] buttonValues = new int[4];
-					foreach (KeypadButton button in memory.Buttons)
-					{
-						buttonValues[button.ButtonIndex] = int.Parse(button.Text.text);
-					}
-					memoryState.buttonNumbers = buttonValues;
-					memoryState.isSolved = isSolved;
-				}
-
+				memoryState.buttonNumbers = buttonValues;
+				memoryState.isSolved = isSolved;
 			}
 
 			else if (comp.ComponentType == ComponentTypeEnum.Morse)
