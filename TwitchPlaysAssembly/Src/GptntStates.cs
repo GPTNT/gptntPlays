@@ -900,9 +900,8 @@ public class GptntStates : MonoBehaviour
 			else if (comp.ComponentType == ComponentTypeEnum.Memory)
 			{
 				MemoryComponent memory = (MemoryComponent) comp;
-				FieldInfo fieldInfo = typeof(MemoryComponent).GetField("buttonsEmerged", BindingFlags.NonPublic | BindingFlags.Instance);
-				bool buttonsEmerged = (bool) fieldInfo.GetValue(memory);
-				if (buttonsEmerged) 
+				bool isInputValid = memory.IsInputValid;
+				if (isInputValid) 
 				{
 					MemoryModuleState memoryState = (MemoryModuleState) bombState.modules.FirstOrDefault(module => module.component == comp);
 					memoryState.stage = memory.CurrentStage + 1;
