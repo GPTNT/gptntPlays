@@ -71,6 +71,8 @@ public class ExampleWebService : MonoBehaviour
 		gptntBuffer = GetComponent<GptntBuffer>();
 		gptntActions = GetComponent<GptntActions>();
 		gptntStates = GetComponent<GptntStates>();
+
+		
 		segmentation = GetComponent<Segmentation>();
 	}
 
@@ -87,6 +89,7 @@ public class ExampleWebService : MonoBehaviour
 			if (gameState.Equals("Setup"))
 			{
 				Reset();
+				
 			}
 		};
 		gameInfo.OnLightsChange += (bool on) => {
@@ -94,18 +97,15 @@ public class ExampleWebService : MonoBehaviour
 			gptntActions.bomb = bomb;
 			gptntActions.InitRotation();
 			gameState = gameState.EqualsAny("Gameplay", "Lights On", "Lights Off") ? (on ? "Lights On" : "Lights Off") : gameState;
-			if (!isStarted)
-			{
 
-				if (gameState.Equals("Lights On"))
-				{
-					// when the first light turns on
-					gptntStates.readyToGive = true;
-					isStarted = true;
-					StartCoroutine(gptntBuffer.StartBuffer(0.25f));
-				 	lastKnownBombState = gptntStates.GetInitialBombState();
-					StartCoroutine(HoldBomb());
-				}
+			if (gameState.Equals("Lights On") && !isStarted)
+			{
+				// when the first light turns on
+				gptntStates.readyToGive = true;
+				isStarted = true;
+				StartCoroutine(gptntBuffer.StartBuffer(0.25f));
+				lastKnownBombState = gptntStates.GetInitialBombState();
+				StartCoroutine(HoldBomb());
 			}
 		};
 
@@ -324,7 +324,7 @@ public class ExampleWebService : MonoBehaviour
 		}
 		if (Input.GetKeyDown(KeyCode.U))
 		{
-			LogClick();
+			LogBombPosition();
 		}
 
 		if (Input.GetKeyDown(KeyCode.O))
