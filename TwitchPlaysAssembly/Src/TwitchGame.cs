@@ -561,8 +561,8 @@ public class TwitchGame : MonoBehaviour
 
 		try
 		{
-			if (GameRoom.Instance.HoldBomb)
-				StartCoroutine(BombCommands.Hold(Bombs[0]));
+			//if (GameRoom.Instance.HoldBomb)
+				//StartCoroutine(BombCommands.Hold(Bombs[0]));
 		}
 		catch (Exception ex)
 		{

@@ -2,6 +2,7 @@
 using System.Collections;
 using Assets.Scripts.Input;
 using UnityEngine;
+using UnityEngine.UI;
 
 public class GptntActions : MonoBehaviour
 {
@@ -74,23 +75,7 @@ public class GptntActions : MonoBehaviour
 			{
 				// This means the selectable is a module, update the bomb state
 				FindObjectOfType<GptntStates>().UpdateZoomIn(selectable);
-				FloatingHoldable floating = KTInputManager.Instance.SelectableManager.GetCurrentFloatingHoldable();
-
-				KTInputManager.Instance.SelectableManager.UnlockSelection();
-				KTInputManager.Instance.EnableInteraction();
-
-
-				KTInputManager.Instance.SelectableManager.Select(selectable, false);
-				KTInputManager.Instance.SelectableManager.HandleFaceSelection();
-
-				floating.Focus(selectable.transform, selectable.FocusDistance, true, false, 0f);
-				floating.OnFocusChild(selectable.gameObject);
-
-				selectable.HandleInteract();
-				KTInputManager.Instance.SelectableManager.HandleInteract();
-				lastUsedSelectable = selectable;
-				isZoomedIn = true;
-				zoomedInto = selectable;
+				StartCoroutine(ZoomInCoroutine(selectable));
 			}
 			else
 			{
@@ -124,14 +109,43 @@ public class GptntActions : MonoBehaviour
 		if (isZoomedIn)
 		{
 			string response = "Zooming out from: " + zoomedInto.name;
-			zoomedInto.HandleDeselect();
-			KTInputManager.Instance.SelectableManager.HandleCancel();
-			isZoomedIn = false;
-			zoomedInto = null;
+			StartCoroutine(ZoomOutCoroutine());
 			return response;
 		}
 		return "No module zoomed into";
 	}
+
+	private IEnumerator ZoomOutCoroutine()
+	{
+		yield return new WaitUntil(() => Time.timeScale > 0);
+		zoomedInto.HandleDeselect();
+		KTInputManager.Instance.SelectableManager.HandleCancel();
+		isZoomedIn = false;
+		zoomedInto = null;
+	}
+
+	private IEnumerator ZoomInCoroutine(Selectable selectable)
+	{
+		yield return new WaitUntil(() => Time.timeScale > 0);
+		GptntDebug.Log("[DEBUG] Zooming out from the coroutine");
+		FloatingHoldable floating = KTInputManager.Instance.SelectableManager.GetCurrentFloatingHoldable();
+
+		KTInputManager.Instance.SelectableManager.UnlockSelection();
+		KTInputManager.Instance.EnableInteraction();
+
+
+		KTInputManager.Instance.SelectableManager.Select(selectable, false);
+		KTInputManager.Instance.SelectableManager.HandleFaceSelection();
+		floating.Focus(selectable.transform, selectable.FocusDistance, true, false, 0f);
+		floating.OnFocusChild(selectable.gameObject);
+
+		selectable.HandleInteract();
+		KTInputManager.Instance.SelectableManager.HandleInteract();
+		lastUsedSelectable = selectable;
+		isZoomedIn = true;
+		zoomedInto = selectable;
+	}
+
 	#endregion
 
 	#region Rotation

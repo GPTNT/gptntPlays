@@ -51,7 +51,7 @@ public class GptntStates : MonoBehaviour
 		};
 	}
 
-	public void GetInitialBombState()
+	public BombState GetInitialBombState()
 	{
 		bombState = new BombState();
 		string gameState = webService.gameState;
@@ -476,14 +476,14 @@ public class GptntStates : MonoBehaviour
 				if (!buttonsEmerged)
 				{
 					GptntDebug.Log("[Exception] Buttons not yet emrged");
-					throw new MemoryModuleException("Memory buttoons not yet emerged");
+					throw new MemoryModuleException("Memory buttons not yet emerged");
 				}
 				memoryState.stage = memory.CurrentStage + 1;
-				memoryState.displayNumber = int.Parse(memory.DisplayText.text);
-				int[] buttonValues = new int[4];
+				memoryState.displayNumber = memory.DisplayText.text;
+				string[] buttonValues = new string[4];
 				foreach (KeypadButton button in memory.Buttons)
 				{
-					buttonValues[button.ButtonIndex] = int.Parse(button.Text.text);
+					buttonValues[button.ButtonIndex] = button.Text.text;
 				}
 				memoryState.buttonNumbers = buttonValues;
 				memoryState.isSolved = isSolved;
@@ -693,10 +693,14 @@ public class GptntStates : MonoBehaviour
 			}
 		}
 		readyToGive = true;
+		return bombState;
 	}
 
 	public BombState UpdateBombState()
 	{
+		if (bombState == null)
+			return GetInitialBombState();
+
 		Bomb bomb = twitchBomb.Bomb;
 		if (!bomb)
 			return bombState;
@@ -908,17 +912,17 @@ public class GptntStates : MonoBehaviour
 				MemoryComponent memory = (MemoryComponent) comp;
 				bool isInputValid = memory.IsInputValid;
 				if (!isInputValid) 
-        {
-          throw new MemoryModuleException("Memory buttoons not yet emerged");
-        }
+				{
+				  throw new MemoryModuleException("Memory buttons not yet emerged");
+				}
         
 				MemoryModuleState memoryState = (MemoryModuleState) bombState.modules.FirstOrDefault(module => module.component == comp);
 				memoryState.stage = memory.CurrentStage + 1;
-				memoryState.displayNumber = int.Parse(memory.DisplayText.text);
-				int[] buttonValues = new int[4];
+				memoryState.displayNumber = memory.DisplayText.text;
+				string[] buttonValues = new string[4];
 				foreach (KeypadButton button in memory.Buttons)
 				{
-					buttonValues[button.ButtonIndex] = int.Parse(button.Text.text);
+					buttonValues[button.ButtonIndex] = button.Text.text;
 				}
 				memoryState.buttonNumbers = buttonValues;
 				memoryState.isSolved = isSolved;
@@ -1226,8 +1230,8 @@ public class MazeModuleState : BaseModuleState
 // --- Memory ---
 public class MemoryModuleState : BaseModuleState
 {
-	public int displayNumber { get; set; }
-	public int[] buttonNumbers { get; set; }
+	public string displayNumber { get; set; }
+	public string[] buttonNumbers { get; set; }
 	public int stage { get; set; }
 }
 
