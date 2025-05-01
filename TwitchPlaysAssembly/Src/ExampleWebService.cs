@@ -23,6 +23,7 @@ public class ExampleWebService : MonoBehaviour
 	KMMission mission;
 	GptntActions gptntActions;
 	GptntStates gptntStates;
+	BombState lastKnownBombState;
 	public volatile string gameState;
 
 	Thread workerThread;
@@ -93,18 +94,18 @@ public class ExampleWebService : MonoBehaviour
 			gptntActions.bomb = bomb;
 			gptntActions.InitRotation();
 			gameState = gameState.EqualsAny("Gameplay", "Lights On", "Lights Off") ? (on ? "Lights On" : "Lights Off") : gameState;
-
-			if (gameState.Equals("Lights On") && !isStarted)
+			if (!isStarted)
 			{
-				// when the first light turns on
-				gptntStates.readyToGive = true;
-				isStarted = true;
-				StartCoroutine(gptntBuffer.StartBuffer(0.25f));
-				gptntStates.GetInitialBombState();
-				InputInterceptor.DisableInput();
-				bomb.Bomb.GetComponent<Selectable>().Trigger();
-				gptntActions.Rotate180();
-				gptntActions.Rotate180();
+
+				if (gameState.Equals("Lights On"))
+				{
+					// when the first light turns on
+					gptntStates.readyToGive = true;
+					isStarted = true;
+					StartCoroutine(gptntBuffer.StartBuffer(0.25f));
+				 	lastKnownBombState = gptntStates.GetInitialBombState();
+					StartCoroutine(HoldBomb());
+				}
 			}
 		};
 
@@ -126,6 +127,12 @@ public class ExampleWebService : MonoBehaviour
 
 		tex = new Texture2D(width, height, TextureFormat.RGB24, false);
 		rect = new Rect(0, 0, width, height);
+	}
+
+	private IEnumerator HoldBomb()
+	{
+		yield return new WaitUntil(() => Time.timeScale > 0);
+		bomb.Bomb.GetComponent<Selectable>().Trigger();
 	}
 
 	private void Reset()
@@ -317,7 +324,7 @@ public class ExampleWebService : MonoBehaviour
 		}
 		if (Input.GetKeyDown(KeyCode.U))
 		{
-			LogBombPosition();
+			LogClick();
 		}
 
 		if (Input.GetKeyDown(KeyCode.O))
@@ -631,6 +638,16 @@ public class ExampleWebService : MonoBehaviour
 			MainThreadQueue.Enqueue(() =>
 			{
 				GptntDebug.Log("[Action] " + actionType);
+
+				try
+				{
+					lastKnownBombState = gptntStates.UpdateBombState();
+				}
+				catch
+				{
+					// Ignored - state may be invalid at current time
+				}
+
 				switch (actionType)
 				{
 					case "click":
@@ -738,18 +755,19 @@ public class ExampleWebService : MonoBehaviour
 		var waitHandle = new ManualResetEvent(false);
 		MainThreadQueue.Enqueue(() =>
 		{
+			BombState bombState = null;
 			try
 			{
-				responseString = JsonConvert.SerializeObject(gptntStates.UpdateBombState(), Formatting.Indented);
+				bombState = gptntStates.UpdateBombState();
 			}
 			catch(MemoryModuleException ex)
 			{
 				GptntDebug.Log("[DEBUG] caught exception: " + ex.ToString());
-				response.StatusCode = (int) HttpStatusCode.BadRequest;
-				responseString = "";
 			}
 			finally
 			{
+				lastKnownBombState = (bombState != null) ? bombState : lastKnownBombState;
+				responseString = JsonConvert.SerializeObject(lastKnownBombState, Formatting.Indented);
 				waitHandle.Set();
 			}
 		});
