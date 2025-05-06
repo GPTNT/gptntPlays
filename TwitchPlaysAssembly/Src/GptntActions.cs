@@ -2,7 +2,6 @@
 using System.Collections;
 using Assets.Scripts.Input;
 using UnityEngine;
-using UnityEngine.UI;
 
 public class GptntActions : MonoBehaviour
 {
@@ -20,6 +19,8 @@ public class GptntActions : MonoBehaviour
 	bool onBackFace = false;
 	bool onLeftSide = false;
 	bool onRightSide = false;
+
+	public Action OnZoomOut;
 
 	private void Start()
 	{
@@ -108,6 +109,7 @@ public class GptntActions : MonoBehaviour
 	{
 		if (isZoomedIn)
 		{
+			OnZoomOut?.Invoke();
 			string response = "Zooming out from: " + zoomedInto.name;
 			StartCoroutine(ZoomOutCoroutine());
 			return response;

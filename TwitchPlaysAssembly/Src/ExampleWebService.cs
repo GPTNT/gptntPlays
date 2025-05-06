@@ -49,6 +49,12 @@ public class ExampleWebService : MonoBehaviour
 
 	private Segmentation segmentation;
 
+	private const int MaxFrames = 12;
+	private const float FrameRateMS = 0.25f;
+
+	int screenWidth = 512;
+	int screenHeight = 384;
+
 	void Awake()
 	{
 		using (FileStream fs = new FileStream(sourceLogPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
@@ -57,8 +63,6 @@ public class ExampleWebService : MonoBehaviour
 		}
 		actions = new Queue<Action>();
 		bombInfo = GetComponent<KMBombInfo>();
-		bombInfo.OnBombExploded += OnBombExplodes;
-		bombInfo.OnBombSolved += OnBombDefused;
 		gameCommands = GetComponent<KMGameCommands>();
 		bombState = "NA";
 		spawn = new GameObject();
@@ -78,6 +82,8 @@ public class ExampleWebService : MonoBehaviour
 
 	private void Start()
 	{
+		bombInfo.OnBombExploded += OnGameEnd;
+		bombInfo.OnBombSolved += OnGameEnd;
 		timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
 		destinationLogPath = $"{timestamp}log.txt";
 		gptntStates.logFilePath = destinationLogPath;
@@ -89,7 +95,6 @@ public class ExampleWebService : MonoBehaviour
 			if (gameState.Equals("Setup"))
 			{
 				Reset();
-				
 			}
 		};
 		gameInfo.OnLightsChange += (bool on) => {
@@ -103,30 +108,21 @@ public class ExampleWebService : MonoBehaviour
 				// when the first light turns on
 				gptntStates.readyToGive = true;
 				isStarted = true;
-				StartCoroutine(gptntBuffer.StartBuffer(0.25f));
+				gptntBuffer.StartBuffer(FrameRateMS);
 				lastKnownBombState = gptntStates.GetInitialBombState();
 				StartCoroutine(HoldBomb());
 			}
 		};
 
-		int width = 512;
-		int height = 384;
-
 		string widthEnv = Environment.GetEnvironmentVariable("GAME_WIDTH");
 		string heightEnv = Environment.GetEnvironmentVariable("GAME_HEIGHT");
 
-		if (int.TryParse(widthEnv, out int parsedWidth)) width = parsedWidth;
-		if (int.TryParse(heightEnv, out int parsedHeight)) height = parsedHeight;
+		if (int.TryParse(widthEnv, out int parsedWidth)) screenWidth = parsedWidth;
+		if (int.TryParse(heightEnv, out int parsedHeight)) screenHeight = parsedHeight;
 
-		Screen.SetResolution(width, height, false);
-		gptntBuffer.Init(width, height, 10);
-		segmentation.Init(width, height);
-		
-		rawScreenRenderTexture = new RenderTexture(width, height, 24);
-		rawScreenRenderTexture.Create();
-
-		tex = new Texture2D(width, height, TextureFormat.RGB24, false);
-		rect = new Rect(0, 0, width, height);
+		Screen.SetResolution(screenWidth, screenHeight, false);
+		gptntBuffer.Init(screenHeight, screenHeight, MaxFrames);
+		segmentation.Init(screenWidth, screenHeight);
 	}
 
 	private IEnumerator HoldBomb()
@@ -135,13 +131,19 @@ public class ExampleWebService : MonoBehaviour
 		bomb.Bomb.GetComponent<Selectable>().Trigger();
 	}
 
+	private void OnGameEnd()
+	{
+		gptntBuffer.StopBuffer();
+		isStarted = false;
+	}
+
 	private void Reset()
 	{
 		actions.Clear();
 		gptntStates.readyToGive = false;
 		isStarted = false;
 		InputInterceptor.EnableInput();
-		gptntBuffer.StopBuffer();
+		gptntBuffer.ClearBuffer();
 	}
 	/*
 	Keys and what they do:
@@ -540,18 +542,8 @@ public class ExampleWebService : MonoBehaviour
 
 	private string HandleObservationBuffer(HttpListenerResponse response)
 	{
-		if(!gameState.Equals("Lights On"))
-		{
-			response.StatusCode = (int) HttpStatusCode.BadRequest;
-			return "Cannot get buffer in " + gameState + " state";
-		}
 
 		string segmentation = HandleSegmentation(response);
-		if (response.StatusCode != (int) HttpStatusCode.OK)
-		{
-			return segmentation;
-		}
-
 		ObservationPayload observation = gptntBuffer.GetBufferJSON();
 		observation.segmentation = segmentation;
 
@@ -717,7 +709,6 @@ public class ExampleWebService : MonoBehaviour
 
 	private string HandleZoomOut()
 	{
-		gptntStates.OnZoomOut();
 		return gptntActions.ZoomOut();
 	}
 
@@ -900,6 +891,7 @@ public class ExampleWebService : MonoBehaviour
 	private string HandleSetTimescale(HttpListenerRequest request)
 	{
 		string value = request.QueryString.Get("value");
+		MainThreadQueue.Enqueue(() => GptntDebug.Log("[TimeScale] value = " + value));
 		Time.timeScale = float.Parse(value);
 		return "Set timeScale to " + value;
 	}
@@ -914,7 +906,7 @@ public class ExampleWebService : MonoBehaviour
 	private string HandleTimeStep(HttpListenerRequest request)
 	{
 		// Start the coroutine to handle the time step
-		StartCoroutine(TimeStepCoroutine());
+		MainThreadQueue.Enqueue(() => StartCoroutine(TimeStepCoroutine()));
 		return "Paused after " + timeStepSize + " in-game milliseconds";
 	}
 	#endregion
@@ -923,7 +915,8 @@ public class ExampleWebService : MonoBehaviour
 	{
 		Time.timeScale = 1; // Unpause
 		yield return new WaitForSeconds(timeStepSize / 1000f);
-		Time.timeScale = 0; // Pause
+		if(isStarted)
+			Time.timeScale = 0; // Pause
 	}
 
 	private void SendResponse(HttpListenerRequest request ,HttpListenerResponse response, string responseString)

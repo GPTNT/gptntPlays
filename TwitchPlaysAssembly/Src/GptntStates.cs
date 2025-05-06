@@ -16,6 +16,7 @@ public class GptntStates : MonoBehaviour
 	public long lastPosition = 0;
 	public BombState bombState;
 	public ExampleWebService webService;
+	public GptntActions gptntActions;
 	TwitchBomb twitchBomb;
 	public bool readyToGive = false;
 	KMBombInfo bombInfo;
@@ -25,7 +26,9 @@ public class GptntStates : MonoBehaviour
 	{
 		bombInfo = GetComponent<KMBombInfo>();
 		webService = GetComponent<ExampleWebService>();
+		gptntActions = GetComponent<GptntActions>();
 
+		gptntActions.OnZoomOut += OnZoomOut;
 
 		bombInfo.OnBombExploded += () =>
 		{
@@ -707,6 +710,8 @@ public class GptntStates : MonoBehaviour
 		string gameState = webService.gameState;
 		bombState.isLightOn = gameState.Equals("Lights On");
 
+		bombState.bombSide = BombSide(gptntActions.bombRotationX, gptntActions.bombRotationZ);
+
 		try
 		{
 			bombState.currentStrikes = bomb.NumStrikes;
@@ -1091,7 +1096,39 @@ public class GptntStates : MonoBehaviour
 		return bombState;
 	}
 
-	public void OnZoomOut()
+	private string BombSide(float xRotation, float zRotation)
+	{
+		// Normalize the angles between 0 and 360
+		xRotation = NormalizeAngle(xRotation);
+		zRotation = NormalizeAngle(zRotation);
+
+		// Check for top/bottom tilt (looking up/down)
+		if (xRotation > 45f && xRotation < 135f)
+			return "bottom";  // Looking downward
+		if (xRotation > 225f && xRotation < 315f)
+			return "top";     // Looking upward
+
+		if (zRotation >= 315f || zRotation < 45f)
+			return "front";
+		if (zRotation >= 45f && zRotation < 135f)
+			return "right";
+		if (zRotation >= 135f && zRotation < 225f)
+			return "back";
+		if (zRotation >= 225f && zRotation < 315f)
+			return "left";
+
+		return "unknown";
+	}
+
+	private float NormalizeAngle(float angle)
+	{
+		angle %= 360f;
+		if (angle < 0f)
+			angle += 360f;
+		return angle;
+	}
+
+	private void OnZoomOut()
 	{
 		foreach (BaseModuleState moduleState in bombState.modules)
 		{
@@ -1265,8 +1302,6 @@ public class TimerModuleState
 	public bool onFront { get; set; }
 	public int index { get; set; }
 	public string name { get; set; }
-
-
 }
 
 // --- Needy Modules ---
@@ -1326,6 +1361,7 @@ public class BombState
 	public bool isDetonated { get; set; }
 	public bool isSolved { get; set; }
 	public bool isLightOn { get; set; }
+	public string bombSide { get; set; }
 	public TimerModuleState timerModule { get; set; }
 	public List<BaseWidgetState> widgets { get; set; }
 	public List<BaseModuleState> modules { get; set; }

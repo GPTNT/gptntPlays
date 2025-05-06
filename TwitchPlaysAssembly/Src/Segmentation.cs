@@ -37,6 +37,7 @@ public class Segmentation : MonoBehaviour
 		tex = new Texture2D(width, height);
 		rect = new Rect(0, 0, width, height);
 		if (!shader) GptntDebug.Log("Shader is null");
+		
 	}
 
 	public IEnumerator Capture(GameObject[] objects, Action<byte[]> callback)
@@ -138,7 +139,6 @@ public class Segmentation : MonoBehaviour
 		childCount = venn.childCount;
 		for (int i = childCount - 1; i > childCount - 7; i--)
 		{
-			// TODO: Go one level lower such that i get all the children of these gameojects - Some might not have any!
 			Transform child = venn.GetChild(i);
 			foreach (Transform grandChild in child)
 			{
