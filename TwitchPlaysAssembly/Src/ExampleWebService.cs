@@ -8,6 +8,7 @@ using System.Collections;
 using Assets.Scripts.Missions;
 using System.IO;
 using Newtonsoft.Json;
+using System.Reflection;
 
 public class ExampleWebService : MonoBehaviour
 {
@@ -49,7 +50,7 @@ public class ExampleWebService : MonoBehaviour
 
 	private Segmentation segmentation;
 
-	private const int MaxFrames = 12;
+	private const int MaxFrames = 16;
 	private const float FrameRateMS = 0.25f;
 
 	int screenWidth = 512;
@@ -326,7 +327,7 @@ public class ExampleWebService : MonoBehaviour
 		}
 		if (Input.GetKeyDown(KeyCode.U))
 		{
-			LogBombPosition();
+			ResetSimon();
 		}
 
 		if (Input.GetKeyDown(KeyCode.O))
@@ -340,28 +341,25 @@ public class ExampleWebService : MonoBehaviour
 		#endregion
 	}
 
-	private void LogBombPosition()
+	private void PrintMorse()
 	{
-		bool hasParent = bomb.Bomb.transform.parent != null;
-		Transform bombTransform = bomb.Bomb.transform;
+		GptntDebug.Log("Morse code is: ");
+		MorseCodeComponent morse = FindObjectOfType<MorseCodeComponent>();
+		GptntDebug.Log("Dot Length" + morse.DotLength.ToString());
+	}
 
-		while (hasParent)
-		{
-			GptntDebug.Log("Has parent");
-			bombTransform = bombTransform.parent;
-			hasParent = bombTransform.parent != null;
-		}
-
-		GptntDebug.Log(bombTransform.name);
-		float x = bombTransform.position.x;
-		float y = bombTransform.position.y;
-		float z = bombTransform.position.z;
-		GptntDebug.Log($"x: {x}, y: {y}, z: {z}");
-		GptntDebug.Log("Newer");
-		x = 0.1017131f;
-		y = 1.090481f;
-		z = -0.4161007f;
-		bombTransform.position = new Vector3(x, y, z);
+	private void ResetSimon()
+	{
+		GptntDebug.Log("Resetting Simon");
+		SimonComponent simon = FindObjectOfType<SimonComponent>();
+		FieldInfo seq = typeof(SimonComponent).GetField("currentSequence", BindingFlags.NonPublic | BindingFlags.Instance);
+		FieldInfo progress = typeof(SimonComponent).GetField("solveProgress", BindingFlags.NonPublic | BindingFlags.Instance);
+		int [] newSequence = {1,1,1,1,1};
+		seq.SetValue(simon, newSequence);
+		progress.SetValue(simon, 4);
+		simon.StopAllCoroutines();
+		simon.PlaySequenceDelay = 1f;
+		simon.StartCoroutine("PlaySequence", simon.PlaySequenceDelay);
 	}
 
 	private void LogClick()
@@ -822,26 +820,8 @@ public class ExampleWebService : MonoBehaviour
 
 	private string HandleScreenshot(HttpListenerResponse response)
 	{
-		byte[] imageBytes = null;
-		var waitHandle = new ManualResetEvent(false);
-
-		// Run this on the Unity main thread
-		MainThreadQueue.Enqueue(() =>
-		{
-			// StartCoroutine must be called on the main thread
-			StartCoroutine(GetScreenshot((img) =>
-			{
-				imageBytes = img;
-				waitHandle.Set();
-			}));
-		});
-
-		// Wait up to 500ms for the screenshot to be captured
-		if (!waitHandle.WaitOne(500))
-		{
-			response.StatusCode = (int) HttpStatusCode.RequestTimeout;
-			return "Failed to take screenshot";
-		}
+		byte[] imageBytes;
+		imageBytes = GetScreenshot();
 
 		if(imageBytes == null || imageBytes.Length == 0)
 		{
@@ -849,7 +829,6 @@ public class ExampleWebService : MonoBehaviour
 			return "Empty screenshot";
 		}
 
-		response.ContentType = "image/png";
 		return Convert.ToBase64String(imageBytes);
 	}
 	
@@ -1083,9 +1062,9 @@ public class ExampleWebService : MonoBehaviour
 		return listString;
 	}
 
-	protected IEnumerator GetScreenshot(Action<byte[]> callback)
+	protected byte[] GetScreenshot()
 	{
-		return GetScreenshotViaRenderTexture(callback);
+		return gptntBuffer.GetLastFrame();
 	}
 
 	protected IEnumerator GetScreenshotViaRenderTexture(Action<byte[]> callback)

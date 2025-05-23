@@ -331,7 +331,13 @@ public class GptntStates : MonoBehaviour
 				simonState.name = "Simon";
 				simonState.component = comp;
 				bombState.modules.Add(simonState);
-				comp.OnStrike += (_) => { bombState.strikes.Add(simonState.name); return false; };
+				comp.OnStrike += (_) => {
+					bombState.strikes.Add(simonState.name);
+					simon.PlaySequenceDelay = 1f;
+					simon.StopAllCoroutines();
+					simon.StartCoroutine("PlaySequence", simon.PlaySequenceDelay);
+					return false;
+				};
 
 			}
 			else if (comp.ComponentType == ComponentTypeEnum.Wires)

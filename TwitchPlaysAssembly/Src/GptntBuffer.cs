@@ -65,6 +65,11 @@ public class GptntBuffer : MonoBehaviour
 		return new ObservationPayload { frames = frameStrings };
 	}
 
+	public byte[] GetLastFrame()
+	{
+		return textureBuffer.GetLastFrame().EncodeToPNG();
+	}
+
 	private IEnumerator BufferCoroutine(float frequency)
 	{
 		if (isRecording) yield break;
@@ -79,7 +84,6 @@ public class GptntBuffer : MonoBehaviour
 	}
 
 	// Helper functions
-
 	private void DuplicateCamera()
 	{
 		if (screenshotObject) return;
