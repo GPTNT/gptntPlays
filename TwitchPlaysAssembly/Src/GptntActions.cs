@@ -2,7 +2,6 @@
 using System.Collections;
 using Assets.Scripts.Input;
 using UnityEngine;
-using UnityEngine.UI;
 
 public class GptntActions : MonoBehaviour
 {
@@ -20,6 +19,8 @@ public class GptntActions : MonoBehaviour
 	bool onBackFace = false;
 	bool onLeftSide = false;
 	bool onRightSide = false;
+
+	public Action OnZoomOut;
 
 	private void Start()
 	{
@@ -79,10 +80,12 @@ public class GptntActions : MonoBehaviour
 			}
 			else
 			{
+				SimonComponent simon = CheckSimonButton(selectable);
 				selectable.HandleInteract();
 				if (selectable.HasInteractEnded)
 					lastUsedSelectable = selectable;
 				selectable.SetHighlight(false);
+				if(simon) simon.PlaySequenceDelay = 1f; // Set to the time we want. 
 			}
 			return "clicked on: " + selectable.name;
 		}
@@ -108,6 +111,7 @@ public class GptntActions : MonoBehaviour
 	{
 		if (isZoomedIn)
 		{
+			OnZoomOut?.Invoke();
 			string response = "Zooming out from: " + zoomedInto.name;
 			StartCoroutine(ZoomOutCoroutine());
 			return response;
@@ -127,7 +131,6 @@ public class GptntActions : MonoBehaviour
 	private IEnumerator ZoomInCoroutine(Selectable selectable)
 	{
 		yield return new WaitUntil(() => Time.timeScale > 0);
-		GptntDebug.Log("[DEBUG] Zooming out from the coroutine");
 		FloatingHoldable floating = KTInputManager.Instance.SelectableManager.GetCurrentFloatingHoldable();
 
 		KTInputManager.Instance.SelectableManager.UnlockSelection();
@@ -144,6 +147,35 @@ public class GptntActions : MonoBehaviour
 		lastUsedSelectable = selectable;
 		isZoomedIn = true;
 		zoomedInto = selectable;
+		CheckSimonModule(selectable);
+	}
+
+	// If we click a simon button, increase the time it takes before it resets back to default
+	private SimonComponent CheckSimonButton(Selectable selectable)
+	{
+		SimonComponent simon = selectable.Parent.GetComponent<SimonComponent>();
+		if (simon == null)
+			return null;
+
+		GptntDebug.Log("[Simon] Resetting Simon");
+		simon.PlaySequenceDelay = 5f; // Reset back to default time
+		// change to 5
+		// click
+		// chaneg to 1 if strike
+		return simon;
+	}
+
+	// Zooming into smion says
+	private void CheckSimonModule(Selectable selectable)
+	{
+		SimonComponent simon = selectable.GetComponent<SimonComponent>();
+		if (simon == null)
+			return;
+		GptntDebug.Log("Reset simon to 1f");
+		simon.PlaySequenceDelay = 1f;
+		simon.PassSequenceDelay = 1f;
+		simon.StopAllCoroutines();
+		simon.StartCoroutine("PlaySequence", simon.PlaySequenceDelay);
 	}
 
 	#endregion

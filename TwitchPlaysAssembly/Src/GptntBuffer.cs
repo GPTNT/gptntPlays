@@ -18,27 +18,39 @@ public class GptntBuffer : MonoBehaviour
 	private TextureRingBuffer textureBuffer;
 	private bool isRecording = false;
 
+	// Coroutine
+	private Coroutine bufferCoroutine;
+
 
 	public void Init(int width, int height, int bufferLength)
 	{
 		screenshotRT = new RenderTexture(width, height, 24);
 		textureBuffer = new TextureRingBuffer(bufferLength);
 		GptntDebug.Log("[DEBUG] Initialized the Buffer");
-		DuplicateCamera();
 	}
 
-	public IEnumerator StartBuffer(float frequency)
+	public void StartBuffer(float frequency)
 	{
-		if (isRecording) yield break;
-		isRecording = true;
-		var wait = new WaitForSeconds(frequency);
-		while (isRecording)
-		{
-			GptntDebug.Log("[DEBUG] Adding frame");
-			yield return new WaitForEndOfFrame();
-			textureBuffer.Add(ConvertRenderTextureToTexture2D(screenshotRT));
-			yield return wait;
-		}
+		DuplicateCamera();
+		bufferCoroutine = StartCoroutine(BufferCoroutine(frequency));
+		GptntDebug.Log("[Buffer] Started the buffer");
+	}
+
+	public void StopBuffer()
+	{
+		isRecording = false;
+		if (bufferCoroutine == null)
+			return;
+		StopCoroutine(bufferCoroutine);
+		bufferCoroutine = null;
+		GptntDebug.Log("[Buffer] Stopped the buffer");
+	}
+
+	public void ClearBuffer()
+	{
+		StopBuffer();
+		textureBuffer.Clear();
+		GptntDebug.Log("[Buffer] Cleared the buffer");
 	}
 
 	public ObservationPayload GetBufferJSON()
@@ -53,14 +65,25 @@ public class GptntBuffer : MonoBehaviour
 		return new ObservationPayload { frames = frameStrings };
 	}
 
-	public void StopBuffer()
+	public byte[] GetLastFrame()
 	{
-		isRecording = false;
-		textureBuffer.Reset();
+		return textureBuffer.GetLastFrame().EncodeToPNG();
+	}
+
+	private IEnumerator BufferCoroutine(float frequency)
+	{
+		if (isRecording) yield break;
+		isRecording = true;
+		var wait = new WaitForSeconds(frequency);
+		while (isRecording)
+		{
+			yield return new WaitForEndOfFrame();
+			textureBuffer.Add(ConvertRenderTextureToTexture2D(screenshotRT));
+			yield return wait;
+		}
 	}
 
 	// Helper functions
-
 	private void DuplicateCamera()
 	{
 		if (screenshotObject) return;
@@ -77,7 +100,7 @@ public class GptntBuffer : MonoBehaviour
 
 		// duplicate game object
 		screenshotObject = new GameObject();
-		screenshotObject.name = "ScreenshotCam";
+		screenshotObject.name = "ScreenshotCamera";
 		screenshotObject.transform.SetParent(mainCam.transform);
 		screenshotObject.transform.localPosition = Vector3.zero;
 		screenshotObject.transform.localRotation = Quaternion.identity;
@@ -95,11 +118,13 @@ public class GptntBuffer : MonoBehaviour
 		screenshotCam.targetTexture = screenshotRT;
 	}
 
+	// Convert a RenderTexture to a Texture2D
 	private Texture2D ConvertRenderTextureToTexture2D(RenderTexture rt)
 	{
-		Texture2D tex = new Texture2D(rt.width, rt.height, TextureFormat.RGB24, false);
 		RenderTexture.active = rt;
-		tex.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0);
+		Texture2D tex = new Texture2D(rt.width, rt.height);
+		Rect rect = new Rect(0, 0, rt.width, rt.height);
+		tex.ReadPixels(rect, 0, 0);
 		tex.Apply();
 		RenderTexture.active = null;
 		return tex;
@@ -149,7 +174,7 @@ public class TextureRingBuffer
 		return buffer[lastIndex];
 	}
 
-	public void Reset()
+	public void Clear()
 	{
 		foreach (Texture2D item in buffer)
 		{

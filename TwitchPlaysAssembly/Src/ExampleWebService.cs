@@ -8,6 +8,7 @@ using System.Collections;
 using Assets.Scripts.Missions;
 using System.IO;
 using Newtonsoft.Json;
+using System.Reflection;
 
 public class ExampleWebService : MonoBehaviour
 {
@@ -49,6 +50,12 @@ public class ExampleWebService : MonoBehaviour
 
 	private Segmentation segmentation;
 
+	private const int MaxFrames = 16;
+	private const float FrameRateMS = 0.25f;
+
+	int screenWidth = 512;
+	int screenHeight = 384;
+
 	void Awake()
 	{
 		using (FileStream fs = new FileStream(sourceLogPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
@@ -57,8 +64,6 @@ public class ExampleWebService : MonoBehaviour
 		}
 		actions = new Queue<Action>();
 		bombInfo = GetComponent<KMBombInfo>();
-		bombInfo.OnBombExploded += OnBombExplodes;
-		bombInfo.OnBombSolved += OnBombDefused;
 		gameCommands = GetComponent<KMGameCommands>();
 		bombState = "NA";
 		spawn = new GameObject();
@@ -78,6 +83,8 @@ public class ExampleWebService : MonoBehaviour
 
 	private void Start()
 	{
+		bombInfo.OnBombExploded += OnGameEnd;
+		bombInfo.OnBombSolved += OnGameEnd;
 		timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
 		destinationLogPath = $"{timestamp}log.txt";
 		gptntStates.logFilePath = destinationLogPath;
@@ -89,7 +96,6 @@ public class ExampleWebService : MonoBehaviour
 			if (gameState.Equals("Setup"))
 			{
 				Reset();
-				
 			}
 		};
 		gameInfo.OnLightsChange += (bool on) => {
@@ -103,30 +109,21 @@ public class ExampleWebService : MonoBehaviour
 				// when the first light turns on
 				gptntStates.readyToGive = true;
 				isStarted = true;
-				StartCoroutine(gptntBuffer.StartBuffer(0.25f));
+				gptntBuffer.StartBuffer(FrameRateMS);
 				lastKnownBombState = gptntStates.GetInitialBombState();
 				StartCoroutine(HoldBomb());
 			}
 		};
 
-		int width = 512;
-		int height = 384;
-
 		string widthEnv = Environment.GetEnvironmentVariable("GAME_WIDTH");
 		string heightEnv = Environment.GetEnvironmentVariable("GAME_HEIGHT");
 
-		if (int.TryParse(widthEnv, out int parsedWidth)) width = parsedWidth;
-		if (int.TryParse(heightEnv, out int parsedHeight)) height = parsedHeight;
+		if (int.TryParse(widthEnv, out int parsedWidth)) screenWidth = parsedWidth;
+		if (int.TryParse(heightEnv, out int parsedHeight)) screenHeight = parsedHeight;
 
-		Screen.SetResolution(width, height, false);
-		gptntBuffer.Init(width, height, 10);
-		segmentation.Init(width, height);
-		
-		rawScreenRenderTexture = new RenderTexture(width, height, 24);
-		rawScreenRenderTexture.Create();
-
-		tex = new Texture2D(width, height, TextureFormat.RGB24, false);
-		rect = new Rect(0, 0, width, height);
+		Screen.SetResolution(screenWidth, screenHeight, false);
+		gptntBuffer.Init(screenHeight, screenHeight, MaxFrames);
+		segmentation.Init(screenWidth, screenHeight);
 	}
 
 	private IEnumerator HoldBomb()
@@ -135,13 +132,19 @@ public class ExampleWebService : MonoBehaviour
 		bomb.Bomb.GetComponent<Selectable>().Trigger();
 	}
 
+	private void OnGameEnd()
+	{
+		gptntBuffer.StopBuffer();
+		isStarted = false;
+	}
+
 	private void Reset()
 	{
 		actions.Clear();
 		gptntStates.readyToGive = false;
 		isStarted = false;
 		InputInterceptor.EnableInput();
-		gptntBuffer.StopBuffer();
+		gptntBuffer.ClearBuffer();
 	}
 	/*
 	Keys and what they do:
@@ -324,7 +327,7 @@ public class ExampleWebService : MonoBehaviour
 		}
 		if (Input.GetKeyDown(KeyCode.U))
 		{
-			LogBombPosition();
+			ResetSimon();
 		}
 
 		if (Input.GetKeyDown(KeyCode.O))
@@ -338,28 +341,25 @@ public class ExampleWebService : MonoBehaviour
 		#endregion
 	}
 
-	private void LogBombPosition()
+	private void PrintMorse()
 	{
-		bool hasParent = bomb.Bomb.transform.parent != null;
-		Transform bombTransform = bomb.Bomb.transform;
+		GptntDebug.Log("Morse code is: ");
+		MorseCodeComponent morse = FindObjectOfType<MorseCodeComponent>();
+		GptntDebug.Log("Dot Length" + morse.DotLength.ToString());
+	}
 
-		while (hasParent)
-		{
-			GptntDebug.Log("Has parent");
-			bombTransform = bombTransform.parent;
-			hasParent = bombTransform.parent != null;
-		}
-
-		GptntDebug.Log(bombTransform.name);
-		float x = bombTransform.position.x;
-		float y = bombTransform.position.y;
-		float z = bombTransform.position.z;
-		GptntDebug.Log($"x: {x}, y: {y}, z: {z}");
-		GptntDebug.Log("Newer");
-		x = 0.1017131f;
-		y = 1.090481f;
-		z = -0.4161007f;
-		bombTransform.position = new Vector3(x, y, z);
+	private void ResetSimon()
+	{
+		GptntDebug.Log("Resetting Simon");
+		SimonComponent simon = FindObjectOfType<SimonComponent>();
+		FieldInfo seq = typeof(SimonComponent).GetField("currentSequence", BindingFlags.NonPublic | BindingFlags.Instance);
+		FieldInfo progress = typeof(SimonComponent).GetField("solveProgress", BindingFlags.NonPublic | BindingFlags.Instance);
+		int [] newSequence = {1,1,1,1,1};
+		seq.SetValue(simon, newSequence);
+		progress.SetValue(simon, 4);
+		simon.StopAllCoroutines();
+		simon.PlaySequenceDelay = 1f;
+		simon.StartCoroutine("PlaySequence", simon.PlaySequenceDelay);
 	}
 
 	private void LogClick()
@@ -540,18 +540,8 @@ public class ExampleWebService : MonoBehaviour
 
 	private string HandleObservationBuffer(HttpListenerResponse response)
 	{
-		if(!gameState.Equals("Lights On"))
-		{
-			response.StatusCode = (int) HttpStatusCode.BadRequest;
-			return "Cannot get buffer in " + gameState + " state";
-		}
 
 		string segmentation = HandleSegmentation(response);
-		if (response.StatusCode != (int) HttpStatusCode.OK)
-		{
-			return segmentation;
-		}
-
 		ObservationPayload observation = gptntBuffer.GetBufferJSON();
 		observation.segmentation = segmentation;
 
@@ -717,7 +707,6 @@ public class ExampleWebService : MonoBehaviour
 
 	private string HandleZoomOut()
 	{
-		gptntStates.OnZoomOut();
 		return gptntActions.ZoomOut();
 	}
 
@@ -831,26 +820,8 @@ public class ExampleWebService : MonoBehaviour
 
 	private string HandleScreenshot(HttpListenerResponse response)
 	{
-		byte[] imageBytes = null;
-		var waitHandle = new ManualResetEvent(false);
-
-		// Run this on the Unity main thread
-		MainThreadQueue.Enqueue(() =>
-		{
-			// StartCoroutine must be called on the main thread
-			StartCoroutine(GetScreenshot((img) =>
-			{
-				imageBytes = img;
-				waitHandle.Set();
-			}));
-		});
-
-		// Wait up to 500ms for the screenshot to be captured
-		if (!waitHandle.WaitOne(500))
-		{
-			response.StatusCode = (int) HttpStatusCode.RequestTimeout;
-			return "Failed to take screenshot";
-		}
+		byte[] imageBytes;
+		imageBytes = GetScreenshot();
 
 		if(imageBytes == null || imageBytes.Length == 0)
 		{
@@ -858,7 +829,6 @@ public class ExampleWebService : MonoBehaviour
 			return "Empty screenshot";
 		}
 
-		response.ContentType = "image/png";
 		return Convert.ToBase64String(imageBytes);
 	}
 	
@@ -900,6 +870,7 @@ public class ExampleWebService : MonoBehaviour
 	private string HandleSetTimescale(HttpListenerRequest request)
 	{
 		string value = request.QueryString.Get("value");
+		MainThreadQueue.Enqueue(() => GptntDebug.Log("[TimeScale] value = " + value));
 		Time.timeScale = float.Parse(value);
 		return "Set timeScale to " + value;
 	}
@@ -914,7 +885,7 @@ public class ExampleWebService : MonoBehaviour
 	private string HandleTimeStep(HttpListenerRequest request)
 	{
 		// Start the coroutine to handle the time step
-		StartCoroutine(TimeStepCoroutine());
+		MainThreadQueue.Enqueue(() => StartCoroutine(TimeStepCoroutine()));
 		return "Paused after " + timeStepSize + " in-game milliseconds";
 	}
 	#endregion
@@ -923,7 +894,8 @@ public class ExampleWebService : MonoBehaviour
 	{
 		Time.timeScale = 1; // Unpause
 		yield return new WaitForSeconds(timeStepSize / 1000f);
-		Time.timeScale = 0; // Pause
+		if(isStarted)
+			Time.timeScale = 0; // Pause
 	}
 
 	private void SendResponse(HttpListenerRequest request ,HttpListenerResponse response, string responseString)
@@ -1090,9 +1062,9 @@ public class ExampleWebService : MonoBehaviour
 		return listString;
 	}
 
-	protected IEnumerator GetScreenshot(Action<byte[]> callback)
+	protected byte[] GetScreenshot()
 	{
-		return GetScreenshotViaRenderTexture(callback);
+		return gptntBuffer.GetLastFrame();
 	}
 
 	protected IEnumerator GetScreenshotViaRenderTexture(Action<byte[]> callback)
