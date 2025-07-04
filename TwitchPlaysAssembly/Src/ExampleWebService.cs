@@ -9,6 +9,7 @@ using Assets.Scripts.Missions;
 using System.IO;
 using Newtonsoft.Json;
 using System.Reflection;
+using Org.BouncyCastle.Asn1.X500;
 
 public class ExampleWebService : MonoBehaviour
 {
@@ -77,7 +78,7 @@ public class ExampleWebService : MonoBehaviour
 		gptntActions = GetComponent<GptntActions>();
 		gptntStates = GetComponent<GptntStates>();
 
-		
+
 		segmentation = GetComponent<Segmentation>();
 	}
 
@@ -98,7 +99,8 @@ public class ExampleWebService : MonoBehaviour
 				Reset();
 			}
 		};
-		gameInfo.OnLightsChange += (bool on) => {
+		gameInfo.OnLightsChange += (bool on) =>
+		{
 			bomb = FindObjectOfType<TwitchBomb>();
 			gptntActions.bomb = bomb;
 			gptntActions.InitRotation();
@@ -175,7 +177,7 @@ public class ExampleWebService : MonoBehaviour
 			action();
 		}
 
-		 #region debug with clicking a key 
+		#region debug with clicking a key 
 
 		// A list of all bomb components in order, including empties and the timer
 		if (Input.GetKeyDown(KeyCode.Space))
@@ -327,13 +329,15 @@ public class ExampleWebService : MonoBehaviour
 		}
 		if (Input.GetKeyDown(KeyCode.U))
 		{
-			ResetSimon();
+			SimonComponent simon = FindObjectOfType<SimonComponent>();
+			GptntDebug.Log("[Simon] Note time: " + simon.NoteTime);
 		}
 
 		if (Input.GetKeyDown(KeyCode.O))
 		{
 			string path = Path.Combine(Application.persistentDataPath, "screenshot.png");
-			StartCoroutine(GetScreenshotViaRenderTexture((bytes) => {
+			StartCoroutine(GetScreenshotViaRenderTexture((bytes) =>
+			{
 				File.WriteAllBytes(path, bytes);
 			}));
 			SegmentSelectables(GetActiveSelectables().ToArray());
@@ -354,7 +358,7 @@ public class ExampleWebService : MonoBehaviour
 		SimonComponent simon = FindObjectOfType<SimonComponent>();
 		FieldInfo seq = typeof(SimonComponent).GetField("currentSequence", BindingFlags.NonPublic | BindingFlags.Instance);
 		FieldInfo progress = typeof(SimonComponent).GetField("solveProgress", BindingFlags.NonPublic | BindingFlags.Instance);
-		int [] newSequence = {1,1,1,1,1};
+		int[] newSequence = { 1, 1, 1, 1, 1 };
 		seq.SetValue(simon, newSequence);
 		progress.SetValue(simon, 4);
 		simon.StopAllCoroutines();
@@ -380,16 +384,17 @@ public class ExampleWebService : MonoBehaviour
 			objects[i] = activeSelectables[i].gameObject;
 		}
 
-		StartCoroutine(segmentation.Capture(objects, (bytes) => {
+		StartCoroutine(segmentation.Capture(objects, (bytes) =>
+		{
 			File.WriteAllBytes(path, bytes);
-			}));
+		}));
 	}
 
 	private void PrintActiveSelectables()
 	{
 		GptntDebug.Log("Parent: " + KTInputManager.Instance.SelectableManager.GetCurrentParent().name);
 		GptntDebug.Log("Selectables: ");
-		foreach(Selectable selectable in GetActiveSelectables())
+		foreach (Selectable selectable in GetActiveSelectables())
 		{
 			string selectableName = selectable.name;
 			GptntDebug.Log(selectableName);
@@ -410,7 +415,7 @@ public class ExampleWebService : MonoBehaviour
 		{
 			if (!(gptntActions.bombRotationX == 0f && gptntActions.bombRotationZ.EqualsAny(0f, 180f)))
 				return activeSelectables;
-				
+
 			foreach (BombComponent component in bomb.Bomb.BombComponents)
 			{
 				if (!component.ComponentType.EqualsAny(ComponentTypeEnum.Empty, ComponentTypeEnum.Timer))
@@ -418,8 +423,9 @@ public class ExampleWebService : MonoBehaviour
 					Vector3 componentUp = component.transform.up;
 					Vector3 bombUp = bomb.Bomb.transform.up;
 					float angleBetween = Vector3.Angle(componentUp, bombUp);
-					bool isFront =  angleBetween < 90.0f;
-					if(isFront == parentName.Equals("FrontFace")){
+					bool isFront = angleBetween < 90.0f;
+					if (isFront == parentName.Equals("FrontFace"))
+					{
 						activeSelectables.Add(component.GetComponent<Selectable>());
 					}
 				}
@@ -471,7 +477,7 @@ public class ExampleWebService : MonoBehaviour
 
 		string responseString;
 		string path = request.Url.AbsolutePath.ToLowerInvariant();
-		if(!path.Equals("/health")) GptntDebug.Log("[HTTP Request] " + path);
+		if (!path.Equals("/health")) GptntDebug.Log("[HTTP Request] " + path);
 		// Route handling with switch
 		switch (path)
 		{
@@ -517,6 +523,9 @@ public class ExampleWebService : MonoBehaviour
 			case "/state":
 				responseString = HandleGetState(response);
 				break;
+			case "/random":
+				responseString = HandleRandomSolve(request);
+				break;
 			default:
 				responseString = "Unknown route.";
 				break;
@@ -526,9 +535,35 @@ public class ExampleWebService : MonoBehaviour
 		SendResponse(request, response, responseString);
 	}
 
+	private string HandleRandomSolve(HttpListenerRequest request)
+	{
+		string responseString = "";
+		int numModulesToSolve = int.Parse(request.QueryString.Get("value"));
+		// Get the modules
+
+		var waitHandle = new ManualResetEvent(false);
+		MainThreadQueue.Enqueue(() =>
+		{
+			GptntDebug.Log("[RandomSolve] value = " + numModulesToSolve);
+			List<TwitchModule> modules = FindObjectsOfType<TwitchModule>().Where(x => !x.Solved).ToList();
+			System.Random rnd = new System.Random();
+			// Choose random number of module between 1 and max-1
+			List<TwitchModule> modulesToSolve = modules.OrderBy(x => rnd.Next()).Take(numModulesToSolve).ToList();
+			foreach (var module in modulesToSolve)
+			{
+				module.Solver.SolveSilently();
+				responseString += " " + module.name;
+			}
+			waitHandle.Set();
+		});
+
+		waitHandle.WaitOne();
+		return responseString;
+	}
+
 	private string HandleReset()
 	{
-		if(!gameState.Equals("Setup"))
+		if (!gameState.Equals("Setup"))
 			SceneManager.Instance.ReturnToSetupState();
 		return "Nuh uh";
 	}
@@ -553,7 +588,7 @@ public class ExampleWebService : MonoBehaviour
 		string screenshot = HandleScreenshot(response);
 		string segmentation = HandleSegmentation(response);
 
-		if(response.StatusCode != (int) HttpStatusCode.OK)
+		if (response.StatusCode != (int) HttpStatusCode.OK)
 		{
 			return screenshot + " " + segmentation;
 		}
@@ -581,7 +616,7 @@ public class ExampleWebService : MonoBehaviour
 		string json = "{"
 		+ "\"screenshot\":\"" + EscapeJsonString(screenshot) + "\","
 		+ "\"segmentation\":\"" + EscapeJsonString(segmentation) + "\""
-		+ "\"state\":\"" + state +"\""
+		+ "\"state\":\"" + state + "\""
 		+ "}";
 
 		response.ContentType = "application/json";
@@ -602,7 +637,7 @@ public class ExampleWebService : MonoBehaviour
 
 	private string HandleAction(HttpListenerRequest request, HttpListenerResponse response)
 	{
-		if(!gameState.EqualsAny("Lights On", "Lights Off") || !isStarted)
+		if (!gameState.EqualsAny("Lights On", "Lights Off") || !isStarted)
 		{
 			response.StatusCode = (int) HttpStatusCode.BadRequest;
 			return "Cannot send action to the game in " + gameState + " state";
@@ -612,7 +647,7 @@ public class ExampleWebService : MonoBehaviour
 
 		responseString = HandleActionOnMainThread(request, response);
 
-		if(response.StatusCode != (int) HttpStatusCode.OK)
+		if (response.StatusCode != (int) HttpStatusCode.OK)
 		{
 			return responseString;
 		}
@@ -625,40 +660,40 @@ public class ExampleWebService : MonoBehaviour
 		string actionType = request.QueryString.Get("action");
 		string responseString = null;
 		var waitHandle = new ManualResetEvent(false);
-			MainThreadQueue.Enqueue(() =>
+		MainThreadQueue.Enqueue(() =>
+		{
+			GptntDebug.Log("[Action] " + actionType);
+
+			try
 			{
-				GptntDebug.Log("[Action] " + actionType);
-
-				try
-				{
-					lastKnownBombState = gptntStates.UpdateBombState();
-				}
-				catch
-				{
-					// Ignored - state may be invalid at current time
-				}
-
-				switch (actionType)
-				{
-					case "click":
-						responseString = HandleClick(request, response);
-						break;
-					case "hold":
-						responseString = HandleHold(request, response);
-						break;
-					case "release":
-						responseString = HandleClickEnd();
-						break;
-					case "out":
-						responseString = HandleZoomOut();
-						break;
-					default:
-						responseString = HandleRotate(request);
-						break;
-				}
-				waitHandle.Set();
+				lastKnownBombState = gptntStates.UpdateBombState();
 			}
-		);
+			catch
+			{
+				// Ignored - state may be invalid at current time
+			}
+
+			switch (actionType)
+			{
+				case "click":
+					responseString = HandleClick(request, response);
+					break;
+				case "hold":
+					responseString = HandleHold(request, response);
+					break;
+				case "release":
+					responseString = HandleClickEnd();
+					break;
+				case "out":
+					responseString = HandleZoomOut();
+					break;
+				default:
+					responseString = HandleRotate(request);
+					break;
+			}
+			waitHandle.Set();
+		}
+	);
 		waitHandle.WaitOne();
 		return responseString;
 	}
@@ -738,7 +773,7 @@ public class ExampleWebService : MonoBehaviour
 			response.StatusCode = (int) HttpStatusCode.BadRequest;
 			return "Cannot get bomb state in " + gameState + " state";
 		}
-			
+
 
 		string responseString = null;
 		var waitHandle = new ManualResetEvent(false);
@@ -749,8 +784,9 @@ public class ExampleWebService : MonoBehaviour
 			{
 				bombState = gptntStates.UpdateBombState();
 			}
-			catch(MemoryModuleException ex)
+			catch (MemoryModuleException ex)
 			{
+				StartCoroutine(GetMemoryState());
 				GptntDebug.Log("[DEBUG] caught exception: " + ex.ToString());
 			}
 			finally
@@ -772,6 +808,15 @@ public class ExampleWebService : MonoBehaviour
 		return responseString;
 
 	}
+
+	private IEnumerator GetMemoryState()
+	{
+		// Keep trying to get the state
+		yield return new WaitUntil(() => gptntStates.badModule.IsInputValid);
+		GptntDebug.Log("[Memory] Updated the bomb state.");
+		lastKnownBombState = gptntStates.UpdateBombState();
+	}
+
 	private string HandleRotate(HttpListenerRequest request)
 	{
 		string direction = request.QueryString.Get("action");
@@ -785,12 +830,12 @@ public class ExampleWebService : MonoBehaviour
 			StartCoroutine(gptntActions.Rotate90(direction));
 			GptntDebug.Log("Handle the fucking rotate to the left");
 			return "flipped bomb left by 90 degrees";
-		} 
+		}
 		else if (direction.Equals("right"))
 		{
 			StartCoroutine(gptntActions.Rotate90(direction));
 			return "flipped bomb right by 90 degrees";
-		} 
+		}
 		else if (direction.Equals("up"))
 		{
 			StartCoroutine(gptntActions.Rotate90(direction));
@@ -823,7 +868,7 @@ public class ExampleWebService : MonoBehaviour
 		byte[] imageBytes;
 		imageBytes = GetScreenshot();
 
-		if(imageBytes == null || imageBytes.Length == 0)
+		if (imageBytes == null || imageBytes.Length == 0)
 		{
 			response.StatusCode = (int) HttpStatusCode.InternalServerError;
 			return "Empty screenshot";
@@ -831,11 +876,11 @@ public class ExampleWebService : MonoBehaviour
 
 		return Convert.ToBase64String(imageBytes);
 	}
-	
+
 	private string HandleSegmentation(HttpListenerResponse response)
 	{
 
-		if(!gameState.Equals("Lights On"))
+		if (!gameState.Equals("Lights On"))
 		{
 			response.ContentType = "image/png";
 			return "";
@@ -894,11 +939,11 @@ public class ExampleWebService : MonoBehaviour
 	{
 		Time.timeScale = 1; // Unpause
 		yield return new WaitForSeconds(timeStepSize / 1000f);
-		if(isStarted)
+		if (isStarted)
 			Time.timeScale = 0; // Pause
 	}
 
-	private void SendResponse(HttpListenerRequest request ,HttpListenerResponse response, string responseString)
+	private void SendResponse(HttpListenerRequest request, HttpListenerResponse response, string responseString)
 	{
 		byte[] buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
 
@@ -925,11 +970,13 @@ public class ExampleWebService : MonoBehaviour
 
 	protected string StartMission(string seed, int timeLimit, int numStrikes, int needyTime, bool isFront, int optWidgets, List<String> components)
 	{
-		if (string.IsNullOrEmpty(seed)) {
+		if (string.IsNullOrEmpty(seed))
+		{
 			return "Please enter valid seed. e.g. seed=123";
 		}
 
-		if (timeLimit < 0) {
+		if (timeLimit < 0)
+		{
 			return "Please enter a valid time limit. e.g. timeLimit=90";
 		}
 
@@ -938,7 +985,8 @@ public class ExampleWebService : MonoBehaviour
 			return "Please enter a valid number of strikes. e.g. numStrikes=3";
 		}
 
-		if (needyTime < 0 || needyTime > timeLimit){
+		if (needyTime < 0 || needyTime > timeLimit)
+		{
 			return "Please enter valid time delay for needy module activation. e.g. needyTime=30";
 		}
 
@@ -947,7 +995,7 @@ public class ExampleWebService : MonoBehaviour
 			return "Please enter a valid number of optional widgets. e.g. optWidgets=3";
 		}
 
-		if (components.Count < 1 || components.Count > 11) 
+		if (components.Count < 1 || components.Count > 11)
 		{
 			return "Please enter a valid list of components to be present on the bomb. e.g. components=Wires,BigButton";
 		}
@@ -969,9 +1017,9 @@ public class ExampleWebService : MonoBehaviour
 			KMComponentPool.ComponentTypeEnum CompType;
 			try
 			{
-				CompType = (KMComponentPool.ComponentTypeEnum)Enum.Parse(typeof(KMComponentPool.ComponentTypeEnum), compString);
+				CompType = (KMComponentPool.ComponentTypeEnum) Enum.Parse(typeof(KMComponentPool.ComponentTypeEnum), compString);
 			}
-			catch (Exception e) 
+			catch (Exception e)
 			{
 				return "Invalid component found! Please try again.";
 			}
@@ -999,19 +1047,19 @@ public class ExampleWebService : MonoBehaviour
 
 	protected string GetBombInfo(HttpListenerResponse response)
 	{
-		if(!gameState.EqualsAny("Lights On", "Lights Off"))
+		if (!gameState.EqualsAny("Lights On", "Lights Off"))
 		{
 			response.StatusCode = (int) HttpStatusCode.BadRequest;
 			return "Cannot get bomb info before the game starts";
 		}
-		if(bombInfo.IsBombPresent())
+		if (bombInfo.IsBombPresent())
 		{
-			if(bombState == "NA")
+			if (bombState == "NA")
 			{
 				bombState = "Active";
 			}
 		}
-		else if(bombState == "Active")
+		else if (bombState == "Active")
 		{
 			bombState = "NA";
 		}
@@ -1025,7 +1073,7 @@ public class ExampleWebService : MonoBehaviour
 		string id = ModInfo.moduleID;
 		solvableModules = GetListAsHTML(bombInfo.GetSolvableModuleNames());
 		solvedModules = GetListAsHTML(bombInfo.GetSolvedModuleNames());
-		
+
 		string responseString = string.Format(
 			"<HTML><BODY>"
 			+ "<span>Time: {0}</span><br>"
@@ -1054,7 +1102,7 @@ public class ExampleWebService : MonoBehaviour
 	{
 		string listString = "";
 
-		foreach(string s in list)
+		foreach (string s in list)
 		{
 			listString += s + ", ";
 		}
@@ -1109,8 +1157,8 @@ public class ExampleWebService : MonoBehaviour
 			{
 				port = "8085";
 			}
-				// Create a listener.
-				listener = new HttpListener();
+			// Create a listener.
+			listener = new HttpListener();
 			// Add the prefixes.
 			foreach (string s in new string[] { $"http://localhost:{port}/" })
 			{

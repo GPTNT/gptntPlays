@@ -20,6 +20,7 @@ public class GptntStates : MonoBehaviour
 	TwitchBomb twitchBomb;
 	public bool readyToGive = false;
 	KMBombInfo bombInfo;
+	public MemoryComponent badModule;
 
 
 	public void Start()
@@ -274,7 +275,6 @@ public class GptntStates : MonoBehaviour
 
 
 
-			bool isSolved = comp.IsSolved;
 			FieldInfo fieldInfo3 = typeof(BombComponent).GetField("isFocused", BindingFlags.NonPublic | BindingFlags.Instance);
 			bool isFocused = (bool) fieldInfo3.GetValue(comp);
 
@@ -296,7 +296,7 @@ public class GptntStates : MonoBehaviour
 				SimonComponent simon = (SimonComponent) comp;
 				FieldInfo fieldInfo1 = typeof(SimonComponent).GetField("currentSequence", BindingFlags.NonPublic | BindingFlags.Instance);
 				int[] sequence = (int[]) fieldInfo1.GetValue(simon);
-				FieldInfo fieldInfo2 = typeof(SimonComponent).GetField("solveProgress", BindingFlags.NonPublic | BindingFlags.Instance);
+				FieldInfo fieldInfo2 = typeof(SimonComponent).GetField("lastIndex", BindingFlags.NonPublic | BindingFlags.Instance);
 				int solveProgress = (int) fieldInfo2.GetValue(simon);
 
 				SimonSaysModuleState simonState = new SimonSaysModuleState();
@@ -324,13 +324,17 @@ public class GptntStates : MonoBehaviour
 
 				simonState.beepSequence = beepSequence;
 				simonState.solveProgress = solveProgress;
-				simonState.isSolved = isSolved;
 				simonState.inFocus = isFocused;
 				simonState.onFront = onFront;
 				simonState.index = closestIndex;
 				simonState.name = "Simon";
 				simonState.component = comp;
 				bombState.modules.Add(simonState);
+				comp.OnPass += (_) =>
+				{
+					simonState.isSolved = true;
+					return false;
+				};
 				comp.OnStrike += (_) => {
 					bombState.strikes.Add(simonState.name);
 					simon.PlaySequenceDelay = 1f;
@@ -368,7 +372,11 @@ public class GptntStates : MonoBehaviour
 					indicesIndex++;
 				}
 
-				wireSetState.isSolved = isSolved;
+				comp.OnPass += (_) =>
+				{
+					wireSetState.isSolved = true;
+					return false;
+				};
 				wireSetState.inFocus = isFocused;
 				wireSetState.onFront = onFront;
 				wireSetState.index = closestIndex;
@@ -396,7 +404,11 @@ public class GptntStates : MonoBehaviour
 				{
 					buttonState.stripColor = null;
 				}
-				buttonState.isSolved = isSolved;
+				comp.OnPass += (_) =>
+				{
+					buttonState.isSolved = true;
+					return false;
+				};
 				buttonState.inFocus = isFocused;
 				buttonState.onFront = onFront;
 				buttonState.index = closestIndex;
@@ -434,7 +446,11 @@ public class GptntStates : MonoBehaviour
 						KeypadButtons[i].color = null;
 					}
 				}
-				keypadState.isSolved = isSolved;
+				comp.OnPass += (_) =>
+				{
+					keypadState.isSolved = true;
+					return false;
+				};
 				keypadState.inFocus = isFocused;
 				keypadState.onFront = onFront;
 				keypadState.index = closestIndex;
@@ -462,10 +478,14 @@ public class GptntStates : MonoBehaviour
 				string displayWord = whoFirst.DisplayText.text;
 
 				WhosOnFirstModuleState whoFirstState = new WhosOnFirstModuleState();
+				comp.OnPass += (_) =>
+				{
+					whoFirstState.isSolved = true;
+					return false;
+				};
 				whoFirstState.stage = stage;
 				whoFirstState.buttonWords = buttonValues;
 				whoFirstState.displayWord = displayWord;
-				whoFirstState.isSolved = isSolved;
 				whoFirstState.inFocus = isFocused;
 				whoFirstState.onFront = onFront;
 				whoFirstState.index = closestIndex;
@@ -495,7 +515,11 @@ public class GptntStates : MonoBehaviour
 					buttonValues[button.ButtonIndex] = button.Text.text;
 				}
 				memoryState.buttonNumbers = buttonValues;
-				memoryState.isSolved = isSolved;
+				comp.OnPass += (_) =>
+				{
+					memoryState.isSolved = true;
+					return false;
+				};
 				memoryState.inFocus = isFocused;
 				memoryState.onFront = onFront;
 				memoryState.index = closestIndex;
@@ -517,7 +541,11 @@ public class GptntStates : MonoBehaviour
 				morseState.currentFrequency = currentFrequency;
 				morseState.sequence = word;
 				morseState.correctFrequency = morse.ChosenFrequency;
-				morseState.isSolved = isSolved;
+				comp.OnPass += (_) =>
+				{
+					morseState.isSolved = true;
+					return false;
+				};
 				morseState.inFocus = isFocused;
 				morseState.onFront = onFront;
 				morseState.index = closestIndex;
@@ -561,7 +589,11 @@ public class GptntStates : MonoBehaviour
 					indicesIndex++;
 				}
 
-				compState.isSolved = isSolved;
+				comp.OnPass += (_) =>
+				{
+					compState.isSolved = true;
+					return false;
+				};
 				compState.inFocus = isFocused;
 				compState.onFront = onFront;
 				compState.index = closestIndex;
@@ -609,7 +641,11 @@ public class GptntStates : MonoBehaviour
 					}
 				}
 
-				wireSeqState.isSolved = isSolved;
+				comp.OnPass += (_) =>
+				{
+					wireSeqState.isSolved = true;
+					return false;
+				};
 				wireSeqState.inFocus = isFocused;
 				wireSeqState.onFront = onFront;
 				wireSeqState.index = closestIndex;
@@ -669,7 +705,11 @@ public class GptntStates : MonoBehaviour
 				mazeState.circlePositions[1].column = circle2X;
 				mazeState.circlePositions[1].row = circle2Y;
 
-				mazeState.isSolved = isSolved;
+				comp.OnPass += (_) =>
+				{
+					mazeState.isSolved = true;
+					return false;
+				};
 				mazeState.inFocus = isFocused;
 				mazeState.onFront = onFront;
 				mazeState.index = closestIndex;
@@ -691,7 +731,11 @@ public class GptntStates : MonoBehaviour
 				passState.currentWord = layout.GetCurrentWord();
 				passState.goalWord = pass.CorrectWord;
 
-				passState.isSolved = isSolved;
+				comp.OnPass += (_) =>
+				{
+					passState.isSolved = true;
+					return false;
+				};
 				passState.inFocus = isFocused;
 				passState.onFront = onFront;
 				passState.index = closestIndex;
@@ -730,8 +774,6 @@ public class GptntStates : MonoBehaviour
 
 		foreach (BombComponent comp in bomb.BombComponents)
 		{
-			bool isSolved = comp.IsSolved;
-
 			if (comp.ComponentType == ComponentTypeEnum.Timer)
 			{
 				TimerModuleState timerState = bombState.timerModule;
@@ -745,7 +787,7 @@ public class GptntStates : MonoBehaviour
 				SimonComponent simon = (SimonComponent) comp;
 				FieldInfo fieldInfo1 = typeof(SimonComponent).GetField("currentSequence", BindingFlags.NonPublic | BindingFlags.Instance);
 				int[] sequence = (int[]) fieldInfo1.GetValue(simon);
-				FieldInfo fieldInfo2 = typeof(SimonComponent).GetField("solveProgress", BindingFlags.NonPublic | BindingFlags.Instance);
+				FieldInfo fieldInfo2 = typeof(SimonComponent).GetField("lastIndex", BindingFlags.NonPublic | BindingFlags.Instance);
 				int solveProgress = (int) fieldInfo2.GetValue(simon);
 
 				SimonSaysModuleState simonState = (SimonSaysModuleState) bombState.modules.FirstOrDefault(module => module.component == comp);
@@ -773,7 +815,6 @@ public class GptntStates : MonoBehaviour
 
 				simonState.beepSequence = beepSequence;
 				simonState.solveProgress = solveProgress;
-				simonState.isSolved = isSolved;
 			}
 
 			else if (comp.ComponentType == ComponentTypeEnum.Wires)
@@ -803,7 +844,6 @@ public class GptntStates : MonoBehaviour
 					indicesIndex++;
 				}
 
-				wireSetState.isSolved = isSolved;
 			}
 
 			else if (comp.ComponentType == ComponentTypeEnum.BigButton)
@@ -825,7 +865,7 @@ public class GptntStates : MonoBehaviour
 				{
 					buttonState.stripColor = null;
 				}
-				buttonState.isSolved = isSolved;
+			
 			}
 
 			else if (comp.ComponentType == ComponentTypeEnum.Keypad)
@@ -888,7 +928,7 @@ public class GptntStates : MonoBehaviour
 						KeypadButtons[i].color = null;
 					}
 				}
-				keypadState.isSolved = isSolved;
+				
 				keypadState.topLeft = KeypadButtons[0];
 				keypadState.topRight = KeypadButtons[1];
 				keypadState.bottomLeft = KeypadButtons[2];
@@ -913,7 +953,7 @@ public class GptntStates : MonoBehaviour
 					whoFirstState.stage = stage;
 					whoFirstState.buttonWords = buttonValues;
 					whoFirstState.displayWord = displayWord;
-					whoFirstState.isSolved = isSolved;
+					
 				}
 
 			}
@@ -921,8 +961,9 @@ public class GptntStates : MonoBehaviour
 			else if (comp.ComponentType == ComponentTypeEnum.Memory)
 			{
 				MemoryComponent memory = (MemoryComponent) comp;
+				badModule = memory;
 				bool isInputValid = memory.IsInputValid;
-				if (!isInputValid) 
+				if (!isInputValid && !comp.IsSolved) 
 				{
 				  throw new MemoryModuleException("Memory buttons not yet emerged");
 				}
@@ -936,7 +977,7 @@ public class GptntStates : MonoBehaviour
 					buttonValues[button.ButtonIndex] = button.Text.text;
 				}
 				memoryState.buttonNumbers = buttonValues;
-				memoryState.isSolved = isSolved;
+				
 			}
 
 			else if (comp.ComponentType == ComponentTypeEnum.Morse)
@@ -951,7 +992,7 @@ public class GptntStates : MonoBehaviour
 				morseState.currentFrequency = currentFrequency;
 				morseState.sequence = word;
 				morseState.correctFrequency = morse.ChosenFrequency;
-				morseState.isSolved = isSolved;
+				
 			}
 
 			else if (comp.ComponentType == ComponentTypeEnum.Venn)
@@ -988,7 +1029,6 @@ public class GptntStates : MonoBehaviour
 					indicesIndex++;
 				}
 
-				compState.isSolved = isSolved;
 			}
 
 			else if (comp.ComponentType == ComponentTypeEnum.WireSequence)
@@ -1029,7 +1069,6 @@ public class GptntStates : MonoBehaviour
 					}
 				}
 
-				wireSeqState.isSolved = isSolved;
 			}
 
 			else if (comp.ComponentType == ComponentTypeEnum.Maze)
@@ -1082,7 +1121,6 @@ public class GptntStates : MonoBehaviour
 				mazeState.circlePositions[1].column = circle2X;
 				mazeState.circlePositions[1].row = circle2Y;
 
-				mazeState.isSolved = isSolved;
 			}
 
 			else if (comp.ComponentType == ComponentTypeEnum.Password)
@@ -1096,7 +1134,6 @@ public class GptntStates : MonoBehaviour
 				passState.currentWord = layout.GetCurrentWord();
 				passState.goalWord = pass.CorrectWord;
 
-				passState.isSolved = isSolved;
 			}
 		}
 		return bombState;

@@ -66,12 +66,16 @@ public class GptntActions : MonoBehaviour
 				}
 					
 			}
+			GameObject sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+			sphere.transform.localScale *= 0.01f;
+			sphere = Instantiate(sphere, hit.point, Quaternion.identity);
+			Destroy(sphere, 3f);
 
 			if (!selectable)
 			{
 				return "Nothing clickable";
 			}
-
+			
 			if (selectable.FocusOnInteraction)
 			{
 				// This means the selectable is a module, update the bomb state

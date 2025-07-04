@@ -63,6 +63,7 @@ public class Segmentation : MonoBehaviour
 
 		objects = tryGetVennWires(objects);
 		objects = tryGetButton(objects);
+		objects = tryGetModule(objects);
 
 		SetObjectsToSegmentationLayer(objects);
 		renderersWithChildren = GetRenderers(objects);
@@ -105,6 +106,9 @@ public class Segmentation : MonoBehaviour
 
 	private void SetLayerRecursively(GameObject obj, int layer)
 	{
+		if (obj.name.Equals("StatusLightParent"))
+			return;
+			
 		obj.layer = layer;
 		if(layer == segmentationLayer) objectsOnSegmentationLayer.Add(obj);
 
@@ -155,6 +159,17 @@ public class Segmentation : MonoBehaviour
 		if (!objects[0].name.Equals("Button")) return objects;
 		objects[0] = objects[0].transform.GetChild(0).gameObject;
 		return objects;
+	}
+
+	private GameObject[] tryGetModule(GameObject[] objects)
+	{
+		List<GameObject> objectsWithoutLight = new List<GameObject>();
+		foreach (var obj in objects)
+		{
+			if (!obj.name.Equals("StatusLightParent"))
+				objectsWithoutLight.Add(obj);
+		}
+		return objectsWithoutLight.ToArray();
 	}
 
 	// Convert a RenderTexture to a Texture2D
