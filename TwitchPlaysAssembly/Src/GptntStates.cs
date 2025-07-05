@@ -7,15 +7,13 @@ using BombGame;
 using Assets.Scripts.Components.VennWire;
 using System.Linq;
 using Newtonsoft.Json;
-using UnityEngine.UI;
-using System.Runtime.InteropServices;
 
 public class GptntStates : MonoBehaviour 
 {
 	public string logFilePath;
 	public long lastPosition = 0;
 	public BombState bombState;
-	public ExampleWebService webService;
+	public GptntGameHost webService;
 	public GptntActions gptntActions;
 	TwitchBomb twitchBomb;
 	public bool readyToGive = false;
@@ -26,7 +24,7 @@ public class GptntStates : MonoBehaviour
 	public void Start()
 	{
 		bombInfo = GetComponent<KMBombInfo>();
-		webService = GetComponent<ExampleWebService>();
+		webService = GetComponent<GptntGameHost>();
 		gptntActions = GetComponent<GptntActions>();
 
 		gptntActions.OnZoomOut += OnZoomOut;

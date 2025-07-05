@@ -9,18 +9,13 @@ using Assets.Scripts.Missions;
 using System.IO;
 using Newtonsoft.Json;
 using System.Reflection;
-using Org.BouncyCastle.Asn1.X500;
 
-public class ExampleWebService : MonoBehaviour
+public class GptntGameHost : MonoBehaviour
 {
 	KMBombInfo bombInfo;
 	KMGameCommands gameCommands;
 	KMGameInfo gameInfo;
 	private bool isStarted = false;
-	string modules;
-	string solvableModules;
-	string solvedModules;
-	string bombState;
 	GameObject spawn;
 	KMMission mission;
 	GptntActions gptntActions;
@@ -33,8 +28,6 @@ public class ExampleWebService : MonoBehaviour
 	Queue<Action> actions;
 	string timestamp;
 	string destinationLogPath;
-
-	public string otherSeed;
 
 	public int timeStepSize = 250;
 
@@ -66,7 +59,6 @@ public class ExampleWebService : MonoBehaviour
 		actions = new Queue<Action>();
 		bombInfo = GetComponent<KMBombInfo>();
 		gameCommands = GetComponent<KMGameCommands>();
-		bombState = "NA";
 		spawn = new GameObject();
 		mission = ScriptableObject.CreateInstance<KMMission>();
 		// Create the thread object. This does not start the thread.
@@ -148,26 +140,6 @@ public class ExampleWebService : MonoBehaviour
 		InputInterceptor.EnableInput();
 		gptntBuffer.ClearBuffer();
 	}
-	/*
-	Keys and what they do:
-	Space: Throws an exception with all the bomb components
-	P: ???
-	Left Click: prints mouse position
-	F: Rotate 180
-	backslash: Enable inputs
-	X: Hold bomb
-	C: Let go Bomb
-	V: Finds a twitch module, assumes it is a wire and then cuts the first wire
-	M: interact with the first module it finds
-	B: ???
-	I: rotate up 
-	K: rotate down
-	J: rotate left
-	K: rotate right
-	T: Take a screeenshot
-	U: Testing -Kareem
-	Y: Testing -Kareem 
-	*/
 
 	void Update()
 	{
@@ -176,180 +148,6 @@ public class ExampleWebService : MonoBehaviour
 			Action action = actions.Dequeue();
 			action();
 		}
-
-		#region debug with clicking a key 
-
-		// A list of all bomb components in order, including empties and the timer
-		if (Input.GetKeyDown(KeyCode.Space))
-		{
-			TwitchGame game = FindObjectOfType<TwitchGame>();
-			bomb = GameObject.FindObjectOfType<TwitchBomb>();
-			List<TwitchModule> modules = new List<TwitchModule>();
-			int modulesIndex = 0;
-			foreach (var component in bomb.Bomb.BombComponents)
-			{
-				if (component.ComponentType.EqualsAny(ComponentTypeEnum.Empty, ComponentTypeEnum.Timer))
-				{
-					TwitchModule emptyModule = new TwitchModule();
-					emptyModule.BombComponent = component;
-					modules.Add(emptyModule);
-				}
-				else
-				{
-					modules.Add(game.Modules[modulesIndex]);
-					modulesIndex++;
-				}
-			}
-			string mystr = "";
-			foreach (var comp in bomb.Bomb.Faces)
-			{
-				mystr += comp.name;
-
-
-				mystr += "\n";
-			}
-			throw new Exception(mystr);
-		}
-
-		if (Input.GetKeyDown(KeyCode.P))
-		{
-			TwitchGame game = FindObjectOfType<TwitchGame>();
-			bomb = GameObject.FindObjectOfType<TwitchBomb>();
-			List<TwitchModule> modules = new List<TwitchModule>();
-			int modulesIndex = 0;
-			foreach (var component in bomb.Bomb.BombComponents)
-			{
-				if (component.ComponentType.EqualsAny(ComponentTypeEnum.Empty, ComponentTypeEnum.Timer))
-				{
-					TwitchModule emptyModule = new TwitchModule();
-					emptyModule.BombComponent = component;
-					modules.Add(emptyModule);
-				}
-				else
-				{
-					modules.Add(game.Modules[modulesIndex]);
-					modulesIndex++;
-				}
-
-			}
-			BombGenerator gen = FindObjectOfType<BombGenerator>();
-			string mystr = "";
-			{
-
-			}
-			mystr += "END";
-			throw new Exception(mystr);
-		}
-
-		if (Input.GetMouseButtonDown(1))
-		{
-			throw new Exception(Input.mousePosition.ToString());
-		}
-
-		// Flip 180 degrees
-		if (Input.GetKeyDown(KeyCode.F))
-		{
-			StartCoroutine(gptntActions.Rotate180());
-		}
-
-		if (Input.GetKeyDown(KeyCode.Backslash))
-		{
-			InputInterceptor.EnableInput();
-		}
-
-
-		// Can potentially use FloatingHoldable.HoldStateEnum.Held, i.e. if user sends click and bomb is not held, then assume action is to hold bomb
-
-		// Pick up the bomb when it is on the table
-		if (Input.GetKeyDown(KeyCode.X))
-		{
-			bomb = GameObject.FindObjectOfType<TwitchBomb>();
-			StartCoroutine(bomb.HoldBomb());
-		}
-		// Drop bomb onto table
-		if (Input.GetKeyDown(KeyCode.C))
-		{
-			bomb = GameObject.FindObjectOfType<TwitchBomb>();
-			StartCoroutine(bomb.LetGoBomb());
-		}
-
-		// Finds a twitch module, assumes it is a wire and then cuts the first wire
-		if (Input.GetKeyDown(KeyCode.V))
-		{
-			TwitchModule module = GameObject.FindObjectOfType<TwitchModule>();
-			WireSetComponentSolver solver = new WireSetComponentSolver(module);
-			StartCoroutine(solver.RespondToCommandInternal("cut 1"));
-		}
-
-		if (Input.GetKeyDown(KeyCode.M))
-		{
-			TwitchModule module = GameObject.FindObjectOfType<TwitchModule>();
-			module.Selectable.HandleInteract();
-		}
-
-		// Finds a twitch module and focuses onto it
-		if (Input.GetKeyDown(KeyCode.B))
-		{
-			bomb = GameObject.FindObjectOfType<TwitchBomb>();
-			TwitchModule module = GameObject.FindObjectOfType<TwitchModule>();
-			StartCoroutine(bomb.Focus(module.Selectable, module.FocusDistance, module.FrontFace, true));
-		}
-
-
-
-		// rotate 90 degrees up
-		if (Input.GetKeyDown(KeyCode.I))
-		{
-			StartCoroutine(gptntActions.Rotate90("up"));
-		}
-		// rotate 90 degrees down
-		if (Input.GetKeyDown(KeyCode.K))
-		{
-			StartCoroutine(gptntActions.Rotate90("down"));
-		}
-		// rotate 90 degrees left
-		if (Input.GetKeyDown(KeyCode.J))
-		{
-			StartCoroutine(gptntActions.Rotate90("left"));
-		}
-		// rotate 90 degrees right
-		if (Input.GetKeyDown(KeyCode.L))
-		{
-			StartCoroutine(gptntActions.Rotate90("right"));
-		}
-
-		if (Input.GetKeyDown(KeyCode.T))
-		{
-			Vector2 mouseInput = new Vector2(
-				Input.mousePosition.x / Screen.width,
-				Input.mousePosition.y / Screen.height
-				);
-			gptntActions.Click(mouseInput.x, mouseInput.y);
-			gptntActions.Release();
-		}
-		if (Input.GetKeyDown(KeyCode.U))
-		{
-			SimonComponent simon = FindObjectOfType<SimonComponent>();
-			GptntDebug.Log("[Simon] Note time: " + simon.NoteTime);
-		}
-
-		if (Input.GetKeyDown(KeyCode.O))
-		{
-			string path = Path.Combine(Application.persistentDataPath, "screenshot.png");
-			StartCoroutine(GetScreenshotViaRenderTexture((bytes) =>
-			{
-				File.WriteAllBytes(path, bytes);
-			}));
-			SegmentSelectables(GetActiveSelectables().ToArray());
-		}
-		#endregion
-	}
-
-	private void PrintMorse()
-	{
-		GptntDebug.Log("Morse code is: ");
-		MorseCodeComponent morse = FindObjectOfType<MorseCodeComponent>();
-		GptntDebug.Log("Dot Length" + morse.DotLength.ToString());
 	}
 
 	private void ResetSimon()
@@ -364,42 +162,6 @@ public class ExampleWebService : MonoBehaviour
 		simon.StopAllCoroutines();
 		simon.PlaySequenceDelay = 1f;
 		simon.StartCoroutine("PlaySequence", simon.PlaySequenceDelay);
-	}
-
-	private void LogClick()
-	{
-		Vector2 mouseInput = new Vector2(
-				Input.mousePosition.x / Screen.width,
-				Input.mousePosition.y / Screen.height
-				);
-		GptntDebug.Log("x = " + mouseInput.x + "y = " + (1 - mouseInput.y));
-	}
-
-	private void SegmentSelectables(Selectable[] activeSelectables)
-	{
-		string path = Path.Combine(Application.persistentDataPath, "segmentation.png");
-		GameObject[] objects = new GameObject[activeSelectables.Length];
-		for (int i = 0; i < activeSelectables.Length; i++)
-		{
-			objects[i] = activeSelectables[i].gameObject;
-		}
-
-		StartCoroutine(segmentation.Capture(objects, (bytes) =>
-		{
-			File.WriteAllBytes(path, bytes);
-		}));
-	}
-
-	private void PrintActiveSelectables()
-	{
-		GptntDebug.Log("Parent: " + KTInputManager.Instance.SelectableManager.GetCurrentParent().name);
-		GptntDebug.Log("Selectables: ");
-		foreach (Selectable selectable in GetActiveSelectables())
-		{
-			string selectableName = selectable.name;
-			GptntDebug.Log(selectableName);
-
-		}
 	}
 
 	private List<Selectable> GetActiveSelectables()
@@ -481,14 +243,8 @@ public class ExampleWebService : MonoBehaviour
 		// Route handling with switch
 		switch (path)
 		{
-			case "/bombinfo":
-				responseString = GetBombInfo(response);
-				break;
 			case "/startmission":
 				responseString = HandleStartMission(request, response); // Main thread
-				break;
-			case "/causestrike":
-				responseString = HandleCauseStrike(request, response);
 				break;
 			case "/screenshot":
 				responseString = HandleScreenshot(response); // Main thread
@@ -753,7 +509,6 @@ public class ExampleWebService : MonoBehaviour
 			return "Cannot start a game from " + gameState + " state";
 		}
 		string seed = request.QueryString.Get("seed");
-		otherSeed = seed;
 		int timeLimit = int.Parse(request.QueryString.Get("timeLimit"));
 		int numStrikes = int.Parse(request.QueryString.Get("numStrikes"));
 		int needyTime = int.Parse(request.QueryString.Get("needyTime"));
@@ -764,6 +519,76 @@ public class ExampleWebService : MonoBehaviour
 		Time.timeScale = float.Parse(request.QueryString.Get("timeScale"));
 		timeStepSize = int.Parse(request.QueryString.Get("timeStepSize"));
 		return StartMission(seed, timeLimit, numStrikes, needyTime, isFront, optWidgets, components);
+	}
+
+	protected string StartMission(string seed, int timeLimit, int numStrikes, int needyTime, bool isFront, int optWidgets, List<String> components)
+	{
+		if (string.IsNullOrEmpty(seed))
+		{
+			return "Please enter valid seed. e.g. seed=123";
+		}
+
+		if (timeLimit < 0)
+		{
+			return "Please enter a valid time limit. e.g. timeLimit=90";
+		}
+
+		if (numStrikes < 1)
+		{
+			return "Please enter a valid number of strikes. e.g. numStrikes=3";
+		}
+
+		if (needyTime < 0 || needyTime > timeLimit)
+		{
+			return "Please enter valid time delay for needy module activation. e.g. needyTime=30";
+		}
+
+		if (optWidgets < 0)
+		{
+			return "Please enter a valid number of optional widgets. e.g. optWidgets=3";
+		}
+
+		if (components.Count < 1 || components.Count > 11)
+		{
+			return "Please enter a valid list of components to be present on the bomb. e.g. components=Wires,BigButton";
+		}
+
+		//Update bomb characteristics with inputted values, then create mission instance with the bomb
+		KMGeneratorSetting setting = new KMGeneratorSetting();
+		setting.TimeLimit = timeLimit;
+		setting.NumStrikes = numStrikes;
+		setting.TimeBeforeNeedyActivation = needyTime;
+		setting.FrontFaceOnly = isFront;
+		setting.OptionalWidgetCount = optWidgets;
+		List<KMComponentPool> pools = new List<KMComponentPool>();
+
+		for (int i = 0; i < components.Count; i++)
+		{
+			KMComponentPool pool = new KMComponentPool();
+			pool.Count = 1;
+			String compString = components[i];
+			KMComponentPool.ComponentTypeEnum CompType;
+			try
+			{
+				CompType = (KMComponentPool.ComponentTypeEnum) Enum.Parse(typeof(KMComponentPool.ComponentTypeEnum), compString);
+			}
+			catch (Exception e)
+			{
+				return "Invalid component found! Please try again.";
+			}
+			pool.ComponentTypes = new List<KMComponentPool.ComponentTypeEnum> { CompType };
+			pools.Add(pool);
+
+
+		}
+		setting.ComponentPools = pools;
+		mission.GeneratorSetting = setting;
+
+		KMBomb bomb = gameCommands.CreateBomb(null, setting, spawn, seed);
+
+		actions.Enqueue(delegate () { gameCommands.StartMission(mission, seed); });
+
+		return seed;
 	}
 
 	private string HandleGetState(HttpListenerResponse response)
@@ -852,17 +677,6 @@ public class ExampleWebService : MonoBehaviour
 		}
 	}
 
-	private string HandleCauseStrike(HttpListenerRequest request, HttpListenerResponse response)
-	{
-		if (gameState.EqualsAny("Lights On", "Lights Off"))
-		{
-			response.StatusCode = (int) HttpStatusCode.BadRequest;
-			return "Cannot strike a bomb when in " + gameState;
-		}
-		string reason = request.QueryString["reason"];
-		return CauseStrike(reason);
-	}
-
 	private string HandleScreenshot(HttpListenerResponse response)
 	{
 		byte[] imageBytes;
@@ -933,7 +747,6 @@ public class ExampleWebService : MonoBehaviour
 		MainThreadQueue.Enqueue(() => StartCoroutine(TimeStepCoroutine()));
 		return "Paused after " + timeStepSize + " in-game milliseconds";
 	}
-	#endregion
 
 	private IEnumerator TimeStepCoroutine()
 	{
@@ -942,6 +755,8 @@ public class ExampleWebService : MonoBehaviour
 		if (isStarted)
 			Time.timeScale = 0; // Pause
 	}
+
+	#endregion
 
 	private void SendResponse(HttpListenerRequest request, HttpListenerResponse response, string responseString)
 	{
@@ -968,175 +783,9 @@ public class ExampleWebService : MonoBehaviour
 		output.Close();
 	}
 
-	protected string StartMission(string seed, int timeLimit, int numStrikes, int needyTime, bool isFront, int optWidgets, List<String> components)
-	{
-		if (string.IsNullOrEmpty(seed))
-		{
-			return "Please enter valid seed. e.g. seed=123";
-		}
-
-		if (timeLimit < 0)
-		{
-			return "Please enter a valid time limit. e.g. timeLimit=90";
-		}
-
-		if (numStrikes < 1)
-		{
-			return "Please enter a valid number of strikes. e.g. numStrikes=3";
-		}
-
-		if (needyTime < 0 || needyTime > timeLimit)
-		{
-			return "Please enter valid time delay for needy module activation. e.g. needyTime=30";
-		}
-
-		if (optWidgets < 0)
-		{
-			return "Please enter a valid number of optional widgets. e.g. optWidgets=3";
-		}
-
-		if (components.Count < 1 || components.Count > 11)
-		{
-			return "Please enter a valid list of components to be present on the bomb. e.g. components=Wires,BigButton";
-		}
-
-		//Update bomb characteristics with inputted values, then create mission instance with the bomb
-		KMGeneratorSetting setting = new KMGeneratorSetting();
-		setting.TimeLimit = timeLimit;
-		setting.NumStrikes = numStrikes;
-		setting.TimeBeforeNeedyActivation = needyTime;
-		setting.FrontFaceOnly = isFront;
-		setting.OptionalWidgetCount = optWidgets;
-		List<KMComponentPool> pools = new List<KMComponentPool>();
-
-		for (int i = 0; i < components.Count; i++)
-		{
-			KMComponentPool pool = new KMComponentPool();
-			pool.Count = 1;
-			String compString = components[i];
-			KMComponentPool.ComponentTypeEnum CompType;
-			try
-			{
-				CompType = (KMComponentPool.ComponentTypeEnum) Enum.Parse(typeof(KMComponentPool.ComponentTypeEnum), compString);
-			}
-			catch (Exception e)
-			{
-				return "Invalid component found! Please try again.";
-			}
-			pool.ComponentTypes = new List<KMComponentPool.ComponentTypeEnum> { CompType };
-			pools.Add(pool);
-
-
-		}
-		setting.ComponentPools = pools;
-		mission.GeneratorSetting = setting;
-
-		KMBomb bomb = gameCommands.CreateBomb(null, setting, spawn, seed);
-
-		actions.Enqueue(delegate () { gameCommands.StartMission(mission, seed); });
-
-		return seed;
-	}
-
-	protected string CauseStrike(string reason)
-	{
-		actions.Enqueue(delegate () { gameCommands.CauseStrike(reason); });
-
-		return reason;
-	}
-
-	protected string GetBombInfo(HttpListenerResponse response)
-	{
-		if (!gameState.EqualsAny("Lights On", "Lights Off"))
-		{
-			response.StatusCode = (int) HttpStatusCode.BadRequest;
-			return "Cannot get bomb info before the game starts";
-		}
-		if (bombInfo.IsBombPresent())
-		{
-			if (bombState == "NA")
-			{
-				bombState = "Active";
-			}
-		}
-		else if (bombState == "Active")
-		{
-			bombState = "NA";
-		}
-
-		string time = bombInfo.GetFormattedTime();
-		int strikes = bombInfo.GetStrikes();
-		modules = GetListAsHTML(bombInfo.GetModuleNames());
-		TwitchModule mod = GameObject.FindObjectOfType<TwitchModule>();
-		ComponentSolver Solver = ComponentSolverFactory.CreateSolver(mod);
-		var ModInfo = Solver.ModInfo;
-		string id = ModInfo.moduleID;
-		solvableModules = GetListAsHTML(bombInfo.GetSolvableModuleNames());
-		solvedModules = GetListAsHTML(bombInfo.GetSolvedModuleNames());
-
-		string responseString = string.Format(
-			"<HTML><BODY>"
-			+ "<span>Time: {0}</span><br>"
-			+ "<span>Strikes: {1}</span><br>"
-			+ "<span>Modules: {2}</span><br>"
-			+ "<span>IDs: {6}</span><br>"
-			+ "<span>Solvable Modules: {3}</span><br>"
-			+ "<span>Solved Modules: {4}</span><br>"
-			+ "<span>State: {5}</span><br>"
-			+ "</BODY></HTML>", time, strikes, modules, solvableModules, solvedModules, bombState, id);
-
-		return responseString;
-	}
-
-	protected void OnBombExplodes()
-	{
-		bombState = "Exploded";
-	}
-
-	protected void OnBombDefused()
-	{
-		bombState = "Defused";
-	}
-
-	protected string GetListAsHTML(List<string> list)
-	{
-		string listString = "";
-
-		foreach (string s in list)
-		{
-			listString += s + ", ";
-		}
-
-		return listString;
-	}
-
 	protected byte[] GetScreenshot()
 	{
 		return gptntBuffer.GetLastFrame();
-	}
-
-	protected IEnumerator GetScreenshotViaRenderTexture(Action<byte[]> callback)
-	{
-		Camera.main.targetTexture = rawScreenRenderTexture;
-		yield return new WaitForEndOfFrame();
-		byte[] img = RenderTextureToPNGBytes(rawScreenRenderTexture);
-		Camera.main.targetTexture = null;
-		callback(img);
-	}
-
-	private Texture2D ConvertRenderTextureToTexture2D(RenderTexture rt)
-	{
-		RenderTexture.active = rt;
-		tex.ReadPixels(rect, 0, 0);
-		tex.Apply();
-		RenderTexture.active = null;
-		return tex;
-	}
-
-	private byte[] RenderTextureToPNGBytes(RenderTexture rt)
-	{
-		byte[] bytes = ConvertRenderTextureToTexture2D(rt).EncodeToPNG();
-		return bytes;
 	}
 
 	public class Worker
