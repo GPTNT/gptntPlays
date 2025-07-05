@@ -12,14 +12,14 @@ GameObject:
   - component: {fileID: 11487366}
   - component: {fileID: 11401430}
   - component: {fileID: 11454842}
-  - component: {fileID: 114641751890309950}
   - component: {fileID: 114679433292821144}
   - component: {fileID: 114644498815997642}
   - component: {fileID: 114569536059629964}
   - component: {fileID: 114753622449213914}
   - component: {fileID: 114229549706910080}
+  - component: {fileID: 114733288652609030}
   m_Layer: 0
-  m_Name: ExampleWebService
+  m_Name: GptntOrchestrator
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -118,20 +118,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   shader: {fileID: 4800000, guid: da01d6839a720493093d1917dc450dc1, type: 3}
---- !u!114 &114641751890309950
-MonoBehaviour:
-  m_ObjectHideFlags: 1
-  m_PrefabParentObject: {fileID: 0}
-  m_PrefabInternal: {fileID: 100100000}
-  m_GameObject: {fileID: 161788}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: -1705822043, guid: 366880d94a4406540983fc80e2e0edb0, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  otherSeed: 
-  timeStepSize: 250
-  sourceLogPath: .\logs\ktane.log
 --- !u!114 &114644498815997642
 MonoBehaviour:
   m_ObjectHideFlags: 1
@@ -143,8 +129,6 @@ MonoBehaviour:
   m_Script: {fileID: 1372372887, guid: 366880d94a4406540983fc80e2e0edb0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  interactableLayer: 11
-  cam: {fileID: 0}
 --- !u!114 &114679433292821144
 MonoBehaviour:
   m_ObjectHideFlags: 1
@@ -157,6 +141,17 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   shader: {fileID: 4800000, guid: da01d6839a720493093d1917dc450dc1, type: 3}
+--- !u!114 &114733288652609030
+MonoBehaviour:
+  m_ObjectHideFlags: 1
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 161788}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 1261797991, guid: 366880d94a4406540983fc80e2e0edb0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!114 &114753622449213914
 MonoBehaviour:
   m_ObjectHideFlags: 1
@@ -168,7 +163,3 @@ MonoBehaviour:
   m_Script: {fileID: -1878535796, guid: 366880d94a4406540983fc80e2e0edb0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  logFilePath: 
-  lastPosition: 0
-  webService: {fileID: 0}
-  readyToGive: 0
