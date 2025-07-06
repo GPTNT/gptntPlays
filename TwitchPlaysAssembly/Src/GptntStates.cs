@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using Assets.Scripts.Missions;
 using System.Linq;
 using TwitchPlaysAssembly;
+using System.Collections;
 
 public class GptntStates : MonoBehaviour 
 {
@@ -14,11 +15,11 @@ public class GptntStates : MonoBehaviour
 	Bomb bomb;
 	KMBombInfo bombInfo;
 	KMGameInfo gameInfo;
-	public MemoryComponent badModule; // TODO: Change this
 	public volatile GameState gameState;
-	private bool isStarted;
+	public bool isStarted;
 
 	public event Action OnFirstLightsOn;
+	public event Action OnGameStart;
 	public event Action OnGameEnd;
 
 	public enum GameState
@@ -44,6 +45,7 @@ public class GptntStates : MonoBehaviour
 
 		bombInfo.OnBombExploded += () =>
 		{
+			isStarted = false;
 			bombState.isDetonated = true;
 			bombState.timerModule.secondsRemaining = bomb.GetTimer().TimeRemaining;
 			if (bombState.timerModule.secondsRemaining < 0)
@@ -55,6 +57,7 @@ public class GptntStates : MonoBehaviour
 
 		bombInfo.OnBombSolved += () =>
 		{
+			isStarted = false;
 			bombState.isSolved = true;
 			bombState.timerModule.secondsRemaining = bomb.GetTimer().TimeRemaining;
 			OnGameEnd?.Invoke();
@@ -66,6 +69,7 @@ public class GptntStates : MonoBehaviour
 			{
 				case KMGameInfo.State.Gameplay:
 					gameState = GameState.Gameplay;
+					OnGameStart?.Invoke();
 					break;
 				case KMGameInfo.State.Setup:
 					gameState = GameState.Setup;
@@ -127,15 +131,30 @@ public class GptntStates : MonoBehaviour
 		bombState.bombSide = gptntActions.GetBombSide();
 		bombState.timerModule.secondsRemaining = bomb.GetTimer().TimeRemaining;
 
-		foreach (var module in bombState.modules)
+		foreach (BaseModuleState module in bombState.modules)
 		{
-			module.UpdateAttributes();
+			try
+			{
+				module.UpdateAttributes();
+			}
+			catch (MemoryModuleException)
+			{
+				StartCoroutine(GetMemoryState((MemoryModuleState) module));
+			}
 		}
 
 		return bombState;
 	}
 
 	#region Helper functions
+
+	private IEnumerator GetMemoryState(MemoryModuleState memory)
+	{
+		MemoryComponent memoryComponent = (MemoryComponent) memory.component;
+		yield return new WaitUntil(() => memoryComponent.IsInputValid);
+		GptntDebug.Log("[Memory] Updated memory state.");
+		memory.UpdateAttributes(); 
+	}
 
 	private void OnZoomOut()
 	{
@@ -249,9 +268,3 @@ public class AnchorInfo
 	public int index;
 	public bool onFront;
 }
-
-public class MemoryModuleException : Exception
-{
-	public MemoryModuleException(string message) : base(message) { }
-}
-

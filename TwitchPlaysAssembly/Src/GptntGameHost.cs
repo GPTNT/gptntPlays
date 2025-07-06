@@ -6,7 +6,6 @@ using Assets.Scripts.Missions;
 
 public class GptntGameHost : MonoBehaviour
 {
-	GptntActions gptntActions;
 	GptntStates gptntStates;
 
 	private int timeStepSize = 250;
@@ -26,7 +25,6 @@ public class GptntGameHost : MonoBehaviour
 	void Awake()
 	{
 		gptntBuffer = GetComponent<GptntBuffer>();
-		gptntActions = GetComponent<GptntActions>();
 		gptntStates = GetComponent<GptntStates>();
 		segmentation = GetComponent<Segmentation>();
 	}
@@ -34,6 +32,7 @@ public class GptntGameHost : MonoBehaviour
 	private void Start()
 	{
 		gptntStates.OnGameEnd += OnGameEnd;
+		gptntStates.OnGameStart += gptntBuffer.ClearBuffer;
 
 		gptntStates.OnFirstLightsOn += () =>
 		{
@@ -63,54 +62,4 @@ public class GptntGameHost : MonoBehaviour
 		gptntBuffer.StopBuffer();
 	}
 
-	private void Reset()
-	{
-		gptntBuffer.ClearBuffer();
-	}
-
-	private List<Selectable> GetActiveSelectables()
-	{
-		List<Selectable> activeSelectables = new List<Selectable>();
-		SelectableManager selectableManager = KTInputManager.Instance.SelectableManager;
-		string parentName = selectableManager.GetCurrentParent().gameObject.name;
-		if (parentName.Equals("BasicRectangleBomb(Clone)")) // Level 1
-		{
-			// Face has no selectables;
-		}
-		else if (parentName.Equals("FrontFace") || parentName.Equals("RearFace")) // Level 2 
-		{
-			if (!(gptntActions.bombRotationX == 0f && gptntActions.bombRotationZ.EqualsAny(0f, 180f)))
-				return activeSelectables;
-
-			foreach (BombComponent component in bomb.Bomb.BombComponents)
-			{
-				if (!component.ComponentType.EqualsAny(ComponentTypeEnum.Empty, ComponentTypeEnum.Timer))
-				{
-					Vector3 componentUp = component.transform.up;
-					Vector3 bombUp = bomb.Bomb.transform.up;
-					float angleBetween = Vector3.Angle(componentUp, bombUp);
-					bool isFront = angleBetween < 90.0f;
-					if (isFront == parentName.Equals("FrontFace"))
-					{
-						activeSelectables.Add(component.GetComponent<Selectable>());
-					}
-				}
-			}
-		}
-		else // level 3 
-		{
-			// assume that it is a module and get its selectables
-			Selectable parent = selectableManager.GetCurrentParent();
-			Selectable[] children = parent.gameObject.GetComponentsInChildren<Selectable>();
-			if (children.Length <= 1) return activeSelectables;
-
-			Selectable[] childrenWithoutHead = new Selectable[children.Length - 1];
-			Array.Copy(children, 1, childrenWithoutHead, 0, children.Length - 1);
-			foreach (Selectable selectable in childrenWithoutHead)
-			{
-				activeSelectables.Add(selectable);
-			}
-		}
-		return activeSelectables;
-	}
 }

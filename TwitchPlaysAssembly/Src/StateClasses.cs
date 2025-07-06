@@ -545,6 +545,11 @@ namespace TwitchPlaysAssembly
 		}
 	}
 
+	public class MemoryModuleException : Exception
+	{
+		public MemoryModuleException(string message) : base(message) { }
+	}
+
 	// --- Morse Code ---
 	public class MorseCodeModuleState : BaseModuleState
 	{

@@ -1,28 +1,95 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Threading;
 using UnityEngine;
 
-public class GptntHandler : MonoBehaviour
+public class GptntHttpHandler : MonoBehaviour
 {
 	Thread workerThread;
 	Worker workerObject;
 
+	RequestHandlers requestHandlers;
+
+	private Dictionary<string, Func<HttpListenerRequest, HttpListenerResponse, string>> routeHandlers;
+
 	private void Awake()
 	{
-		// Create the thread object. This does not start the thread.
+		InitializeComponents();
+		StartHttpWorker();
+	}
+
+	private void InitializeComponents()
+	{
+		requestHandlers = GetComponent<RequestHandlers>();
+	}
+
+	private void StartHttpWorker()
+	{
 		workerObject = new Worker(this);
 		workerThread = new Thread(workerObject.DoWork);
-		// Start the worker thread.
-		workerThread.Start(this);
+		workerThread.Start();
+	}
+
+	private void SetupRoutes()
+	{
+		routeHandlers = new Dictionary<string, Func<HttpListenerRequest, HttpListenerResponse, string>>()
+		{
+			["/startmission"] = requestHandlers.HandleStartMission,
+			["/settimescale"] = requestHandlers.HandleSetTimescale,
+			["/setstepunit"] = requestHandlers.HandleSetStepUnit,
+			["/timestep"] = requestHandlers.HandleTimeStep,
+			["/action"] = requestHandlers.HandleAction,
+			["/buffer"] = requestHandlers.HandleObservationBuffer,
+			["/health"] = requestHandlers.HandleHealth,
+			["/reset"] = requestHandlers.HandleReset,
+			["/state"] = requestHandlers.HandleGetState, 
+			["/random"] = requestHandlers.HandleRandomSolve,
+		};
+	}
+
+	private void HandleRequest(HttpListenerContext context)
+	{
+		var path = context.Request.Url.AbsolutePath.ToLowerInvariant();
+		if (!path.Equals("/health")) GptntDebug.Log("[HTTP Request] " + path);
+
+		string responseString = routeHandlers.TryGetValue(path, out var handler)
+			? handler(context.Request, context.Response)
+			: "Unknown route.";
+
+		SendResponse(context.Request, context.Response, responseString);
+	}
+
+	private void SendResponse(HttpListenerRequest request, HttpListenerResponse response, string responseString)
+	{
+		byte[] buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
+
+		// Set CORS headers here
+		response.AddHeader("Access-Control-Allow-Origin", "*"); // or restrict to your domain
+		response.AddHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+		response.AddHeader("Access-Control-Allow-Headers", "Content-Type");
+
+		// Special case for preflight OPTIONS requests — immediately return 200 OK
+		if (response.StatusCode == (int) HttpStatusCode.OK && request.HttpMethod == "OPTIONS")
+		{
+			response.ContentLength64 = 0;
+			response.OutputStream.Close();
+			return;
+		}
+
+		// Get a response stream and write the response to it.
+		response.ContentLength64 = buffer.Length;
+		System.IO.Stream output = response.OutputStream;
+		output.Write(buffer, 0, buffer.Length);
+		output.Close();
 	}
 
 	public class Worker
 	{
-		GptntHandler host;
+		GptntHttpHandler host;
 		HttpListener listener;
 
-		public Worker(GptntHandler h)
+		public Worker(GptntHttpHandler h)
 		{
 			host = h;
 		}
@@ -75,4 +142,3 @@ public class GptntHandler : MonoBehaviour
 		workerObject.Stop();
 	}
 }
-
