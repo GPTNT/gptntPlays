@@ -1,21 +1,13 @@
 using UnityEngine;
 using System.Collections.Generic;
-using System.Net;
-using System.Threading;
 using System;
-using System.Linq;
 using System.Collections;
 using Assets.Scripts.Missions;
-using System.IO;
-using Newtonsoft.Json;
-using System.Reflection;
 
 public class GptntGameHost : MonoBehaviour
 {
-	KMBombInfo bombInfo;
 	GptntActions gptntActions;
 	GptntStates gptntStates;
-	BombState lastKnownBombState; // TODO: Move to states
 
 	private int timeStepSize = 250;
 
@@ -36,14 +28,18 @@ public class GptntGameHost : MonoBehaviour
 		gptntBuffer = GetComponent<GptntBuffer>();
 		gptntActions = GetComponent<GptntActions>();
 		gptntStates = GetComponent<GptntStates>();
-		bombInfo = GetComponent<KMBombInfo>();
 		segmentation = GetComponent<Segmentation>();
 	}
 
 	private void Start()
 	{
-		bombInfo.OnBombExploded += OnGameEnd;
-		bombInfo.OnBombSolved += OnGameEnd;
+		gptntStates.OnGameEnd += OnGameEnd;
+
+		gptntStates.OnFirstLightsOn += () =>
+		{
+			gptntBuffer.StartBuffer(FrameRateMS);
+			StartCoroutine(HoldBomb());
+		};
 
 		string widthEnv = Environment.GetEnvironmentVariable("GAME_WIDTH");
 		string heightEnv = Environment.GetEnvironmentVariable("GAME_HEIGHT");
@@ -65,28 +61,11 @@ public class GptntGameHost : MonoBehaviour
 	private void OnGameEnd()
 	{
 		gptntBuffer.StopBuffer();
-		isStarted = false;
 	}
 
 	private void Reset()
 	{
-		gptntStates.readyToGive = false;
-		isStarted = false;
 		gptntBuffer.ClearBuffer();
-	}
-
-	private void ResetSimon()
-	{
-		GptntDebug.Log("Resetting Simon");
-		SimonComponent simon = FindObjectOfType<SimonComponent>();
-		FieldInfo seq = typeof(SimonComponent).GetField("currentSequence", BindingFlags.NonPublic | BindingFlags.Instance);
-		FieldInfo progress = typeof(SimonComponent).GetField("solveProgress", BindingFlags.NonPublic | BindingFlags.Instance);
-		int[] newSequence = { 1, 1, 1, 1, 1 };
-		seq.SetValue(simon, newSequence);
-		progress.SetValue(simon, 4);
-		simon.StopAllCoroutines();
-		simon.PlaySequenceDelay = 1f;
-		simon.StartCoroutine("PlaySequence", simon.PlaySequenceDelay);
 	}
 
 	private List<Selectable> GetActiveSelectables()

@@ -459,5 +459,36 @@ public class GptntActions : MonoBehaviour
 
 	#endregion
 
+	public string GetBombSide()
+	{
+		// Normalize the angles between 0 and 360
+		float xRotation = NormalizeAngle(bombRotationX);
+		float zRotation = NormalizeAngle(bombRotationZ);
+
+		// Check for top/bottom tilt (looking up/down)
+		if (xRotation > 45f && xRotation < 135f)
+			return "bottom";  // Looking downward
+		if (xRotation > 225f && xRotation < 315f)
+			return "top";     // Looking upward
+
+		if (zRotation >= 315f || zRotation < 45f)
+			return "front";
+		if (zRotation >= 45f && zRotation < 135f)
+			return "right";
+		if (zRotation >= 135f && zRotation < 225f)
+			return "back";
+		if (zRotation >= 225f && zRotation < 315f)
+			return "left";
+
+		return "unknown";
+	}
+
+	private float NormalizeAngle(float angle)
+	{
+		angle %= 360f;
+		if (angle < 0f)
+			angle += 360f;
+		return angle;
+	}
 }
 
