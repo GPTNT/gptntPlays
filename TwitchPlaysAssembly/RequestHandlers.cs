@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Threading;
-using TwitchPlaysAssembly;
 using UnityEngine;
 using System.Collections;
 using Assets.Scripts.Missions;
@@ -21,6 +20,7 @@ public class RequestHandlers : MonoBehaviour
 	GptntBuffer gptntBuffer;
 	Segmentation segmentation;
 
+	bool canGetState;
 
 	private void Awake()
 	{
@@ -32,6 +32,9 @@ public class RequestHandlers : MonoBehaviour
 
 		spawn = new GameObject();
 		mission = ScriptableObject.CreateInstance<KMMission>();
+
+		gptntStates.OnFirstLightsOn += () => canGetState = true;
+		gptntStates.OnReset += () => canGetState = false;
 	}
 
 	public string HandleRandomSolve(HttpListenerRequest request, HttpListenerResponse response)
@@ -204,19 +207,9 @@ public class RequestHandlers : MonoBehaviour
 		return StartMission(seed, timeLimit, numStrikes, needyTime, isFront, optWidgets, components);
 	}
 
-	private bool StateEqualsAny(params GptntStates.GameState[] states)
-	{
-		foreach (var state in states)
-		{
-			if (state == gptntStates.gameState)
-				return true;
-		}
-		return false;
-	}
-
 	public string HandleGetState(HttpListenerRequest request, HttpListenerResponse response)
 	{
-		if (!StateEqualsAny(GptntStates.GameState.LightsOn, GptntStates.GameState.LightsOn, GptntStates.GameState.PostGame))
+		if (!canGetState)
 		{
 			response.StatusCode = (int) HttpStatusCode.BadRequest;
 			return "Cannot get bomb state in " + gptntStates.gameState + " state";
@@ -224,8 +217,7 @@ public class RequestHandlers : MonoBehaviour
 
 		string responseString = RunOnMainThread(() =>
 		{
-			BombState bombState = gptntStates.UpdateBombState();
-			return JsonConvert.SerializeObject(bombState, Formatting.Indented);
+			return JsonConvert.SerializeObject(gptntStates.UpdateBombState(), Formatting.Indented);
 		});
 
 		if (responseString == null)
@@ -336,6 +328,16 @@ public class RequestHandlers : MonoBehaviour
 		yield return new WaitForSeconds(timeStepSize / 1000f);
 		yield return new WaitUntil(() => !StateEqualsAny(GptntStates.GameState.Transitioning));
 		Time.timeScale = 0; // Pause
+	}
+
+	private bool StateEqualsAny(params GptntStates.GameState[] states)
+	{
+		foreach (var state in states)
+		{
+			if (state == gptntStates.gameState)
+				return true;
+		}
+		return false;
 	}
 
 	private string StartMission(string seed, int timeLimit, int numStrikes, int needyTime, bool isFront, int optWidgets, List<string> components)

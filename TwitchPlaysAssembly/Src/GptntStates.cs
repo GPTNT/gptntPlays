@@ -19,7 +19,7 @@ public class GptntStates : MonoBehaviour
 	public bool isStarted;
 
 	public event Action OnFirstLightsOn;
-	public event Action OnGameStart;
+	public event Action OnReset;
 	public event Action OnGameEnd;
 
 	public enum GameState
@@ -69,10 +69,10 @@ public class GptntStates : MonoBehaviour
 			{
 				case KMGameInfo.State.Gameplay:
 					gameState = GameState.Gameplay;
-					OnGameStart?.Invoke();
 					break;
 				case KMGameInfo.State.Setup:
 					gameState = GameState.Setup;
+					OnReset?.Invoke();
 					break;
 				case KMGameInfo.State.PostGame:
 					gameState = GameState.PostGame;

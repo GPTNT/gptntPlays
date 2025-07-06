@@ -32,7 +32,7 @@ public class GptntGameHost : MonoBehaviour
 	private void Start()
 	{
 		gptntStates.OnGameEnd += OnGameEnd;
-		gptntStates.OnGameStart += gptntBuffer.ClearBuffer;
+		gptntStates.OnReset += gptntBuffer.ClearBuffer;
 
 		gptntStates.OnFirstLightsOn += () =>
 		{
