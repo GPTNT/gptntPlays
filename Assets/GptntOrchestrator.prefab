@@ -18,6 +18,8 @@ GameObject:
   - component: {fileID: 114753622449213914}
   - component: {fileID: 114229549706910080}
   - component: {fileID: 114733288652609030}
+  - component: {fileID: 114275456140878404}
+  - component: {fileID: 114858667918516344}
   m_Layer: 0
   m_Name: GptntOrchestrator
   m_TagString: Untagged
@@ -106,6 +108,17 @@ MonoBehaviour:
   m_Script: {fileID: 1731885876, guid: 366880d94a4406540983fc80e2e0edb0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+--- !u!114 &114275456140878404
+MonoBehaviour:
+  m_ObjectHideFlags: 1
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 161788}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 630581107, guid: 366880d94a4406540983fc80e2e0edb0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!114 &114569536059629964
 MonoBehaviour:
   m_ObjectHideFlags: 1
@@ -161,5 +174,16 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: -1878535796, guid: 366880d94a4406540983fc80e2e0edb0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!114 &114858667918516344
+MonoBehaviour:
+  m_ObjectHideFlags: 1
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 161788}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: -707422334, guid: 366880d94a4406540983fc80e2e0edb0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 

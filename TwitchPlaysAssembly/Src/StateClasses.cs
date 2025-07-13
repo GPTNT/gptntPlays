@@ -9,12 +9,7 @@ using System.Linq;
 namespace TwitchPlaysAssembly
 {
 	public class BaseModuleState
-	{
-		public event Action OnStrike;
-		public event Action OnPass;
-
-		public bool isSolved { get; set; }
-		public bool inFocus { get; set; }
+	{ 
 		public bool onFront { get; set; }
 		public int index { get; set; }
 		public string name { get; set; }
@@ -27,27 +22,10 @@ namespace TwitchPlaysAssembly
 			onFront = anchor.onFront;
 			index = anchor.index;
 
-			FieldInfo fieldInfo = typeof(BombComponent).GetField("isFocused", BindingFlags.NonPublic | BindingFlags.Instance);
-			inFocus = (bool) fieldInfo.GetValue(comp);
-
-			comp.OnStrike += (_) =>
-			{
-				OnStrike?.Invoke();
-				return false;
-			};
-			comp.OnPass += (_) =>
-			{
-				OnPass?.Invoke();
-				isSolved = true;
-				return false;
-			};
+			
 		}
 
-		public virtual void UpdateAttributes()
-		{
-			FieldInfo fieldInfo = typeof(BombComponent).GetField("isFocused", BindingFlags.NonPublic | BindingFlags.Instance);
-			inFocus = (bool) fieldInfo.GetValue(component);
-		}
+		public virtual void UpdateAttributes() { }
 
 		private AnchorInfo GetClosestAnchorInfo(BombComponent comp)
 		{
@@ -85,8 +63,42 @@ namespace TwitchPlaysAssembly
 
 	}
 
+	public class SolvableModuleState : BaseModuleState
+	{
+		public event Action OnStrike;
+		public event Action OnPass;
+
+		public bool isSolved { get; set; }
+		public bool inFocus { get; set; }
+
+		public SolvableModuleState(BombComponent comp) : base(comp)
+		{
+			FieldInfo fieldInfo = typeof(BombComponent).GetField("isFocused", BindingFlags.NonPublic | BindingFlags.Instance);
+			inFocus = (bool) fieldInfo.GetValue(comp);
+
+			comp.OnStrike += (_) =>
+			{
+				OnStrike?.Invoke();
+				return false;
+			};
+			comp.OnPass += (_) =>
+			{
+				OnPass?.Invoke();
+				isSolved = true;
+				return false;
+			};
+		}
+
+		public override void UpdateAttributes()
+		{
+			base.UpdateAttributes();
+			FieldInfo fieldInfo = typeof(BombComponent).GetField("isFocused", BindingFlags.NonPublic | BindingFlags.Instance);
+			inFocus = (bool) fieldInfo.GetValue(component);
+		}
+	}
+
 	// --- Button Module ---
-	public class ButtonModuleState : BaseModuleState
+	public class ButtonModuleState : SolvableModuleState
 	{
 		public string buttonColor { get; set; }
 		public string buttonWord { get; set; }
@@ -125,7 +137,7 @@ namespace TwitchPlaysAssembly
 		public string color { get; set; }
 	}
 
-	public class KeypadModuleState : BaseModuleState
+	public class KeypadModuleState : SolvableModuleState
 	{
 		public KeyPadButtonState topLeft { get; set; }
 		public KeyPadButtonState topRight { get; set; }
@@ -202,7 +214,7 @@ namespace TwitchPlaysAssembly
 	}
 
 	// --- Simon Says ---
-	public class SimonSaysModuleState : BaseModuleState
+	public class SimonSaysModuleState : SolvableModuleState
 	{
 		public List<string> beepSequence { get; set; }
 		public int solveProgress { get; set; }
@@ -282,7 +294,7 @@ namespace TwitchPlaysAssembly
 	}
 
 	// --- Wire Modules ---
-	public class WireSetModuleState : BaseModuleState
+	public class WireSetModuleState : SolvableModuleState
 	{
 		public WireSetWireState[] wires { get; set; }
 
@@ -329,7 +341,7 @@ namespace TwitchPlaysAssembly
 		}
 	}
 
-	public class ComplicatedWiresModuleState : BaseModuleState
+	public class ComplicatedWiresModuleState : SolvableModuleState
 	{
 		public ComplicatedWireState[] wires { get; set; }
 
@@ -382,7 +394,7 @@ namespace TwitchPlaysAssembly
 		}
 	}
 
-	public class WireSequenceModuleState : BaseModuleState
+	public class WireSequenceModuleState : SolvableModuleState
 	{
 		public int panel { get; set; }
 		public WireSequenceWireState[] wires { get; set; }
@@ -437,7 +449,7 @@ namespace TwitchPlaysAssembly
 		public int column { get; set; }
 	}
 
-	public class MazeModuleState : BaseModuleState
+	public class MazeModuleState : SolvableModuleState
 	{
 		public int numRows { get; set; } = 6;
 		public int numColumns { get; set; } = 6;
@@ -501,7 +513,7 @@ namespace TwitchPlaysAssembly
 	}
 
 	// --- Memory ---
-	public class MemoryModuleState : BaseModuleState
+	public class MemoryModuleState : SolvableModuleState
 	{
 		public string displayNumber { get; set; }
 		public string[] buttonNumbers { get; set; }
@@ -551,7 +563,7 @@ namespace TwitchPlaysAssembly
 	}
 
 	// --- Morse Code ---
-	public class MorseCodeModuleState : BaseModuleState
+	public class MorseCodeModuleState : SolvableModuleState
 	{
 		public string sequence { get; set; }
 		public float currentFrequency { get; set; }
@@ -583,7 +595,7 @@ namespace TwitchPlaysAssembly
 	}
 
 	// --- Password ---
-	public class PasswordModuleState : BaseModuleState
+	public class PasswordModuleState : SolvableModuleState
 	{
 		public string currentWord { get; set; }
 		public string goalWord { get; set; }
@@ -614,7 +626,7 @@ namespace TwitchPlaysAssembly
 	}
 
 	// --- Who’s On First ---
-	public class WhosOnFirstModuleState : BaseModuleState
+	public class WhosOnFirstModuleState : SolvableModuleState
 	{
 		public string displayWord { get; set; }
 		public string[] buttonWords { get; set; }
@@ -763,7 +775,7 @@ namespace TwitchPlaysAssembly
 		public string bombSide { get; set; }
 		public TimerModuleState timerModule { get; set; }
 		public List<BaseWidgetState> widgets { get; set; }
-		public List<BaseModuleState> modules { get; set; }
+		public List<SolvableModuleState> modules { get; set; }
 		public List<string> strikes { get; set; }
 	}
 }

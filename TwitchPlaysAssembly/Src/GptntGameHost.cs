@@ -8,10 +8,6 @@ public class GptntGameHost : MonoBehaviour
 {
 	GptntStates gptntStates;
 
-	private int timeStepSize = 250;
-
-	public TwitchBomb bomb;
-
 	// Observation variables 
 	private GptntBuffer gptntBuffer;
 	private Segmentation segmentation;
@@ -54,7 +50,7 @@ public class GptntGameHost : MonoBehaviour
 	private IEnumerator HoldBomb()
 	{
 		yield return new WaitUntil(() => Time.timeScale > 0);
-		bomb.Bomb.GetComponent<Selectable>().Trigger();
+		gptntStates.bomb.GetComponent<Selectable>().Trigger();
 	}
 
 	private void OnGameEnd()

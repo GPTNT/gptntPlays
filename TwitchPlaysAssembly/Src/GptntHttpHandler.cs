@@ -15,13 +15,9 @@ public class GptntHttpHandler : MonoBehaviour
 
 	private void Awake()
 	{
-		InitializeComponents();
-		StartHttpWorker();
-	}
-
-	private void InitializeComponents()
-	{
 		requestHandlers = GetComponent<RequestHandlers>();
+		StartHttpWorker();
+		SetupRoutes();
 	}
 
 	private void StartHttpWorker()
@@ -51,7 +47,8 @@ public class GptntHttpHandler : MonoBehaviour
 	private void HandleRequest(HttpListenerContext context)
 	{
 		var path = context.Request.Url.AbsolutePath.ToLowerInvariant();
-		if (!path.Equals("/health")) GptntDebug.Log("[HTTP Request] " + path);
+		//if (!path.Equals("/health")) GptntDebug.Log("[HTTP Request] " + path);
+		GptntDebug.Log("[HTTP Request] " + path);
 
 		string responseString = routeHandlers.TryGetValue(path, out var handler)
 			? handler(context.Request, context.Response)

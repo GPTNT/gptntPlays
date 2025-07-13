@@ -66,6 +66,7 @@ public class RequestHandlers : MonoBehaviour
 
 	public string HandleHealth(HttpListenerRequest request, HttpListenerResponse response)
 	{
+		GptntDebug.Log("[Health] Handling health");
 		return gptntStates.gameState.ToString();
 	}
 

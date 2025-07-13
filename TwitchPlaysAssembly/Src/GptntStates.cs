@@ -12,7 +12,7 @@ public class GptntStates : MonoBehaviour
 	public BombState bombState;
 	public GptntGameHost host;
 	public GptntActions gptntActions;
-	Bomb bomb;
+	public Bomb bomb;
 	KMBombInfo bombInfo;
 	KMGameInfo gameInfo;
 	public volatile GameState gameState;
@@ -38,8 +38,7 @@ public class GptntStates : MonoBehaviour
 		host = GetComponent<GptntGameHost>();
 		gptntActions = GetComponent<GptntActions>();
 		gameInfo = FindObjectOfType<KMGameInfo>();
-
-		bomb = host.bomb.Bomb;
+		GptntDebug.Log("[Game Info] " + gameInfo.ToString());
 
 		gptntActions.OnZoomOut += OnZoomOut;
 
@@ -65,6 +64,7 @@ public class GptntStates : MonoBehaviour
 
 		gameInfo.OnStateChange += (KMGameInfo.State state) =>
 		{
+			GptntDebug.Log("[DEBUG] State changed to " + state.ToString());
 			switch (state)
 			{
 				case KMGameInfo.State.Gameplay:
@@ -72,6 +72,7 @@ public class GptntStates : MonoBehaviour
 					break;
 				case KMGameInfo.State.Setup:
 					gameState = GameState.Setup;
+					isStarted = false;
 					OnReset?.Invoke();
 					break;
 				case KMGameInfo.State.PostGame:
@@ -87,8 +88,17 @@ public class GptntStates : MonoBehaviour
 		};
 		gameInfo.OnLightsChange += (bool on) =>
 		{
-			TwitchBomb bomb = FindObjectOfType<TwitchBomb>();
-			gptntActions.bomb = bomb;
+			GptntDebug.Log("[DEBUG] Lights changes to" + on.ToString());
+			TwitchBomb twitchBomb = FindObjectOfType<TwitchBomb>();
+			try
+			{
+				bomb = twitchBomb.Bomb;
+			}
+			catch (Exception ex)
+			{
+				GptntDebug.Log("[DEBUG] Twitch bomb is null " + ex);
+			}
+			gptntActions.bomb = twitchBomb;
 			gptntActions.InitRotation();
 			gameState = gameState.EqualsAny(GameState.Gameplay, GameState.LightsOn, GameState.LightsOff) ? (on ? GameState.LightsOn : GameState.LightsOff) : gameState;
 
@@ -158,7 +168,7 @@ public class GptntStates : MonoBehaviour
 
 	private void OnZoomOut()
 	{
-		foreach (BaseModuleState moduleState in bombState.modules)
+		foreach (SolvableModuleState moduleState in bombState.modules)
 		{
 			moduleState.inFocus = false;
 		}
@@ -172,7 +182,7 @@ public class GptntStates : MonoBehaviour
 		}
 	}
 
-	private BaseModuleState GetModuleStateFromSelectable(Selectable selectable)
+	private SolvableModuleState GetModuleStateFromSelectable(Selectable selectable)
 	{
 		BombComponent selectableComponent = selectable.GetComponent<BombComponent>();
 		if (!selectableComponent)
@@ -218,15 +228,15 @@ public class GptntStates : MonoBehaviour
 		return widgetStates;
 	}
 
-	private List<BaseModuleState> ModuleStates(List<BombComponent> components)
+	private List<SolvableModuleState> ModuleStates(List<BombComponent> components)
 	{
-		List<BaseModuleState> moduleStates = new List<BaseModuleState>();
+		List<SolvableModuleState> moduleStates = new List<SolvableModuleState>();
 		foreach (var comp in components)
 		{
 			if (comp.ComponentType == ComponentTypeEnum.Timer)
 				continue;
 
-			var moduleState = CreateModuleState(comp);
+			SolvableModuleState moduleState = CreateModuleState(comp);
 
 			if (moduleState != null)
 			{
@@ -241,7 +251,7 @@ public class GptntStates : MonoBehaviour
 		return moduleStates;
 	}
 
-	private BaseModuleState CreateModuleState(BombComponent comp)
+	private SolvableModuleState CreateModuleState(BombComponent comp)
 	{
 		switch (comp.ComponentType)
 		{
