@@ -210,6 +210,7 @@ public class RequestHandlers : MonoBehaviour
 
 	public string HandleGetState(HttpListenerRequest request, HttpListenerResponse response)
 	{
+
 		if (!canGetState)
 		{
 			response.StatusCode = (int) HttpStatusCode.BadRequest;
@@ -231,7 +232,35 @@ public class RequestHandlers : MonoBehaviour
 		return responseString;
 	}
 
+	public string HandleDetonateBomb(HttpListenerRequest request, HttpListenerResponse response)
+	{
+		if(!StateEqualsAny(GptntStates.GameState.LightsOn))
+		{
+			response.StatusCode = (int) HttpStatusCode.BadRequest;
+			return "Cannot detonate bomb in " + gptntStates.gameState + " state";
+		}
 
+		TwitchBomb bomb = FindObjectOfType<TwitchBomb>();
+		bomb.Bomb.Detonate();
+		return "Detonated bomb successfully";
+	}
+
+	public string HandleSolveBomb(HttpListenerRequest request, HttpListenerResponse response)
+	{
+		if (!StateEqualsAny(GptntStates.GameState.LightsOn))
+		{
+			response.StatusCode = (int) HttpStatusCode.BadRequest;
+			return "Cannot solve bomb in " + gptntStates.gameState + " state";
+		}
+
+		foreach (var module in FindObjectsOfType<TwitchModule>())
+		{
+			if (module.Solved)
+				continue;
+			module.Solver.SolveSilently();
+		}
+		return "Solved bomb successfully";
+	}
 
 	public string HandleRotate(HttpListenerRequest request)
 	{

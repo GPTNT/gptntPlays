@@ -41,6 +41,8 @@ public class GptntHttpHandler : MonoBehaviour
 			["/reset"] = requestHandlers.HandleReset,
 			["/state"] = requestHandlers.HandleGetState, 
 			["/random"] = requestHandlers.HandleRandomSolve,
+			["/detonate"] = requestHandlers.HandleDetonateBomb,
+			["/solve"] = requestHandlers.HandleSolveBomb,
 		};
 	}
 
@@ -128,7 +130,7 @@ public class GptntHttpHandler : MonoBehaviour
 			}
 			catch (Exception ex)
 			{
-				Console.WriteLine("Error processing request: " + ex.Message);
+				GptntDebug.Log("[Http Server Error] Error processing request: " + ex.Message);
 			}
 		}
 	}
