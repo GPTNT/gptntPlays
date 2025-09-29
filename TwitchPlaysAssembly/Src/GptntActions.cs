@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections;
+using System.Security.Cryptography;
 using Assets.Scripts.Input;
 using UnityEngine;
 
@@ -15,13 +16,26 @@ public class GptntActions : MonoBehaviour
 	public float bombRotationX { get; private set; } = 0f;
 	public float bombRotationZ { get; private set; } = 0f;
 	bool StartingFace;
-	bool onFrontFace = true;
-	bool onBackFace = false;
-	bool onLeftSide = false;
-	bool onRightSide = false;
+	SideFace activeFace = SideFace.Front; // for keeping track of which side face we are on / have to return to 
+	ZFace currentFace = ZFace.Side; // for keeping track of face perpendicular to the z axis
+
+	private enum SideFace
+	{
+		Front = 0,
+		Right = 90,
+		Back = 180,
+		Left = 270,
+	}
+
+	private enum ZFace
+	{
+		Top = 90,
+		Side = 0,
+		Bottom = -90,
+	}
 
 	public Action OnZoomOut;
-
+	
 	private void Start()
 	{
 		cam = Camera.main;
@@ -32,10 +46,8 @@ public class GptntActions : MonoBehaviour
 		bombRotationZ = 0;
 		bombRotationX = 0;
 		StartingFace = KTInputManager.Instance.SelectableManager.GetActiveFace() == FaceEnum.Front;
-		onFrontFace = true;
-		onBackFace = false;
-		onLeftSide = false;
-		onRightSide = false;
+		activeFace = SideFace.Front;
+		currentFace = ZFace.Side;
 	}
 
 	#region Mouse clicks
@@ -204,256 +216,60 @@ public class GptntActions : MonoBehaviour
 
 	private void Rotation90(string direction)
 	{
+		InputInterceptor.DisableInput();
 		if (direction.Equals("right"))
 		{
-			InputInterceptor.DisableInput();
-			if (bombRotationZ == 180)
-			{
-				bomb.RotateByLocalQuaternion(Quaternion.Euler(-bombRotationX, 0, 0));
-
-			}
-			else
-			{
-				bomb.RotateByLocalQuaternion(Quaternion.Euler(-bombRotationX, 0, -bombRotationZ));
-
-			}
-			StartCoroutine(bomb.MyForceHeldRotation(StartingFace, 0f));
-			if (onFrontFace)
-			{
-				bombRotationZ = 90;
-			}
-			else if (onBackFace)
-			{
-				bombRotationZ = -90;
-			}
-			else if (onLeftSide)
-			{
-				bombRotationZ = 0;
-			}
-			else if (onRightSide)
-			{
-				bombRotationZ = 180;
-			}
-			bomb.RotateByLocalQuaternion(Quaternion.Euler(bombRotationX, 0, bombRotationZ));
-			alignFace90R();
+			activeFace = CycleSide(activeFace, 1);
 		}
-		if (direction.Equals("left"))
+		else if (direction.Equals("left"))
 		{
-			InputInterceptor.DisableInput();
-			if (bombRotationZ == 180)
-			{
-				bomb.RotateByLocalQuaternion(Quaternion.Euler(-bombRotationX, 0, 0));
-
-			}
-			else
-			{
-				bomb.RotateByLocalQuaternion(Quaternion.Euler(-bombRotationX, 0, -bombRotationZ));
-
-			}
-			StartCoroutine(bomb.MyForceHeldRotation(StartingFace, 0f));
-			if (onFrontFace)
-			{
-				bombRotationZ = -90;
-			}
-			else if (onBackFace)
-			{
-				bombRotationZ = 90;
-			}
-			else if (onLeftSide)
-			{
-				bombRotationZ = 180;
-			}
-			else if (onRightSide)
-			{
-				bombRotationZ = 0;
-			}
-			bomb.RotateByLocalQuaternion(Quaternion.Euler(bombRotationX, 0, bombRotationZ));
-			alignFace90L();
-		}
-
-		if (direction.Equals("up"))
+			activeFace = CycleSide(activeFace, -1);
+		}else if (direction.Equals("up"))
 		{
-			if (bombRotationX < 90)
-			{
-				InputInterceptor.DisableInput();
-				if (bombRotationZ == 180)
-				{
-					bomb.RotateByLocalQuaternion(Quaternion.Euler(-bombRotationX, 0, 0));
-
-				}
-				else
-				{
-					bomb.RotateByLocalQuaternion(Quaternion.Euler(-bombRotationX, 0, -bombRotationZ));
-
-				}
-				StartCoroutine(bomb.MyForceHeldRotation(StartingFace, 0f));
-
-
-				bombRotationX += 90;
-				bomb.RotateByLocalQuaternion(Quaternion.Euler(bombRotationX, 0, bombRotationZ));
-
-			}
-		}
-
-		if (direction.Equals("down"))
+			currentFace = CycleFace(currentFace, 1);
+		}else if (direction.Equals("down"))
 		{
-			if (bombRotationX > -90)
-			{
-				InputInterceptor.DisableInput();
-				if (bombRotationZ == 180)
-				{
-					bomb.RotateByLocalQuaternion(Quaternion.Euler(-bombRotationX, 0, 0));
-
-				}
-				else
-				{
-					bomb.RotateByLocalQuaternion(Quaternion.Euler(-bombRotationX, 0, -bombRotationZ));
-
-				}
-				StartCoroutine(bomb.MyForceHeldRotation(StartingFace, 0f));
-
-
-				bombRotationX -= 90;
-				bomb.RotateByLocalQuaternion(Quaternion.Euler(bombRotationX, 0, bombRotationZ));
-			}
+			currentFace = CycleFace(currentFace, -1);
 		}
-
-		if (bombRotationX == 0)
-		{
-			if (bombRotationZ % 360 == 0)
-			{
-				StartCoroutine(bomb.MyForceHeldRotation(StartingFace, 0f));
-				InputInterceptor.EnableInput();
-			}
-			else if (bombRotationZ % 180 == 0)
-			{
-				StartCoroutine(bomb.MyForceHeldRotation(!StartingFace, 0f));
-				InputInterceptor.EnableInput();
-			}
-		}
+		bomb.RotateByLocalQuaternion(Quaternion.Euler((int) currentFace, 0, (int) activeFace));
+		GptntDebug.Log($"[Debug] Set the bomb rotation to X:{(int) currentFace} Z:{(int) activeFace}");
 	}
 
 	private void Rotation180()
 	{
-		ZoomOut();
 		InputInterceptor.DisableInput();
-		if (bombRotationZ == 180)
+		switch (currentFace)
 		{
-			bomb.RotateByLocalQuaternion(Quaternion.Euler(-bombRotationX, 0, 0));
+			case ZFace.Side:
+				activeFace = CycleSide(activeFace, 2);
+				break;
+			case ZFace.Top:
+				currentFace = CycleFace(currentFace, -2);
+				break;
+			case ZFace.Bottom:
+				currentFace = CycleFace(currentFace, 2);
+				break;
 		}
-		else
-		{
-			bomb.RotateByLocalQuaternion(Quaternion.Euler(-bombRotationX, 0, -bombRotationZ));
-		}
-		StartCoroutine(bomb.MyForceHeldRotation(StartingFace, 0f));
-
-		if (onFrontFace)
-		{
-			bombRotationZ = 180;
-		}
-		else if (onBackFace)
-		{
-			bombRotationZ = 0;
-		}
-		else if (onLeftSide)
-		{
-			bombRotationZ = 90;
-		}
-		else if (onRightSide)
-		{
-			bombRotationZ = -90;
-		}
-		bomb.RotateByLocalQuaternion(Quaternion.Euler(bombRotationX, 0, bombRotationZ));
-
-		if (bombRotationX == 0)
-		{
-			if (bombRotationZ % 360 == 0)
-			{
-				StartCoroutine(bomb.MyForceHeldRotation(StartingFace, 0f));
-				InputInterceptor.EnableInput();
-			}
-			else if (bombRotationZ % 180 == 0)
-			{
-				StartCoroutine(bomb.MyForceHeldRotation(!StartingFace, 0f));
-				InputInterceptor.EnableInput();
-			}
-		}
-		alignFace180();
-	}
-
-	private void alignFace180()
-	{
-		if (onFrontFace)
-		{
-			onFrontFace = false;
-			onBackFace = true;
-		}
-		else if (onBackFace)
-		{
-			onBackFace = false;
-			onFrontFace = true;
-		}
-		else if (onLeftSide)
-		{
-			onLeftSide = false;
-			onRightSide = true;
-		}
-		else if (onRightSide)
-		{
-			onRightSide = false;
-			onLeftSide = true;
-		}
-	}
-
-	private void alignFace90L()
-	{
-		if (onFrontFace)
-		{
-			onFrontFace = false;
-			onLeftSide = true;
-		}
-		else if (onBackFace)
-		{
-			onBackFace = false;
-			onRightSide = true;
-		}
-		else if (onLeftSide)
-		{
-			onLeftSide = false;
-			onBackFace = true;
-		}
-		else if (onRightSide)
-		{
-			onRightSide = false;
-			onFrontFace = true;
-		}
-	}
-
-	private void alignFace90R()
-	{
-		if (onFrontFace)
-		{
-			onFrontFace = false;
-			onRightSide = true;
-		}
-		else if (onBackFace)
-		{
-			onBackFace = false;
-			onLeftSide = true;
-		}
-		else if (onLeftSide)
-		{
-			onLeftSide = false;
-			onFrontFace = true;
-		}
-		else if (onRightSide)
-		{
-			onRightSide = false;
-			onBackFace = true;
-		}
+		bomb.RotateByLocalQuaternion(Quaternion.Euler((int) currentFace, 0, (int) activeFace));
+		GptntDebug.Log($"[Debug] Set the bomb rotation to X:{(int) currentFace} Z:{(int) activeFace}");
 	}
 
 	#endregion
+
+	private SideFace CycleSide(SideFace face, int step)
+	{
+		// Cycle the state "step" times to the right
+		int deg = ((int) face + 90 * step) % 360;
+		if (deg < 0) deg += 360;  // normalize
+		return (SideFace) deg;
+	}
+
+	private ZFace CycleFace(ZFace face, int step)
+	{
+		int deg = Mathf.Clamp((int) face + 90 * step, -90, 90);
+
+		return (ZFace) deg;
+	}
 
 	public string GetBombSide()
 	{
