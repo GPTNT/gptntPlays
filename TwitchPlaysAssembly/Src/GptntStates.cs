@@ -64,7 +64,7 @@ public class GptntStates : MonoBehaviour
 
 		gameInfo.OnStateChange += (KMGameInfo.State state) =>
 		{
-			GptntDebug.Log("[DEBUG] State changed to " + state.ToString());
+			GptntDebug.Log($"[DEBUG] State changed: {gameState} -> {state}");
 			switch (state)
 			{
 				case KMGameInfo.State.Gameplay:
@@ -83,12 +83,11 @@ public class GptntStates : MonoBehaviour
 					break;
 				default:
 					break;
-
 			}
 		};
 		gameInfo.OnLightsChange += (bool on) =>
 		{
-			GptntDebug.Log("[DEBUG] Lights changes to" + on.ToString());
+			GptntDebug.Log("[DEBUG] Lights on changes to " + on.ToString());
 			TwitchBomb twitchBomb = FindObjectOfType<TwitchBomb>();
 			try
 			{
