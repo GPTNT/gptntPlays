@@ -37,6 +37,34 @@ public class RequestHandlers : MonoBehaviour
 		gptntStates.OnReset += () => canGetState = false;
 	}
 
+	#region Debug Helpers
+
+	private void Update()
+	{
+		if (Input.GetKeyDown(KeyCode.W))
+		{
+			StartCoroutine(gptntActions.Rotate90("up"));
+		}
+		if (Input.GetKeyDown(KeyCode.S))
+		{
+			StartCoroutine(gptntActions.Rotate90("down"));
+		}
+		if (Input.GetKeyDown(KeyCode.A))
+		{
+			StartCoroutine(gptntActions.Rotate90("left"));
+		}
+		if (Input.GetKeyDown(KeyCode.D))
+		{
+			StartCoroutine(gptntActions.Rotate90("right"));
+		}
+		if (Input.GetKeyDown(KeyCode.F))
+		{
+			StartCoroutine(gptntActions.Rotate180());
+		}
+	}
+
+	#endregion
+
 	public string HandleRandomSolve(HttpListenerRequest request, HttpListenerResponse response)
 	{
 		int numModulesToSolve = int.Parse(request.QueryString.Get("value"));
@@ -332,10 +360,33 @@ public class RequestHandlers : MonoBehaviour
 
 	public string HandleSetTimescale(HttpListenerRequest request, HttpListenerResponse response)
 	{
-		string value = request.QueryString.Get("value");
-		MainThreadQueue.Enqueue(() => GptntDebug.Log("[TimeScale] value = " + value));
-		Time.timeScale = float.Parse(value);
-		return "Set timeScale to " + value;
+		try
+		{
+			string value = request.QueryString.Get("value");
+			MainThreadQueue.Enqueue(() => GptntDebug.Log("[TimeScale] value = " + value));
+			if (float.Parse(value) == 0 && StateEqualsAny(GptntStates.GameState.Transitioning))
+				MainThreadQueue.Enqueue(() =>
+				{
+					GptntDebug.Log("[TimeScale] waiting for end of transitioning to pause");
+					StartCoroutine(PauseAfterTransition());
+				});
+			else
+				Time.timeScale = float.Parse(value);
+			return "Set timeScale to " + value;
+		}
+		catch
+		{
+			response.StatusCode = (int) HttpStatusCode.BadRequest;
+			GptntDebug.Log("[TimeScale] Could not parse request");
+			return "Could not parse request";
+		}
+
+	}
+
+	private IEnumerator PauseAfterTransition()
+	{
+		yield return new WaitUntil(() => !StateEqualsAny(GptntStates.GameState.Transitioning));
+		Time.timeScale = 0;
 	}
 
 	public string HandleSetStepUnit(HttpListenerRequest request, HttpListenerResponse response)
