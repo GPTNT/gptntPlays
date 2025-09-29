@@ -9,6 +9,8 @@ public class GptntDebug : MonoBehaviour
 	public static void Log(string message)
 	{
 		StreamWriter writer = new StreamWriter(path, true);
+		DateTime currentTime = DateTime.Now;
+		message = $"[{currentTime.ToLongTimeString()}] " + message; 
 		writer.WriteLine(message);
 		writer.Close();
 	}
