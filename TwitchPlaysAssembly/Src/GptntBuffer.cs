@@ -2,7 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using Newtonsoft.Json;
+using log4net;
 
 public class GptntBuffer : MonoBehaviour
 {
@@ -21,19 +21,20 @@ public class GptntBuffer : MonoBehaviour
 	// Coroutine
 	private Coroutine bufferCoroutine;
 
+	private static ILog log = LogManager.GetLogger("Buffer");
 
 	public void Init(int width, int height, int bufferLength)
 	{
 		screenshotRT = new RenderTexture(width, height, 24);
 		textureBuffer = new TextureRingBuffer(bufferLength);
-		GptntDebug.Log("[DEBUG] Initialized the Buffer");
+		log.Debug("Initialized the Buffer");
 	}
 
 	public void StartBuffer(float frequency)
 	{
 		DuplicateCamera();
 		bufferCoroutine = StartCoroutine(BufferCoroutine(frequency));
-		GptntDebug.Log("[Buffer] Started the buffer");
+		log.Debug("Started the buffer");
 	}
 
 	public void StopBuffer()
@@ -43,14 +44,14 @@ public class GptntBuffer : MonoBehaviour
 			return;
 		StopCoroutine(bufferCoroutine);
 		bufferCoroutine = null;
-		GptntDebug.Log("[Buffer] Stopped the buffer");
+		log.Debug("Stopped the buffer");
 	}
 
 	public void ClearBuffer()
 	{
 		StopBuffer();
 		textureBuffer.Clear();
-		GptntDebug.Log("[Buffer] Cleared the buffer");
+		log.Debug("Cleared the buffer");
 	}
 
 	public ObservationPayload GetBufferJSON()
@@ -93,7 +94,7 @@ public class GptntBuffer : MonoBehaviour
 			mainCam = Camera.main;
 			if (!mainCam)
 			{
-				GptntDebug.Log("[OH SHIT...] Main camera not found");
+				log.Error("OH SHIT... Main camera not found");
 				return;
 			}
 		}

@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using log4net;
 
 /*
 *	Script to segment objects in a scene
@@ -28,6 +29,8 @@ public class Segmentation : MonoBehaviour
 	// each element in renderers has an array of renderers for the children of an object
 	private List<Renderer[]> renderersWithChildren;
 	private List<GameObject> objectsOnSegmentationLayer;
+	private static ILog log = LogManager.GetLogger("Segmentation");
+
 
 	public void Init(int width, int height)
 	{
@@ -36,7 +39,7 @@ public class Segmentation : MonoBehaviour
 		renderTexture.filterMode = FilterMode.Point;
 		tex = new Texture2D(width, height);
 		rect = new Rect(0, 0, width, height);
-		if (!shader) GptntDebug.Log("Shader is null");
+		if (!shader) log.Debug("Shader is null");
 		
 	}
 
@@ -198,7 +201,7 @@ public class Segmentation : MonoBehaviour
 			mainCam = Camera.main;
 			if (!mainCam)
 			{
-				GptntDebug.Log("Main camera not found");
+				log.Warn("Main camera not found");
 				return;
 			}
 		}

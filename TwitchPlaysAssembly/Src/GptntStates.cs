@@ -5,6 +5,8 @@ using Assets.Scripts.Missions;
 using System.Linq;
 using TwitchPlaysAssembly;
 using System.Collections;
+using KModkit;
+using log4net;
 
 public class GptntStates : MonoBehaviour 
 {
@@ -22,6 +24,8 @@ public class GptntStates : MonoBehaviour
 	public event Action OnReset;
 	public event Action OnGameEnd;
 
+	private static ILog log = LogManager.GetLogger("GptntStates");
+
 	public enum GameState
 	{
 		Gameplay,
@@ -38,7 +42,6 @@ public class GptntStates : MonoBehaviour
 		host = GetComponent<GptntGameHost>();
 		gptntActions = GetComponent<GptntActions>();
 		gameInfo = FindObjectOfType<KMGameInfo>();
-		GptntDebug.Log("[Game Info] " + gameInfo.ToString());
 
 		gptntActions.OnZoomOut += OnZoomOut;
 
@@ -64,7 +67,7 @@ public class GptntStates : MonoBehaviour
 
 		gameInfo.OnStateChange += (KMGameInfo.State state) =>
 		{
-			GptntDebug.Log($"[DEBUG] State changed: {gameState} -> {state}");
+			log.Debug($"State changed: {gameState} -> {state}");
 			switch (state)
 			{
 				case KMGameInfo.State.Gameplay:
@@ -87,7 +90,7 @@ public class GptntStates : MonoBehaviour
 		};
 		gameInfo.OnLightsChange += (bool on) =>
 		{
-			GptntDebug.Log("[DEBUG] Lights on changes to " + on.ToString());
+			log.Debug("Lights on changes to " + on.ToString());
 			TwitchBomb twitchBomb = FindObjectOfType<TwitchBomb>();
 			try
 			{
@@ -95,7 +98,7 @@ public class GptntStates : MonoBehaviour
 			}
 			catch (Exception ex)
 			{
-				GptntDebug.Log("[DEBUG] Twitch bomb is null " + ex);
+				log.Debug("[DEBUG] Twitch bomb is null " + ex);
 			}
 			gptntActions.bomb = twitchBomb;
 			gptntActions.InitRotation();
@@ -146,8 +149,9 @@ public class GptntStates : MonoBehaviour
 			{
 				module.UpdateAttributes();
 			}
-			catch (MemoryModuleException)
+			catch (MemoryModuleException ex)
 			{
+				log.Warn("Memory module buttons have not emerged yet", ex);
 				StartCoroutine(GetMemoryState((MemoryModuleState) module));
 			}
 		}
@@ -161,7 +165,7 @@ public class GptntStates : MonoBehaviour
 	{
 		MemoryComponent memoryComponent = (MemoryComponent) memory.component;
 		yield return new WaitUntil(() => memoryComponent.IsInputValid);
-		GptntDebug.Log("[Memory] Updated memory state.");
+		log.Debug("Updated memory state.");
 		memory.UpdateAttributes(); 
 	}
 
@@ -186,7 +190,7 @@ public class GptntStates : MonoBehaviour
 		BombComponent selectableComponent = selectable.GetComponent<BombComponent>();
 		if (!selectableComponent)
 		{
-			GptntDebug.Log("No Component Found");
+			log.Debug("No Component Found");
 			return null;
 		}
 		return bombState.modules.FirstOrDefault(module => module.component == selectableComponent);
@@ -220,7 +224,7 @@ public class GptntStates : MonoBehaviour
 			}
 			catch (Exception ex)
 			{
-				GptntDebug.Log($"Error processing {widget.GetType().Name} widget: {ex}");
+				log.Error($"Error processing {widget.GetType().Name}", ex);
 			}
 		}
 
@@ -239,12 +243,19 @@ public class GptntStates : MonoBehaviour
 
 			if (moduleState != null)
 			{
-				moduleState.OnStrike += () => bombState.strikes.Add(moduleState.name);
+				moduleState.OnStrike += () =>
+				{
+					bombState.strikes.Add(moduleState.name);
+					if (bombState.strikes.Count == 2)
+					{
+						RemoveBlinking();
+					}
+				};
 				moduleStates.Add(moduleState);
 			}
 			else
 			{
-				GptntDebug.Log("Unknown bomb component: " + comp.name);
+				log.Debug("Unknown bomb component: " + comp.name);
 			}
 		}
 		return moduleStates;
@@ -267,6 +278,15 @@ public class GptntStates : MonoBehaviour
 			case ComponentTypeEnum.Password: return new PasswordModuleState(comp);
 			default: return null;
 		}
+	}
+
+	private void RemoveBlinking()
+	{
+		StrikeIndicator indicator = FindObjectOfType<StrikeIndicator>();
+		indicator.StopAllCoroutines();
+		var method = typeof(StrikeIndicator).GetMethod("SetAllIndicatorsOn",
+		System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+		method.Invoke(indicator, new object[] { indicator.RedColour });
 	}
 
 	#endregion

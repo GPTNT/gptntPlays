@@ -1,17 +1,32 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Net;
+using System.Net.Sockets;
+using System.IO;
 using System.Threading;
 using UnityEngine;
+using log4net;
+
+public class TraceContext
+{
+	public string TraceId { get; set; }
+	public string SpanId { get; set; }
+}
+
 
 public class GptntHttpHandler : MonoBehaviour
 {
 	Thread workerThread;
 	Worker workerObject;
-
 	RequestHandlers requestHandlers;
 
 	private Dictionary<string, Func<HttpListenerRequest, HttpListenerResponse, string>> routeHandlers;
+
+	// Add trace context holder
+	private string currentTraceId;
+	private string currentSpanId;
+
+	private static ILog log = LogManager.GetLogger("HttpHandler");
 
 	private void Awake()
 	{
@@ -39,7 +54,7 @@ public class GptntHttpHandler : MonoBehaviour
 			["/buffer"] = requestHandlers.HandleObservationBuffer,
 			["/health"] = requestHandlers.HandleHealth,
 			["/reset"] = requestHandlers.HandleReset,
-			["/state"] = requestHandlers.HandleGetState, 
+			["/state"] = requestHandlers.HandleGetState,
 			["/random"] = requestHandlers.HandleRandomSolve,
 			["/detonate"] = requestHandlers.HandleDetonateBomb,
 			["/solve"] = requestHandlers.HandleSolveBomb,
@@ -49,26 +64,113 @@ public class GptntHttpHandler : MonoBehaviour
 	private void HandleRequest(HttpListenerContext context)
 	{
 		var path = context.Request.Url.AbsolutePath.ToLowerInvariant();
-		//if (!path.Equals("/health")) GptntDebug.Log("[HTTP Request] " + path);
-		GptntDebug.Log("[HTTP Request] " + path);
+		log.Debug("Received request to: " + path);
 
-		string responseString = routeHandlers.TryGetValue(path, out var handler)
-			? handler(context.Request, context.Response)
-			: "Unknown route.";
+		// Extract trace context from incoming request
+		string traceParent = context.Request.Headers["traceparent"];
+		string traceState = context.Request.Headers["tracestate"];
+
+		// Parse trace context
+		string traceId, parentSpanId;
+		TraceContext tc = ParseTraceParent(traceParent);
+		traceId = tc.TraceId;
+		parentSpanId = tc.SpanId;
+
+		// Create span for this HTTP request
+		var span = new OpenTelemetrySpan(
+			$"HTTP {context.Request.HttpMethod} {path}",
+			traceId,
+			parentSpanId
+		);
+
+		// Add HTTP attributes
+		span.SetAttribute("http.method", context.Request.HttpMethod);
+		span.SetAttribute("http.route", path);
+		span.SetAttribute("http.url", context.Request.Url.ToString());
+		span.SetAttribute("http.user_agent", context.Request.UserAgent ?? "unknown");
+
+		// Store for child spans (if handlers need to create nested spans)
+		currentTraceId = span.GetTraceId();
+		currentSpanId = span.GetSpanId();
+
+		// Set trace context in log4net for logs during this request
+		ThreadContext.Properties["trace_id"] = currentTraceId;
+		ThreadContext.Properties["span_id"] = currentSpanId;
+
+
+		string responseString;
+		bool success = true;
+
+		try
+		{
+			// Call the route handler
+			if (routeHandlers.TryGetValue(path, out var handler))
+			{
+				responseString = handler(context.Request, context.Response);
+				span.SetAttribute("http.status_code", 200);
+			}
+			else
+			{
+				responseString = "Unknown route.";
+				span.SetAttribute("http.status_code", 404);
+				success = false;
+			}
+		}
+		catch (Exception ex)
+		{
+			log.Error($"Error when handling {path}:", ex);
+			responseString = $"Error: {ex.Message}";
+			span.SetAttribute("http.status_code", 500);
+			span.SetAttribute("error", true);
+			span.SetAttribute("error.type", ex.GetType().Name);
+			span.SetAttribute("error.message", ex.Message);
+			span.SetAttribute("error.stack", ex.StackTrace);
+			success = false;
+		}
+		finally
+		{
+			// Clean up trace context
+			ThreadContext.Properties.Remove("trace_id");
+			ThreadContext.Properties.Remove("span_id");
+
+			// End span
+			span.End(success);
+		}
 
 		SendResponse(context.Request, context.Response, responseString);
+	}
+
+	// Helper to parse W3C traceparent header
+	private TraceContext ParseTraceParent(string traceParent)
+	{
+		if (string.IsNullOrEmpty(traceParent))
+			return new TraceContext();
+
+		// Format: version-trace_id-parent_id-trace_flags
+		// Example: 00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01
+		var parts = traceParent.Split('-');
+		if (parts.Length >= 3)
+		{
+			return new TraceContext { TraceId = parts[1], SpanId = parts[2] };
+		}
+
+		return new TraceContext();
+	}
+
+	// Expose current trace context for handlers that want to create child spans
+	public TraceContext GetCurrentTraceContext()
+	{
+		return new TraceContext { TraceId = currentTraceId, SpanId = currentSpanId };
 	}
 
 	private void SendResponse(HttpListenerRequest request, HttpListenerResponse response, string responseString)
 	{
 		byte[] buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
 
-		// Set CORS headers here
-		response.AddHeader("Access-Control-Allow-Origin", "*"); // or restrict to your domain
+		response.AddHeader("Access-Control-Allow-Origin", "*");
 		response.AddHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-		response.AddHeader("Access-Control-Allow-Headers", "Content-Type");
+		response.AddHeader("Access-Control-Allow-Headers", "Content-Type, traceparent, tracestate"); // Add trace headers
 
-		// Special case for preflight OPTIONS requests — immediately return 200 OK
 		if (response.StatusCode == (int) HttpStatusCode.OK && request.HttpMethod == "OPTIONS")
 		{
 			response.ContentLength64 = 0;
@@ -76,7 +178,6 @@ public class GptntHttpHandler : MonoBehaviour
 			return;
 		}
 
-		// Get a response stream and write the response to it.
 		response.ContentLength64 = buffer.Length;
 		System.IO.Stream output = response.OutputStream;
 		output.Write(buffer, 0, buffer.Length);
@@ -93,7 +194,6 @@ public class GptntHttpHandler : MonoBehaviour
 			host = h;
 		}
 
-		// This method will be called when the thread is started. 
 		public void DoWork()
 		{
 			string port = Environment.GetEnvironmentVariable("port");
@@ -101,9 +201,8 @@ public class GptntHttpHandler : MonoBehaviour
 			{
 				port = "8085";
 			}
-			// Create a listener.
+
 			listener = new HttpListener();
-			// Add the prefixes.
 			foreach (string s in new string[] { $"http://localhost:{port}/" })
 			{
 				listener.Prefixes.Add(s);
@@ -130,7 +229,7 @@ public class GptntHttpHandler : MonoBehaviour
 			}
 			catch (Exception ex)
 			{
-				GptntDebug.Log("[Http Server Error] Error processing request: " + ex.Message);
+				log.Error("Error processing request: ", ex);
 			}
 		}
 	}

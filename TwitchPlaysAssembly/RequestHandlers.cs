@@ -7,6 +7,7 @@ using System.Threading;
 using UnityEngine;
 using System.Collections;
 using Assets.Scripts.Missions;
+using log4net;
 
 public class RequestHandlers : MonoBehaviour
 {
@@ -21,6 +22,8 @@ public class RequestHandlers : MonoBehaviour
 	Segmentation segmentation;
 
 	bool canGetState;
+
+	private static ILog log = LogManager.GetLogger("RequestHandler");
 
 	private void Awake()
 	{
@@ -71,7 +74,6 @@ public class RequestHandlers : MonoBehaviour
 		return RunOnMainThread(() =>
 		{
 			string responseString = "";
-			GptntDebug.Log("[RandomSolve] value = " + numModulesToSolve);
 			List<TwitchModule> modules = FindObjectsOfType<TwitchModule>().Where(x => !x.Solved).ToList();
 			System.Random rnd = new System.Random();
 			// Choose random number of module between 1 and max-1
@@ -94,7 +96,7 @@ public class RequestHandlers : MonoBehaviour
 
 	public string HandleHealth(HttpListenerRequest request, HttpListenerResponse response)
 	{
-		GptntDebug.Log("[Health] Handling health");
+		log.Debug("Handling health");
 		return gptntStates.gameState.ToString();
 	}
 
@@ -131,7 +133,7 @@ public class RequestHandlers : MonoBehaviour
 	{
 		string actionType = request.QueryString.Get("action");
 		string responseString = null;
-		GptntDebug.Log("[Action] " + actionType);
+		log.Debug("Handling action: " + actionType);
 
 		gptntStates.UpdateBombState();
 		switch (actionType)
@@ -184,11 +186,11 @@ public class RequestHandlers : MonoBehaviour
 		}
 		catch (Exception ex)
 		{
-			GptntDebug.Log(ex.ToString());
+			log.Error("Uh oh click start failed", ex);
 			response.StatusCode = (int) HttpStatusCode.BadRequest;
 			return "Could not parse x and y coordinates: " + ex;
 		}
-		GptntDebug.Log($"[Location] x: {x}, y: {y}");
+		log.Debug($"Clicked at x: {x}, y: {y}");
 		return gptntActions.Click(x, y);
 	}
 
@@ -363,21 +365,21 @@ public class RequestHandlers : MonoBehaviour
 		try
 		{
 			string value = request.QueryString.Get("value");
-			MainThreadQueue.Enqueue(() => GptntDebug.Log("[TimeScale] value = " + value));
+			MainThreadQueue.Enqueue(() => log.Debug("Setting time scale to: " + value));
 			if (float.Parse(value) == 0 && StateEqualsAny(GptntStates.GameState.Transitioning))
 				MainThreadQueue.Enqueue(() =>
 				{
-					GptntDebug.Log("[TimeScale] waiting for end of transitioning to pause");
+					log.Warn("Game paused during transitioning, waiting for end of transitioning to pause");
 					StartCoroutine(PauseAfterTransition());
 				});
 			else
 				Time.timeScale = float.Parse(value);
 			return "Set timeScale to " + value;
 		}
-		catch
+		catch(Exception ex)
 		{
 			response.StatusCode = (int) HttpStatusCode.BadRequest;
-			GptntDebug.Log("[TimeScale] Could not parse request");
+			log.Error("Could not parse time scale request", ex);
 			return "Could not parse request";
 		}
 
@@ -503,8 +505,8 @@ public class RequestHandlers : MonoBehaviour
 		}
 		else if (parentName.Equals("FrontFace") || parentName.Equals("RearFace")) // Bomb held, return module selectables
 		{
-			if (!(gptntActions.bombRotationX == 0f && gptntActions.bombRotationZ.EqualsAny(0f, 180f)))
-				return activeSelectables;
+			if (!(gptntActions.currentFace == GptntActions.ZFace.Side && gptntActions.activeFace.EqualsAny(GptntActions.SideFace.Front, GptntActions.SideFace.Back)))
+				return activeSelectables; // Return empty if we're not on the front or back side of the bomb
 
 			foreach (BombComponent component in bomb.Bomb.BombComponents)
 			{

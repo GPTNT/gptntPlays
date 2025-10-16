@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
 using System.Linq;
+using log4net;
 
 namespace TwitchPlaysAssembly
 {
@@ -539,7 +540,6 @@ namespace TwitchPlaysAssembly
 			bool buttonsEmerged = (bool) buttonsEmergedField.GetValue(memory);
 			if (!buttonsEmerged)
 			{
-				GptntDebug.Log("[Exception] Buttons not yet emerged");
 				throw new MemoryModuleException("Memory buttons not yet emerged");
 			}
 

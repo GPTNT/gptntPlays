@@ -15,7 +15,7 @@
    <DocumentationFile>../docs/documentation.xml</DocumentationFile>
  </PropertyGroup>
  <PropertyGroup>
-   <GameFolder Condition="'$(GameFolder)' == ''">/Users/mac/Desktop/KTANE/Keep Talking and Nobody Explodes.app/Contents/Resources/Data/Managed</GameFolder>
+   <GameFolder Condition="'$(GameFolder)' == ''">/Users/mac/git/gptnt/storage/ktane/Keep Talking and Nobody Explodes.app/Contents/Resources/Data/Managed</GameFolder>
    <Copy>copy</Copy>
    <Copy Condition=" '$(OS)' != 'Windows_NT' ">cp</Copy>
  </PropertyGroup>
@@ -81,6 +81,10 @@
    </Reference>
    <Reference Include="UnityEngine.UnityWebRequestWWWModule">
      <HintPath>$(GameFolder)/UnityEngine.UnityWebRequestWWWModule.dll</HintPath>
+     <Private>False</Private>
+   </Reference>
+      <Reference Include="log4net">
+     <HintPath>$(GameFolder)/log4net.dll</HintPath>
      <Private>False</Private>
    </Reference>
  </ItemGroup>

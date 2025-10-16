@@ -1,8 +1,6 @@
 using UnityEngine;
-using System.Collections.Generic;
 using System;
 using System.Collections;
-using Assets.Scripts.Missions;
 
 public class GptntGameHost : MonoBehaviour
 {
@@ -43,7 +41,7 @@ public class GptntGameHost : MonoBehaviour
 		if (int.TryParse(heightEnv, out int parsedHeight)) screenHeight = parsedHeight;
 
 		Screen.SetResolution(screenWidth, screenHeight, false);
-		gptntBuffer.Init(screenHeight, screenHeight, MaxFrames);
+		gptntBuffer.Init(screenWidth, screenHeight, MaxFrames);
 		segmentation.Init(screenWidth, screenHeight);
 	}
 

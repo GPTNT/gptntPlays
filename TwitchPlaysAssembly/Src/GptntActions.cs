@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections;
-using System.Security.Cryptography;
 using Assets.Scripts.Input;
 using UnityEngine;
 
@@ -12,14 +11,11 @@ public class GptntActions : MonoBehaviour
 	private bool isZoomedIn;
 	private Selectable zoomedInto;
 	public TwitchBomb bomb;
-
-	public float bombRotationX { get; private set; } = 0f;
-	public float bombRotationZ { get; private set; } = 0f;
 	bool StartingFace;
-	SideFace activeFace = SideFace.Front; // for keeping track of which side face we are on / have to return to 
-	ZFace currentFace = ZFace.Side; // for keeping track of face perpendicular to the z axis
+	public SideFace activeFace = SideFace.Front; // for keeping track of which side face we are on / have to return to 
+	public ZFace currentFace = ZFace.Side; // for keeping track of face perpendicular to the z axis
 
-	private enum SideFace
+	public enum SideFace
 	{
 		Front = 0,
 		Right = 90,
@@ -27,7 +23,7 @@ public class GptntActions : MonoBehaviour
 		Left = 270,
 	}
 
-	private enum ZFace
+	public enum ZFace
 	{
 		Top = 90,
 		Side = 0,
@@ -43,8 +39,6 @@ public class GptntActions : MonoBehaviour
 
 	public void InitRotation()
 	{
-		bombRotationZ = 0;
-		bombRotationX = 0;
 		StartingFace = KTInputManager.Instance.SelectableManager.GetActiveFace() == FaceEnum.Front;
 		activeFace = SideFace.Front;
 		currentFace = ZFace.Side;
@@ -169,7 +163,6 @@ public class GptntActions : MonoBehaviour
 		if (simon == null)
 			return null;
 
-		GptntDebug.Log("[Simon] Resetting Simon");
 		simon.PlaySequenceDelay = 5f; // Reset back to default time
 		// change to 5
 		// click
@@ -183,7 +176,6 @@ public class GptntActions : MonoBehaviour
 		SimonComponent simon = selectable.GetComponent<SimonComponent>();
 		if (simon == null)
 			return;
-		GptntDebug.Log("Reset simon to 1f");
 		simon.PlaySequenceDelay = 1f;
 		simon.PassSequenceDelay = 1f;
 		simon.StopAllCoroutines();
@@ -232,7 +224,6 @@ public class GptntActions : MonoBehaviour
 			currentFace = CycleFace(currentFace, -1);
 		}
 		bomb.RotateByLocalQuaternion(Quaternion.Euler((int) currentFace, 0, (int) activeFace));
-		GptntDebug.Log($"[Debug] Set the bomb rotation to X:{(int) currentFace} Z:{(int) activeFace}");
 	}
 
 	private void Rotation180()
@@ -251,7 +242,6 @@ public class GptntActions : MonoBehaviour
 				break;
 		}
 		bomb.RotateByLocalQuaternion(Quaternion.Euler((int) currentFace, 0, (int) activeFace));
-		GptntDebug.Log($"[Debug] Set the bomb rotation to X:{(int) currentFace} Z:{(int) activeFace}");
 	}
 
 	#endregion
@@ -273,27 +263,12 @@ public class GptntActions : MonoBehaviour
 
 	public string GetBombSide()
 	{
-		// Normalize the angles between 0 and 360
-		float xRotation = NormalizeAngle(bombRotationX);
-		float zRotation = NormalizeAngle(bombRotationZ);
+		if (currentFace == ZFace.Side)
+			return activeFace.ToString().ToLower();
 
-		// Check for top/bottom tilt (looking up/down)
-		if (xRotation > 45f && xRotation < 135f)
-			return "bottom";  // Looking downward
-		if (xRotation > 225f && xRotation < 315f)
-			return "top";     // Looking upward
-
-		if (zRotation >= 315f || zRotation < 45f)
-			return "front";
-		if (zRotation >= 45f && zRotation < 135f)
-			return "right";
-		if (zRotation >= 135f && zRotation < 225f)
-			return "back";
-		if (zRotation >= 225f && zRotation < 315f)
-			return "left";
-
-		return "unknown";
+		return currentFace.ToString().ToLower();
 	}
+
 
 	private float NormalizeAngle(float angle)
 	{

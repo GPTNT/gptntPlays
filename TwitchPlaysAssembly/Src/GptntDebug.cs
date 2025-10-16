@@ -1,26 +1,17 @@
-﻿using System;
-using System.IO;
-using UnityEngine;
+﻿using UnityEngine;
+using log4net;
 
 public class GptntDebug : MonoBehaviour
 {
 	private static string path = "gptntlogs.log";
-
-	public static void Log(string message)
-	{
-		StreamWriter writer = new StreamWriter(path, true);
-		DateTime currentTime = DateTime.Now;
-		message = $"[{currentTime.ToLongTimeString()}] " + message; 
-		writer.WriteLine(message);
-		writer.Close();
-	}
+	private static ILog log = LogManager.GetLogger("Helper");
 
 	public static void LogChildrenRecursive(GameObject obj,bool withComponents, int depth = 0)
 	{
 		foreach (Transform child in obj.transform)
 		{
 			string indent = new string('-', depth);
-			Log($"{indent}{child.gameObject.name}");
+			log.Debug($"{indent}{child.gameObject.name}");
 			if (withComponents) {LogAllComponents(child.gameObject);}
 			LogChildrenRecursive(child.gameObject, withComponents, depth + 1);
 		}
@@ -29,14 +20,14 @@ public class GptntDebug : MonoBehaviour
 	public static void LogAllComponents(GameObject obj)
 	{
 		Component[] components = obj.GetComponents<Component>();
-		Log($"Components on '{obj.name}':");
+		log.Debug($"Components on '{obj.name}':");
 
 		foreach (Component comp in components)
 		{
 			if (comp != null)
-				Log("+ " + comp.GetType().Name);
+				log.Debug("+ " + comp.GetType().Name);
 			else
-				Log("+ [Missing Component]");
+				log.Debug("+ [Missing Component]");
 		}
 	}
 
