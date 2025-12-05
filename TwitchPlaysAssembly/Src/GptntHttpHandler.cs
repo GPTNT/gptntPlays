@@ -6,6 +6,8 @@ using System.IO;
 using System.Threading;
 using UnityEngine;
 using log4net;
+using TwitchPlaysAssembly;
+using System.Security.AccessControl;
 
 public class TraceContext
 {
@@ -64,11 +66,9 @@ public class GptntHttpHandler : MonoBehaviour
 	private void HandleRequest(HttpListenerContext context)
 	{
 		var path = context.Request.Url.AbsolutePath.ToLowerInvariant();
-		log.Debug("Received request to: " + path);
 
 		// Extract trace context from incoming request
 		string traceParent = context.Request.Headers["traceparent"];
-		string traceState = context.Request.Headers["tracestate"];
 
 		// Parse trace context
 		string traceId, parentSpanId;
@@ -82,6 +82,8 @@ public class GptntHttpHandler : MonoBehaviour
 			traceId,
 			parentSpanId
 		);
+		if(!path.Equals("/health")) // Remove logs for /health not to clog logs
+			log.Debug(GptntDebug.FormatMessage("Received request to: " + path, span.GetTraceId(), span.GetSpanId()));
 
 		// Add HTTP attributes
 		span.SetAttribute("http.method", context.Request.HttpMethod);
@@ -94,9 +96,8 @@ public class GptntHttpHandler : MonoBehaviour
 		currentSpanId = span.GetSpanId();
 
 		// Set trace context in log4net for logs during this request
-		ThreadContext.Properties["trace_id"] = currentTraceId;
-		ThreadContext.Properties["span_id"] = currentSpanId;
-
+		GlobalContext.Properties["trace_id"] = currentTraceId;
+		GlobalContext.Properties["span_id"] = currentSpanId;
 
 		string responseString;
 		bool success = true;
@@ -118,7 +119,7 @@ public class GptntHttpHandler : MonoBehaviour
 		}
 		catch (Exception ex)
 		{
-			log.Error($"Error when handling {path}:", ex);
+			log.Error(GptntDebug.FormatMessage($"Error when handling {path}:", span.GetTraceId(), span.GetSpanId()), ex);
 			responseString = $"Error: {ex.Message}";
 			span.SetAttribute("http.status_code", 500);
 			span.SetAttribute("error", true);
@@ -130,8 +131,8 @@ public class GptntHttpHandler : MonoBehaviour
 		finally
 		{
 			// Clean up trace context
-			ThreadContext.Properties.Remove("trace_id");
-			ThreadContext.Properties.Remove("span_id");
+			GlobalContext.Properties.Remove("trace_id");
+			GlobalContext.Properties.Remove("span_id");
 
 			// End span
 			span.End(success);
@@ -170,7 +171,7 @@ public class GptntHttpHandler : MonoBehaviour
 		response.AddHeader("Access-Control-Allow-Origin", "*");
 		response.AddHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
 		response.AddHeader("Access-Control-Allow-Headers", "Content-Type, traceparent, tracestate"); // Add trace headers
-
+		
 		if (response.StatusCode == (int) HttpStatusCode.OK && request.HttpMethod == "OPTIONS")
 		{
 			response.ContentLength64 = 0;
@@ -229,7 +230,7 @@ public class GptntHttpHandler : MonoBehaviour
 			}
 			catch (Exception ex)
 			{
-				log.Error("Error processing request: ", ex);
+				log.Error(GptntDebug.FormatMessage("Error processing request: "), ex);
 			}
 		}
 	}

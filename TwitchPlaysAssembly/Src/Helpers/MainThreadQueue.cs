@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Threading;
+using log4net;
 
 /// <summary>
 /// Allows the execution of a function with the guarantee that it will run on Unity's mainthread.
@@ -9,6 +10,8 @@ static class MainThreadQueue
 {
 	static readonly Queue<Action> ActionQueue = new Queue<Action>();
 	static int MainThreadID;
+
+	private static ILog log = LogManager.GetLogger("MainThreadQueue");
 
 	/// <summary>
 	/// Stores the current thread ID, allowing enqueued functions to execute immediately if they were already on Unity's mainthread.
@@ -29,6 +32,7 @@ static class MainThreadQueue
 		{
 			lock (ActionQueue)
 			{
+				log.Debug("Action Queue length: " + ActionQueue.Count);
 				ActionQueue.Enqueue(action);
 			}
 		}

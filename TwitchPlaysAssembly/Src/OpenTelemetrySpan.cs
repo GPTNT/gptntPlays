@@ -9,7 +9,7 @@ public class OpenTelemetrySpan
 	private static ILog log = LogManager.GetLogger("OTel");
 
 	// Your OTEL collector endpoint
-	private const string OTEL_ENDPOINT = "http://otel-collector:4318/v1/traces";
+	private const string OTEL_ENDPOINT = "http://localhost:4318/v1/traces";
 
 	private string traceId;
 	private string spanId;
@@ -27,7 +27,7 @@ public class OpenTelemetrySpan
 		startTimeUnixNano = DateTimeOffset.UtcNow.Millisecond * 1000000;
 		attributes = new Dictionary<string, object>();
 
-		log.Debug($"Started span '{name}' trace_id={this.traceId} span_id={spanId}");
+		//log.Debug($"Started span '{name}' trace_id={this.traceId} span_id={spanId}");
 	}
 
 	public void SetAttribute(string key, object value)
@@ -38,7 +38,7 @@ public class OpenTelemetrySpan
 	public void AddEvent(string name, Dictionary<string, object> eventAttributes = null)
 	{
 		// Store events if needed
-		log.Debug($"Span event: {name}");
+		log.Debug(GptntDebug.FormatMessage($"Span event: {name}"));
 	}
 
 	public void End(bool success = true)
@@ -98,20 +98,20 @@ public class OpenTelemetrySpan
 
 		try
 		{
-			var json = JsonConvert.SerializeObject(payload);
+			//var json = JsonConvert.SerializeObject(payload);
 
-			using (var client = new WebClient())
-			{
-				client.Headers[HttpRequestHeader.ContentType] = "application/json";
-				string response = client.UploadString(OTEL_ENDPOINT, json);
-			}
+			//using (var client = new WebClient())
+			//{
+			//	client.Headers[HttpRequestHeader.ContentType] = "application/json";
+			//	string response = client.UploadString(OTEL_ENDPOINT, json);
+			//}
 		}
 		catch (Exception ex)
 		{
-			log.Error($"Error sending span", ex);
+			log.Error(GptntDebug.FormatMessage($"Error sending span"), ex);
 		}
 
-		log.Debug($"Ended span '{name}' duration={(endTimeUnixNano - startTimeUnixNano) / 1000000}ms");
+		//log.Debug(GptntDebug.FormatMessage($"Ended span '{name}' duration={(endTimeUnixNano - startTimeUnixNano) / 1000000}ms"));
 	}
 
 	private object[] ConvertAttributes()

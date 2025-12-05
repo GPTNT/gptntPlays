@@ -540,7 +540,7 @@ namespace TwitchPlaysAssembly
 			bool buttonsEmerged = (bool) buttonsEmergedField.GetValue(memory);
 			if (!buttonsEmerged)
 			{
-				throw new MemoryModuleException("Memory buttons not yet emerged");
+				throw new ButtonsNotEmergedException("Memory buttons did not emerge yet");
 			}
 
 			stage = memory.CurrentStage + 1;
@@ -557,9 +557,9 @@ namespace TwitchPlaysAssembly
 		}
 	}
 
-	public class MemoryModuleException : Exception
+	public class ButtonsNotEmergedException : Exception
 	{
-		public MemoryModuleException(string message) : base(message) { }
+		public ButtonsNotEmergedException(string message) : base(message) { }
 	}
 
 	// --- Morse Code ---
@@ -647,6 +647,10 @@ namespace TwitchPlaysAssembly
 		private void SetAttributes()
 		{
 			WhosOnFirstComponent whoFirst = (WhosOnFirstComponent) component;
+			if (!whoFirst.ButtonsEmerged)
+			{
+				throw new ButtonsNotEmergedException("Whos on first buttons did not emerge yet");
+			}
 			stage = whoFirst.CurrentStage + 1;
 
 			buttonWords = new string[6];

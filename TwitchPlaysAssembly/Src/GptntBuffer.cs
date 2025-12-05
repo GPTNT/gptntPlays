@@ -27,14 +27,26 @@ public class GptntBuffer : MonoBehaviour
 	{
 		screenshotRT = new RenderTexture(width, height, 24);
 		textureBuffer = new TextureRingBuffer(bufferLength);
-		log.Debug("Initialized the Buffer");
+
+		OpenTelemetrySpan span = new OpenTelemetrySpan("buffer.init");
+		span.SetAttribute("width", width);
+		span.SetAttribute("height", height);
+		span.SetAttribute("bufferLength", bufferLength);
+
+		log.Debug(GptntDebug.FormatMessage("Initialized the Buffer", span.GetTraceId(), span.GetSpanId()));
+
+		span.End(true);
 	}
 
 	public void StartBuffer(float frequency)
 	{
 		DuplicateCamera();
 		bufferCoroutine = StartCoroutine(BufferCoroutine(frequency));
-		log.Debug("Started the buffer");
+
+		OpenTelemetrySpan span = new OpenTelemetrySpan("buffer.start");
+		span.SetAttribute("frequency", frequency);
+		log.Debug(GptntDebug.FormatMessage("Started the Buffer", span.GetTraceId(), span.GetSpanId()));
+		span.End(true);
 	}
 
 	public void StopBuffer()
@@ -44,14 +56,18 @@ public class GptntBuffer : MonoBehaviour
 			return;
 		StopCoroutine(bufferCoroutine);
 		bufferCoroutine = null;
-		log.Debug("Stopped the buffer");
+		OpenTelemetrySpan span = new OpenTelemetrySpan("buffer.stop");
+		log.Debug(GptntDebug.FormatMessage("Stopped the Buffer", span.GetTraceId(), span.GetSpanId()));
+		span.End(true);
 	}
 
 	public void ClearBuffer()
 	{
 		StopBuffer();
 		textureBuffer.Clear();
-		log.Debug("Cleared the buffer");
+		OpenTelemetrySpan span = new OpenTelemetrySpan("buffer.clear");
+		log.Debug(GptntDebug.FormatMessage("Cleared the buffer"));
+		span.End(true);
 	}
 
 	public ObservationPayload GetBufferJSON()
@@ -94,7 +110,10 @@ public class GptntBuffer : MonoBehaviour
 			mainCam = Camera.main;
 			if (!mainCam)
 			{
-				log.Error("OH SHIT... Main camera not found");
+				OpenTelemetrySpan span = new OpenTelemetrySpan("buffer.duplicate_camera_fail");
+				span.SetAttribute("error", "Main camera not found");
+				span.End(false);
+				log.Error(GptntDebug.FormatMessage("Failed to duplicate camera: Main camera not found", span.GetTraceId(), span.GetSpanId()));
 				return;
 			}
 		}

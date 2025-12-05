@@ -20,6 +20,8 @@ public class RequestHandlers : MonoBehaviour
 	GptntActions gptntActions;
 	GptntBuffer gptntBuffer;
 	Segmentation segmentation;
+	GptntHttpHandler httpHandler;
+	MagicSolver magic;
 
 	bool canGetState;
 
@@ -32,6 +34,8 @@ public class RequestHandlers : MonoBehaviour
 		gptntActions = GetComponent<GptntActions>();
 		gptntBuffer = GetComponent<GptntBuffer>();
 		segmentation = GetComponent<Segmentation>();
+		httpHandler = GetComponent<GptntHttpHandler>();
+		magic = GetComponent<MagicSolver>();
 
 		spawn = new GameObject();
 		mission = ScriptableObject.CreateInstance<KMMission>();
@@ -64,13 +68,29 @@ public class RequestHandlers : MonoBehaviour
 		{
 			StartCoroutine(gptntActions.Rotate180());
 		}
+		if (Input.GetKeyDown(KeyCode.O))
+		{
+			Selectable[] selectables = GetActiveSelectables().ToArray();
+			GameObject[] objects = new GameObject[selectables.Length];
+			for (int i = 0; i < selectables.Length; i++)
+			{
+				objects[i] = selectables[i].gameObject;
+			}
+			StartCoroutine(segmentation.Capture(objects, (bytes) => {
+				System.IO.File.WriteAllBytes("segmentation.png", bytes);
+			}));
+		}
 	}
 
 	#endregion
 
 	public string HandleRandomSolve(HttpListenerRequest request, HttpListenerResponse response)
 	{
+		var traceContext = httpHandler.GetCurrentTraceContext();
+		OpenTelemetrySpan span = new OpenTelemetrySpan("random.solve", traceContext.TraceId, traceContext.SpanId);
+
 		int numModulesToSolve = int.Parse(request.QueryString.Get("value"));
+		log.Debug(GptntDebug.FormatMessage("Handling random solve for " + numModulesToSolve + " modules", span.GetTraceId(), span.GetSpanId()));
 		return RunOnMainThread(() =>
 		{
 			string responseString = "";
@@ -81,31 +101,49 @@ public class RequestHandlers : MonoBehaviour
 			foreach (var module in modulesToSolve)
 			{
 				module.Solver.SolveSilently();
+				log.Debug(GptntDebug.FormatMessage("Randomly solved module: " + module.name, span.GetTraceId(), span.GetSpanId()));
 				responseString += " " + module.name;
 			}
+			span.End(true);
 			return responseString;
 		});
 	}
 
 	public string HandleReset(HttpListenerRequest request, HttpListenerResponse response)
 	{
+		var traceContext = httpHandler.GetCurrentTraceContext();
+		OpenTelemetrySpan span = new OpenTelemetrySpan("game.reset", traceContext.TraceId, traceContext.SpanId);
+
 		if (gptntStates.gameState != GptntStates.GameState.Setup)
 			SceneManager.Instance.ReturnToSetupState();
+
+		log.Debug(GptntDebug.FormatMessage("reset successful", span.GetTraceId(), span.GetSpanId()));
+		span.End(true);
 		return "Nuh uh";
 	}
 
 	public string HandleHealth(HttpListenerRequest request, HttpListenerResponse response)
 	{
-		log.Debug("Handling health");
 		return gptntStates.gameState.ToString();
 	}
 
 	public string HandleObservationBuffer(HttpListenerRequest request, HttpListenerResponse response)
 	{
+		var traceContext = httpHandler.GetCurrentTraceContext();
+		OpenTelemetrySpan span = new OpenTelemetrySpan("observation.buffer", traceContext.TraceId, traceContext.SpanId);
+
 		string segmentation = HandleSegmentation(response);
+		if (response.StatusCode != 200)
+		{
+			log.Debug(GptntDebug.FormatMessage("Segmentation took too long", span.GetTraceId(), span.GetSpanId()));
+			return "";
+		}
+		else
+			log.Debug(GptntDebug.FormatMessage("segmentation returned properly", span.GetTraceId(), span.GetSpanId()));
 		ObservationPayload observation = gptntBuffer.GetBufferJSON();
 		observation.segmentation = segmentation;
 
+		span.End(true);
 		return JsonConvert.SerializeObject(observation);
 	}
 
@@ -113,10 +151,15 @@ public class RequestHandlers : MonoBehaviour
 
 	public string HandleAction(HttpListenerRequest request, HttpListenerResponse response)
 	{
+		var traceContext = httpHandler.GetCurrentTraceContext();
+		OpenTelemetrySpan span = new OpenTelemetrySpan("game.action", traceContext.TraceId, traceContext.SpanId);
+
 		GptntStates.GameState gameState = gptntStates.gameState;
 		if (!gameState.EqualsAny(GptntStates.GameState.LightsOn, GptntStates.GameState.LightsOff) || !gptntStates.isStarted)
 		{
 			response.StatusCode = (int) HttpStatusCode.BadRequest;
+			log.Debug(GptntDebug.FormatMessage("Cannot send action to the game in " + gameState.ToString() + " state", span.GetTraceId(), span.GetSpanId()));
+			span.End(false);
 			return "Cannot send action to the game in " + gameState.ToString() + " state";
 		}
 
@@ -126,14 +169,19 @@ public class RequestHandlers : MonoBehaviour
 		{
 			return responseString;
 		}
+		span.End(true);
 		return responseString;
 	}
 
 	private string HandleActionOnMainThread(HttpListenerRequest request, HttpListenerResponse response)
 	{
+		var traceContext = httpHandler.GetCurrentTraceContext();
+		OpenTelemetrySpan span = new OpenTelemetrySpan("game.action.mainthread", traceContext.TraceId, traceContext.SpanId);
+
 		string actionType = request.QueryString.Get("action");
 		string responseString = null;
-		log.Debug("Handling action: " + actionType);
+		span.SetAttribute("action.type", actionType);
+		log.Debug(GptntDebug.FormatMessage("Handling action: " + actionType, span.GetTraceId(), span.GetSpanId()));
 
 		gptntStates.UpdateBombState();
 		switch (actionType)
@@ -150,10 +198,14 @@ public class RequestHandlers : MonoBehaviour
 			case "out":
 				responseString = HandleZoomOut();
 				break;
+			case "magic":
+				responseString = HandleMagic();
+				break;
 			default:
 				responseString = HandleRotate(request);
 				break;
 		}
+		span.End(true);
 		return responseString;
 	}
 
@@ -174,6 +226,8 @@ public class RequestHandlers : MonoBehaviour
 	private string HandleClickStart(HttpListenerRequest request, HttpListenerResponse response)
 	{
 		float x, y;
+		var traceContext = httpHandler.GetCurrentTraceContext();
+		OpenTelemetrySpan span = new OpenTelemetrySpan("game.action.clickstart", traceContext.TraceId, traceContext.SpanId);
 
 		try
 		{
@@ -186,11 +240,15 @@ public class RequestHandlers : MonoBehaviour
 		}
 		catch (Exception ex)
 		{
-			log.Error("Uh oh click start failed", ex);
+			log.Error(GptntDebug.FormatMessage("Uh oh click start failed", span.GetTraceId(), span.GetSpanId()), ex);
 			response.StatusCode = (int) HttpStatusCode.BadRequest;
+			span.End(false);
 			return "Could not parse x and y coordinates: " + ex;
 		}
-		log.Debug($"Clicked at x: {x}, y: {y}");
+		span.SetAttribute("click.x", x);
+		span.SetAttribute("click.y", y);
+		log.Debug(GptntDebug.FormatMessage($"Clicked at x: {x}, y: {y}", span.GetTraceId(), span.GetSpanId()));
+		span.End(true);
 		return gptntActions.Click(x, y);
 	}
 
@@ -204,6 +262,11 @@ public class RequestHandlers : MonoBehaviour
 		return gptntActions.ZoomOut();
 	}
 
+	public string HandleMagic()
+	{
+		return magic.ApplyMagic();
+	}
+
 	#endregion
 
 	private string RunOnMainThread(Func<string> func)
@@ -214,7 +277,14 @@ public class RequestHandlers : MonoBehaviour
 			result = func();
 			handle.Set();
 		});
-		handle.WaitOne();
+		bool completed = handle.WaitOne(50000);
+
+		if (!completed)
+		{
+			log.Error(GptntDebug.FormatMessage("Timed out waiting for main thread"));
+			return null;
+		}
+
 		return result;
 	}
 
@@ -240,25 +310,32 @@ public class RequestHandlers : MonoBehaviour
 
 	public string HandleGetState(HttpListenerRequest request, HttpListenerResponse response)
 	{
-
+		var traceContext = httpHandler.GetCurrentTraceContext();
+		OpenTelemetrySpan span = new OpenTelemetrySpan("game.getstate", traceContext.TraceId, traceContext.SpanId);
 		if (!canGetState)
 		{
 			response.StatusCode = (int) HttpStatusCode.BadRequest;
 			return "Cannot get bomb state in " + gptntStates.gameState + " state";
 		}
-
+		log.Debug(GptntDebug.FormatMessage("Throwing get state into main thread", span.GetTraceId(), span.GetSpanId()));
 		string responseString = RunOnMainThread(() =>
 		{
-			return JsonConvert.SerializeObject(gptntStates.UpdateBombState(), Formatting.Indented);
+			string stateJson =  JsonConvert.SerializeObject(gptntStates.UpdateBombState(), Formatting.Indented);
+			span.SetAttribute("bomb.state", stateJson);
+			log.Debug(GptntDebug.FormatMessage("Retrieved bomb state", span.GetTraceId(), span.GetSpanId()));
+			return stateJson;
 		});
 
 		if (responseString == null)
 		{
 			response.StatusCode = (int) HttpStatusCode.InternalServerError;
+			log.Error(GptntDebug.FormatMessage("Could not serialize bomb state", span.GetTraceId(), span.GetSpanId()));
+			span.End(false);
 			responseString = "Could not serialize bomb state";
 		}
 
 		response.ContentType = "application/json";
+		span.End(true);
 		return responseString;
 	}
 
@@ -354,6 +431,7 @@ public class RequestHandlers : MonoBehaviour
 
 		if (!waitHandle.WaitOne(500))
 		{
+			response.StatusCode = (int) HttpStatusCode.RequestTimeout;
 			return "Failed to get segmentation mask";
 		}
 		response.ContentType = "image/png";
@@ -365,11 +443,11 @@ public class RequestHandlers : MonoBehaviour
 		try
 		{
 			string value = request.QueryString.Get("value");
-			MainThreadQueue.Enqueue(() => log.Debug("Setting time scale to: " + value));
+			MainThreadQueue.Enqueue(() => log.Debug(GptntDebug.FormatMessage("Setting time scale to: " + value)));
 			if (float.Parse(value) == 0 && StateEqualsAny(GptntStates.GameState.Transitioning))
 				MainThreadQueue.Enqueue(() =>
 				{
-					log.Warn("Game paused during transitioning, waiting for end of transitioning to pause");
+					log.Warn(GptntDebug.FormatMessage("Game paused during transitioning, waiting for end of transitioning to pause"));
 					StartCoroutine(PauseAfterTransition());
 				});
 			else
@@ -379,7 +457,7 @@ public class RequestHandlers : MonoBehaviour
 		catch(Exception ex)
 		{
 			response.StatusCode = (int) HttpStatusCode.BadRequest;
-			log.Error("Could not parse time scale request", ex);
+			log.Error(GptntDebug.FormatMessage("Could not parse time scale request"), ex);
 			return "Could not parse request";
 		}
 
@@ -516,7 +594,8 @@ public class RequestHandlers : MonoBehaviour
 					Vector3 bombUp = bomb.Bomb.transform.up;
 					float angleBetween = Vector3.Angle(componentUp, bombUp);
 					bool isFront = angleBetween < 90.0f;
-					if (isFront == parentName.Equals("FrontFace"))
+					log.Debug($"Componenet {component.name} isFront={isFront}. Bomb on front={gptntActions.activeFace.Equals(GptntActions.SideFace.Front)}");	
+					if (isFront == gptntActions.activeFace.Equals(GptntActions.SideFace.Front))
 					{
 						activeSelectables.Add(component.GetComponent<Selectable>());
 					}

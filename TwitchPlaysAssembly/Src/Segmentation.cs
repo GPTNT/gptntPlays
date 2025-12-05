@@ -39,8 +39,24 @@ public class Segmentation : MonoBehaviour
 		renderTexture.filterMode = FilterMode.Point;
 		tex = new Texture2D(width, height);
 		rect = new Rect(0, 0, width, height);
-		if (!shader) log.Debug("Shader is null");
-		
+		if (!shader)
+		{
+			var shaderHolder = GetComponent("ShaderHolder");
+			if (shaderHolder != null)
+			{
+				var shaderField = shaderHolder.GetType().GetField("shader");
+				if (shaderField != null)
+				{
+					shader = shaderField.GetValue(shaderHolder) as Shader;
+					log.Debug(GptntDebug.FormatMessage("Shader retrieved from ShaderHolder"));
+				}
+			}
+			else
+			{
+				log.Error(GptntDebug.FormatMessage("ShaderHolder component not found"));
+			}
+		}
+
 	}
 
 	public IEnumerator Capture(GameObject[] objects, Action<byte[]> callback)
@@ -201,7 +217,7 @@ public class Segmentation : MonoBehaviour
 			mainCam = Camera.main;
 			if (!mainCam)
 			{
-				log.Warn("Main camera not found");
+				log.Warn(GptntDebug.FormatMessage("Main camera not found"));
 				return;
 			}
 		}

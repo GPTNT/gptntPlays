@@ -2,18 +2,22 @@
 using System.Collections;
 using Assets.Scripts.Input;
 using UnityEngine;
+using UnityEngine.UI;
+using log4net;
 
 public class GptntActions : MonoBehaviour
 {
 	private int interactableLayer = 11;
 	private Camera cam;
 	private Selectable lastUsedSelectable;
-	private bool isZoomedIn;
+	public bool isZoomedIn { get; private set; }
 	private Selectable zoomedInto;
 	public TwitchBomb bomb;
 	bool StartingFace;
 	public SideFace activeFace = SideFace.Front; // for keeping track of which side face we are on / have to return to 
 	public ZFace currentFace = ZFace.Side; // for keeping track of face perpendicular to the z axis
+
+	private static ILog log = LogManager.GetLogger("GptntActions");
 
 	public enum SideFace
 	{
@@ -81,8 +85,7 @@ public class GptntActions : MonoBehaviour
 			if (selectable.FocusOnInteraction)
 			{
 				// This means the selectable is a module, update the bomb state
-				FindObjectOfType<GptntStates>().UpdateZoomIn(selectable);
-				StartCoroutine(ZoomInCoroutine(selectable));
+				ZoomIn(selectable);
 			}
 			else
 			{
@@ -123,6 +126,12 @@ public class GptntActions : MonoBehaviour
 			return response;
 		}
 		return "No module zoomed into";
+	}
+
+	public void ZoomIn(Selectable selectable)
+	{
+		FindObjectOfType<GptntStates>().UpdateZoomIn(selectable);
+		StartCoroutine(ZoomInCoroutine(selectable));
 	}
 
 	private IEnumerator ZoomOutCoroutine()
@@ -246,18 +255,29 @@ public class GptntActions : MonoBehaviour
 
 	#endregion
 
-	private SideFace CycleSide(SideFace face, int step)
+	private SideFace CycleSide(SideFace face, int step) // Front / Back / Left / Right
 	{
 		// Cycle the state "step" times to the right
 		int deg = ((int) face + 90 * step) % 360;
 		if (deg < 0) deg += 360;  // normalize
+		KTInputManager.Instance.UnlockSelection();
+		KTInputManager.Instance.SelectableManager.SetZSpin(deg);
+		if (deg == 0 || deg == 180)
+		{
+			log.Debug("Resetting active face");
+			UpdateBombFace(activeFace != SideFace.Back);
+		}
 		return (SideFace) deg;
 	}
 
-	private ZFace CycleFace(ZFace face, int step)
+	private ZFace CycleFace(ZFace face, int step) // Top / Side / Bottom
 	{
 		int deg = Mathf.Clamp((int) face + 90 * step, -90, 90);
-
+		if(deg == 0)
+		{
+			log.Debug("Resetting active face");
+			UpdateBombFace(activeFace != SideFace.Back);
+		}
 		return (ZFace) deg;
 	}
 
@@ -276,6 +296,17 @@ public class GptntActions : MonoBehaviour
 		if (angle < 0f)
 			angle += 360f;
 		return angle;
+	}
+
+	private void UpdateBombFace(bool isFront) // Update the selectable that the bomb is facing
+	{
+		FaceEnum face = isFront ? FaceEnum.Front : FaceEnum.Rear;
+		SelectableManager sm = KTInputManager.Instance.SelectableManager;
+		FloatingHoldable floatingHoldable = sm.GetCurrentFloatingHoldable();
+		Selectable faceSelectable = floatingHoldable.GetFaceSelectable(face);
+		KTInputManager.Instance.SelectableManager.Select(faceSelectable, false);
+		floatingHoldable.ActiveFace = face;
+		floatingHoldable.Defocus(false, false);
 	}
 }
 

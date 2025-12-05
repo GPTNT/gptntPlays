@@ -14,6 +14,7 @@ public class GptntStates : MonoBehaviour
 	public BombState bombState;
 	public GptntGameHost host;
 	public GptntActions gptntActions;
+	private GptntHttpHandler httpHandler;
 	public Bomb bomb;
 	KMBombInfo bombInfo;
 	KMGameInfo gameInfo;
@@ -42,6 +43,7 @@ public class GptntStates : MonoBehaviour
 		host = GetComponent<GptntGameHost>();
 		gptntActions = GetComponent<GptntActions>();
 		gameInfo = FindObjectOfType<KMGameInfo>();
+		httpHandler = GetComponent<GptntHttpHandler>();
 
 		gptntActions.OnZoomOut += OnZoomOut;
 
@@ -67,7 +69,7 @@ public class GptntStates : MonoBehaviour
 
 		gameInfo.OnStateChange += (KMGameInfo.State state) =>
 		{
-			log.Debug($"State changed: {gameState} -> {state}");
+			log.Debug(GptntDebug.FormatMessage($"State changed: {gameState} -> {state}"));
 			switch (state)
 			{
 				case KMGameInfo.State.Gameplay:
@@ -90,7 +92,7 @@ public class GptntStates : MonoBehaviour
 		};
 		gameInfo.OnLightsChange += (bool on) =>
 		{
-			log.Debug("Lights on changes to " + on.ToString());
+			log.Debug(GptntDebug.FormatMessage("Lights on changes to " + on.ToString()));
 			TwitchBomb twitchBomb = FindObjectOfType<TwitchBomb>();
 			try
 			{
@@ -98,7 +100,7 @@ public class GptntStates : MonoBehaviour
 			}
 			catch (Exception ex)
 			{
-				log.Debug("[DEBUG] Twitch bomb is null " + ex);
+				log.Warn(GptntDebug.FormatMessage("Twitch bomb is null"), ex);
 			}
 			gptntActions.bomb = twitchBomb;
 			gptntActions.InitRotation();
@@ -108,10 +110,16 @@ public class GptntStates : MonoBehaviour
 			{
 				// when the first light turns on
 				isStarted = true;
-				bombState = GetInitialBombState();
-				OnFirstLightsOn?.Invoke();
+				StartCoroutine(FirstLightOn());
 			}
 		};
+	}
+
+	private IEnumerator FirstLightOn()
+	{
+		yield return new WaitForSeconds(1.5f); // wait for a bit for the bomb to fully initiate.
+		bombState = GetInitialBombState();
+		OnFirstLightsOn?.Invoke();
 	}
 
 	private BombState GetInitialBombState()
@@ -133,6 +141,12 @@ public class GptntStates : MonoBehaviour
 
 	public BombState UpdateBombState()
 	{
+		var traceContext = httpHandler.GetCurrentTraceContext();
+
+		OpenTelemetrySpan span = new OpenTelemetrySpan("state.update", traceContext.TraceId, traceContext.SpanId);
+
+		log.Debug(GptntDebug.FormatMessage("Updating bomb state", span.GetTraceId(), span.GetSpanId()));
+
 		if (bombState == null)
 			return GetInitialBombState();
 
@@ -147,26 +161,44 @@ public class GptntStates : MonoBehaviour
 		{
 			try
 			{
+				log.Debug(GptntDebug.FormatMessage($"Updating attributes for module {module.name}", span.GetTraceId(), span.GetSpanId()));
 				module.UpdateAttributes();
 			}
-			catch (MemoryModuleException ex)
+			catch (ButtonsNotEmergedException ex)
 			{
-				log.Warn("Memory module buttons have not emerged yet", ex);
-				StartCoroutine(GetMemoryState((MemoryModuleState) module));
+				log.Warn(GptntDebug.FormatMessage("Module buttons have not emerged yet", span.GetTraceId(), span.GetSpanId()), ex);
+				StartCoroutine(UpdateStateWhenAvailable(module));
+			}
+			catch (Exception ex)
+			{
+				log.Error(GptntDebug.FormatMessage($"Module update failed for: {module.name} because of ", span.GetTraceId(), span.GetSpanId()), ex);
 			}
 		}
-
+		span.End(true);
 		return bombState;
 	}
 
 	#region Helper functions
 
-	private IEnumerator GetMemoryState(MemoryModuleState memory)
+	private IEnumerator UpdateStateWhenAvailable(BaseModuleState module)
 	{
-		MemoryComponent memoryComponent = (MemoryComponent) memory.component;
-		yield return new WaitUntil(() => memoryComponent.IsInputValid);
-		log.Debug("Updated memory state.");
-		memory.UpdateAttributes(); 
+		if (module is MemoryModuleState)
+		{
+			MemoryComponent memoryComponent = (MemoryComponent) module.component;
+			yield return new WaitUntil(() => memoryComponent.IsInputValid);
+			module.UpdateAttributes();
+		}
+		else if (module is WhosOnFirstModuleState)
+		{
+			WhosOnFirstComponent whosOnFirstComponent = (WhosOnFirstComponent) module.component;
+			yield return new WaitUntil(() => whosOnFirstComponent.ButtonsEmerged);
+			module.UpdateAttributes();
+		}
+		else
+		{
+			throw new Exception("Module invalid for dealyed update");
+		}
+		log.Debug(GptntDebug.FormatMessage($"Updated {module.name} state."));
 	}
 
 	private void OnZoomOut()
@@ -190,7 +222,7 @@ public class GptntStates : MonoBehaviour
 		BombComponent selectableComponent = selectable.GetComponent<BombComponent>();
 		if (!selectableComponent)
 		{
-			log.Debug("No Component Found");
+			log.Debug(GptntDebug.FormatMessage("No Component Found"));
 			return null;
 		}
 		return bombState.modules.FirstOrDefault(module => module.component == selectableComponent);
@@ -224,7 +256,7 @@ public class GptntStates : MonoBehaviour
 			}
 			catch (Exception ex)
 			{
-				log.Error($"Error processing {widget.GetType().Name}", ex);
+				log.Error(GptntDebug.FormatMessage($"Error processing {widget.GetType().Name}"), ex);
 			}
 		}
 
@@ -239,23 +271,29 @@ public class GptntStates : MonoBehaviour
 			if (comp.ComponentType == ComponentTypeEnum.Timer)
 				continue;
 
-			SolvableModuleState moduleState = CreateModuleState(comp);
-
-			if (moduleState != null)
+			try
 			{
-				moduleState.OnStrike += () =>
+				SolvableModuleState moduleState = CreateModuleState(comp);
+				if (moduleState != null)
 				{
-					bombState.strikes.Add(moduleState.name);
-					if (bombState.strikes.Count == 2)
+					moduleState.OnStrike += () =>
 					{
-						RemoveBlinking();
-					}
-				};
-				moduleStates.Add(moduleState);
+						bombState.strikes.Add(moduleState.name);
+						if (bombState.strikes.Count == 2)
+						{
+							RemoveBlinking();
+						}
+					};
+					moduleStates.Add(moduleState);
+				}
+				else
+				{
+					log.Debug(GptntDebug.FormatMessage("Unknown bomb component: " + comp.name));
+				}
 			}
-			else
+			catch (ButtonsNotEmergedException)
 			{
-				log.Debug("Unknown bomb component: " + comp.name);
+
 			}
 		}
 		return moduleStates;
@@ -289,7 +327,7 @@ public class GptntStates : MonoBehaviour
 		method.Invoke(indicator, new object[] { indicator.RedColour });
 	}
 
-	#endregion
+	#endregion  
 }
 
 public class AnchorInfo
