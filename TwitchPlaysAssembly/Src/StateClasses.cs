@@ -22,8 +22,6 @@ namespace TwitchPlaysAssembly
 			AnchorInfo anchor = GetClosestAnchorInfo(comp);
 			onFront = anchor.onFront;
 			index = anchor.index;
-
-			
 		}
 
 		public virtual void UpdateAttributes() { }
@@ -399,6 +397,7 @@ namespace TwitchPlaysAssembly
 	{
 		public int panel { get; set; }
 		public WireSequenceWireState[] wires { get; set; }
+		public bool isEmerged { get; set; }
 
 		public WireSequenceModuleState(BombComponent comp) : base(comp)
 		{
@@ -438,6 +437,7 @@ namespace TwitchPlaysAssembly
 				};
 			}
 
+			isEmerged = !wireSeq.IsChangingPage;
 			name = "WireSequence";
 		}
 	}
@@ -519,6 +519,7 @@ namespace TwitchPlaysAssembly
 		public string displayNumber { get; set; }
 		public string[] buttonNumbers { get; set; }
 		public int stage { get; set; }
+		public bool isEmerged { get; set; }
 
 		public MemoryModuleState(BombComponent comp) : base(comp)
 		{
@@ -537,14 +538,20 @@ namespace TwitchPlaysAssembly
 			MemoryComponent memory = (MemoryComponent) component;
 
 			FieldInfo buttonsEmergedField = typeof(MemoryComponent).GetField("buttonsEmerged", BindingFlags.NonPublic | BindingFlags.Instance);
-			bool buttonsEmerged = (bool) buttonsEmergedField.GetValue(memory);
-			if (!buttonsEmerged)
-			{
-				throw new ButtonsNotEmergedException("Memory buttons did not emerge yet");
-			}
+			isEmerged = (bool) buttonsEmergedField.GetValue(memory);
 
 			stage = memory.CurrentStage + 1;
 			displayNumber = memory.DisplayText.text;
+			isEmerged &= !displayNumber.Equals(""); // Buttons must be emerged AND display must be populated
+
+			name = "Memory";
+
+			if (!isEmerged)
+			{
+				displayNumber = null;
+				buttonNumbers = null;
+				return;
+			}
 
 			string[] buttonValues = new string[4];
 			foreach (KeypadButton button in memory.Buttons)
@@ -552,14 +559,7 @@ namespace TwitchPlaysAssembly
 				buttonValues[button.ButtonIndex] = button.Text.text;
 			}
 			buttonNumbers = buttonValues;
-
-			name = "Memory";
 		}
-	}
-
-	public class ButtonsNotEmergedException : Exception
-	{
-		public ButtonsNotEmergedException(string message) : base(message) { }
 	}
 
 	// --- Morse Code ---
@@ -631,6 +631,7 @@ namespace TwitchPlaysAssembly
 		public string displayWord { get; set; }
 		public string[] buttonWords { get; set; }
 		public int stage { get; set; }
+		public bool isEmerged { get; set; }
 
 		public WhosOnFirstModuleState(BombComponent comp) : base(comp)
 		{
@@ -647,12 +648,18 @@ namespace TwitchPlaysAssembly
 		private void SetAttributes()
 		{
 			WhosOnFirstComponent whoFirst = (WhosOnFirstComponent) component;
-			if (!whoFirst.ButtonsEmerged)
-			{
-				throw new ButtonsNotEmergedException("Whos on first buttons did not emerge yet");
-			}
-			stage = whoFirst.CurrentStage + 1;
 
+			stage = whoFirst.CurrentStage + 1;
+			isEmerged = whoFirst.ButtonsEmerged;
+
+			name = "WhosOnFirst";
+
+			if (!isEmerged)
+			{
+				buttonWords = null;
+				displayWord = null;
+				return;
+			}
 			buttonWords = new string[6];
 			foreach (KeypadButton button in whoFirst.Buttons)
 			{
@@ -660,7 +667,6 @@ namespace TwitchPlaysAssembly
 			}
 
 			displayWord = whoFirst.DisplayText.text;
-			name = "WhosOnFirst";
 		}
 	}
 

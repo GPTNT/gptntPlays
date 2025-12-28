@@ -8,6 +8,7 @@ using UnityEngine;
 using System.Collections;
 using Assets.Scripts.Missions;
 using log4net;
+using System.Globalization;
 
 public class RequestHandlers : MonoBehaviour
 {
@@ -80,8 +81,21 @@ public class RequestHandlers : MonoBehaviour
 				System.IO.File.WriteAllBytes("segmentation.png", bytes);
 			}));
 		}
+		if (Input.GetKeyDown(KeyCode.C))
+		{
+			gptntActions.Click(0.4f, 0.6f);
+		}
+		if (Input.GetKeyDown(KeyCode.X))
+		{
+			gptntActions.ZoomOut();
+		}
 	}
 
+	public string HandleDebug(HttpListenerRequest request, HttpListenerResponse response)
+	{
+		log.Debug($"Current face is {KTInputManager.Instance.SelectableManager.GetActiveFace()}");
+		return $"Current face is {KTInputManager.Instance.SelectableManager.GetActiveFace()}";
+	}
 	#endregion
 
 	public string HandleRandomSolve(HttpListenerRequest request, HttpListenerResponse response)

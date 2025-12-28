@@ -218,6 +218,7 @@ public class GptntActions : MonoBehaviour
 	private void Rotation90(string direction)
 	{
 		InputInterceptor.DisableInput();
+
 		if (direction.Equals("right"))
 		{
 			activeFace = CycleSide(activeFace, 1);
@@ -232,7 +233,8 @@ public class GptntActions : MonoBehaviour
 		{
 			currentFace = CycleFace(currentFace, -1);
 		}
-		bomb.RotateByLocalQuaternion(Quaternion.Euler((int) currentFace, 0, (int) activeFace));
+		bomb.RotateByLocalQuaternion(Quaternion.Euler((int) currentFace, 0f, (int) activeFace));
+		MaybeUpdateBombFace();
 	}
 
 	private void Rotation180()
@@ -250,7 +252,9 @@ public class GptntActions : MonoBehaviour
 				currentFace = CycleFace(currentFace, 2);
 				break;
 		}
+
 		bomb.RotateByLocalQuaternion(Quaternion.Euler((int) currentFace, 0, (int) activeFace));
+		MaybeUpdateBombFace();
 	}
 
 	#endregion
@@ -260,24 +264,13 @@ public class GptntActions : MonoBehaviour
 		// Cycle the state "step" times to the right
 		int deg = ((int) face + 90 * step) % 360;
 		if (deg < 0) deg += 360;  // normalize
-		KTInputManager.Instance.UnlockSelection();
-		KTInputManager.Instance.SelectableManager.SetZSpin(deg);
-		if (deg == 0 || deg == 180)
-		{
-			log.Debug("Resetting active face");
-			UpdateBombFace(activeFace != SideFace.Back);
-		}
+		log.Debug($"Setting Z spin to {deg} for side: {(SideFace) deg}");
 		return (SideFace) deg;
 	}
 
 	private ZFace CycleFace(ZFace face, int step) // Top / Side / Bottom
 	{
 		int deg = Mathf.Clamp((int) face + 90 * step, -90, 90);
-		if(deg == 0)
-		{
-			log.Debug("Resetting active face");
-			UpdateBombFace(activeFace != SideFace.Back);
-		}
 		return (ZFace) deg;
 	}
 
@@ -298,15 +291,12 @@ public class GptntActions : MonoBehaviour
 		return angle;
 	}
 
-	private void UpdateBombFace(bool isFront) // Update the selectable that the bomb is facing
+	private void MaybeUpdateBombFace() // Update the selectable that the bomb is facing
 	{
-		FaceEnum face = isFront ? FaceEnum.Front : FaceEnum.Rear;
-		SelectableManager sm = KTInputManager.Instance.SelectableManager;
-		FloatingHoldable floatingHoldable = sm.GetCurrentFloatingHoldable();
-		Selectable faceSelectable = floatingHoldable.GetFaceSelectable(face);
-		KTInputManager.Instance.SelectableManager.Select(faceSelectable, false);
-		floatingHoldable.ActiveFace = face;
-		floatingHoldable.Defocus(false, false);
+		if (currentFace != ZFace.Side) return;
+		if (activeFace.EqualsAny(SideFace.Left, SideFace.Right)) return;
+
+		StartCoroutine(bomb.MyForceHeldRotation(activeFace == SideFace.Front, 0f));
 	}
 }
 

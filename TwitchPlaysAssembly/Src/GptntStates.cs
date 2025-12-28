@@ -104,22 +104,25 @@ public class GptntStates : MonoBehaviour
 			}
 			gptntActions.bomb = twitchBomb;
 			gptntActions.InitRotation();
-			gameState = gameState.EqualsAny(GameState.Gameplay, GameState.LightsOn, GameState.LightsOff) ? (on ? GameState.LightsOn : GameState.LightsOff) : gameState;
+			GameState newGameState = gameState.EqualsAny(GameState.Gameplay, GameState.LightsOn, GameState.LightsOff) ? (on ? GameState.LightsOn : GameState.LightsOff) : gameState;
 
-			if (gameState == GameState.LightsOn && !isStarted)
+			if (newGameState == GameState.LightsOn && !isStarted)
 			{
 				// when the first light turns on
 				isStarted = true;
 				StartCoroutine(FirstLightOn());
+				return;
 			}
+			gameState = newGameState;
 		};
 	}
 
 	private IEnumerator FirstLightOn()
 	{
 		yield return new WaitForSeconds(1.5f); // wait for a bit for the bomb to fully initiate.
-		bombState = GetInitialBombState();
 		OnFirstLightsOn?.Invoke();
+		gameState = GameState.LightsOn;
+		bombState = GetInitialBombState();
 	}
 
 	private BombState GetInitialBombState()
@@ -163,11 +166,6 @@ public class GptntStates : MonoBehaviour
 			{
 				log.Debug(GptntDebug.FormatMessage($"Updating attributes for module {module.name}", span.GetTraceId(), span.GetSpanId()));
 				module.UpdateAttributes();
-			}
-			catch (ButtonsNotEmergedException ex)
-			{
-				log.Warn(GptntDebug.FormatMessage("Module buttons have not emerged yet", span.GetTraceId(), span.GetSpanId()), ex);
-				StartCoroutine(UpdateStateWhenAvailable(module));
 			}
 			catch (Exception ex)
 			{
@@ -271,29 +269,22 @@ public class GptntStates : MonoBehaviour
 			if (comp.ComponentType == ComponentTypeEnum.Timer)
 				continue;
 
-			try
+			SolvableModuleState moduleState = CreateModuleState(comp);
+			if (moduleState != null)
 			{
-				SolvableModuleState moduleState = CreateModuleState(comp);
-				if (moduleState != null)
+				moduleState.OnStrike += () =>
 				{
-					moduleState.OnStrike += () =>
+					bombState.strikes.Add(moduleState.name);
+					if (bombState.strikes.Count == 2)
 					{
-						bombState.strikes.Add(moduleState.name);
-						if (bombState.strikes.Count == 2)
-						{
-							RemoveBlinking();
-						}
-					};
-					moduleStates.Add(moduleState);
-				}
-				else
-				{
-					log.Debug(GptntDebug.FormatMessage("Unknown bomb component: " + comp.name));
-				}
+						RemoveBlinking();
+					}
+				};
+				moduleStates.Add(moduleState);
 			}
-			catch (ButtonsNotEmergedException)
+			else
 			{
-
+				log.Debug(GptntDebug.FormatMessage("Unknown bomb component: " + comp.name));
 			}
 		}
 		return moduleStates;

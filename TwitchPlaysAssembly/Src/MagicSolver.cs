@@ -60,13 +60,7 @@ public class MagicSolver : MonoBehaviour
 				solveSequence.RemoveAt(0);
 				return gptntActions.ZoomOut();
 			}
-			try
-			{
-				SolveStep(solveSequence[0]);
-			}
-			catch (ButtonsNotEmergedException) {
-				return "Can't do step now, try again later";
-			}
+			SolveStep(solveSequence[0]);
 			return "Solved one step";
 		}
 		// if zoomed out

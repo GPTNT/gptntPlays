@@ -60,6 +60,7 @@ public class GptntHttpHandler : MonoBehaviour
 			["/random"] = requestHandlers.HandleRandomSolve,
 			["/detonate"] = requestHandlers.HandleDetonateBomb,
 			["/solve"] = requestHandlers.HandleSolveBomb,
+			["/debug"] = requestHandlers.HandleDebug,
 		};
 	}
 
