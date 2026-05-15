@@ -83,6 +83,10 @@
       <HintPath>$(GameFolder)\ktane_Data\Managed\UnityEngine.UnityWebRequestWWWModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="log4net">
+      <HintPath>$(GameFolder)\ktane_Data\Managed\log4net.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
     <None Include=".editorconfig" />
