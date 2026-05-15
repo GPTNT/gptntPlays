@@ -96,6 +96,11 @@ namespace TwitchPlaysAssembly
 		}
 	}
 
+	public interface IEmergingModule
+	{
+		bool isEmerged { get; }
+	}
+
 	// --- Button Module ---
 	public class ButtonModuleState : SolvableModuleState
 	{
@@ -393,7 +398,7 @@ namespace TwitchPlaysAssembly
 		}
 	}
 
-	public class WireSequenceModuleState : SolvableModuleState
+	public class WireSequenceModuleState : SolvableModuleState, IEmergingModule
 	{
 		public int panel { get; set; }
 		public WireSequenceWireState[] wires { get; set; }
@@ -514,7 +519,7 @@ namespace TwitchPlaysAssembly
 	}
 
 	// --- Memory ---
-	public class MemoryModuleState : SolvableModuleState
+	public class MemoryModuleState : SolvableModuleState, IEmergingModule
 	{
 		public string displayNumber { get; set; }
 		public string[] buttonNumbers { get; set; }
@@ -626,7 +631,7 @@ namespace TwitchPlaysAssembly
 	}
 
 	// --- Who’s On First ---
-	public class WhosOnFirstModuleState : SolvableModuleState
+	public class WhosOnFirstModuleState : SolvableModuleState, IEmergingModule
 	{
 		public string displayWord { get; set; }
 		public string[] buttonWords { get; set; }
@@ -787,5 +792,6 @@ namespace TwitchPlaysAssembly
 		public List<BaseWidgetState> widgets { get; set; }
 		public List<SolvableModuleState> modules { get; set; }
 		public List<string> strikes { get; set; }
+		[JsonIgnore] public bool isEmerging { get; set; }
 	}
 }

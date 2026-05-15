@@ -82,6 +82,21 @@ public class GptntBuffer : MonoBehaviour
 		return new ObservationPayload { frames = frameStrings };
 	}
 
+	public RawObservationPayload GetRawBufferData()
+	{
+		List<byte[]> rawFrames = new List<byte[]>();
+		foreach (Texture2D frame in textureBuffer.GetLastFrames())
+		{
+			byte[] frameBytes = frame.GetRawTextureData();
+			// crop out the padding added by unity for the gpu
+			int validBytes = frame.width * frame.height * 3;
+			byte[] trimmed = new byte[validBytes];
+			Array.Copy(frameBytes, trimmed, validBytes);
+			rawFrames.Add(trimmed);
+		}
+		return new RawObservationPayload { rawFrames = rawFrames, frameHeight = screenshotRT.height, frameWidth = screenshotRT.width };
+	}
+
 	public byte[] GetLastFrame()
 	{
 		return textureBuffer.GetLastFrame().EncodeToPNG();
@@ -142,7 +157,7 @@ public class GptntBuffer : MonoBehaviour
 	private Texture2D ConvertRenderTextureToTexture2D(RenderTexture rt)
 	{
 		RenderTexture.active = rt;
-		Texture2D tex = new Texture2D(rt.width, rt.height);
+		Texture2D tex = new Texture2D(rt.width, rt.height, TextureFormat.RGB24, mipmap: true);
 		Rect rect = new Rect(0, 0, rt.width, rt.height);
 		tex.ReadPixels(rect, 0, 0);
 		tex.Apply();
@@ -210,4 +225,11 @@ public class ObservationPayload
 {
 	public List<string> frames { get; set; }
 	public string segmentation { get; set; }
+}
+
+public class RawObservationPayload
+{
+	public List<byte[]> rawFrames { get; set; }
+	public int frameWidth;
+	public int frameHeight;
 }

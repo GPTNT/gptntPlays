@@ -21,6 +21,7 @@ GameObject:
   - component: {fileID: 114858667918516344}
   - component: {fileID: 114032243377499722}
   - component: {fileID: 114687647588153858}
+  - component: {fileID: 114785686749512466}
   m_Layer: 0
   m_Name: GptntOrchestrator
   m_TagString: Untagged
@@ -186,6 +187,17 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: -1878535796, guid: 366880d94a4406540983fc80e2e0edb0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!114 &114785686749512466
+MonoBehaviour:
+  m_ObjectHideFlags: 1
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 161788}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 585278470, guid: 366880d94a4406540983fc80e2e0edb0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
 --- !u!114 &114858667918516344

@@ -9,6 +9,8 @@ using System.Collections;
 using Assets.Scripts.Missions;
 using log4net;
 using System.Globalization;
+using TwitchPlaysAssembly;
+using System.IO;
 
 public class RequestHandlers : MonoBehaviour
 {
@@ -23,6 +25,7 @@ public class RequestHandlers : MonoBehaviour
 	Segmentation segmentation;
 	GptntHttpHandler httpHandler;
 	MagicSolver magic;
+	LotterySolver lottery;
 
 	bool canGetState;
 
@@ -37,6 +40,7 @@ public class RequestHandlers : MonoBehaviour
 		segmentation = GetComponent<Segmentation>();
 		httpHandler = GetComponent<GptntHttpHandler>();
 		magic = GetComponent<MagicSolver>();
+		lottery = GetComponent<LotterySolver>();
 
 		spawn = new GameObject();
 		mission = ScriptableObject.CreateInstance<KMMission>();
@@ -130,7 +134,7 @@ public class RequestHandlers : MonoBehaviour
 
 		if (gptntStates.gameState != GptntStates.GameState.Setup)
 			SceneManager.Instance.ReturnToSetupState();
-
+		GptntDebug.ResetLogFormat();
 		log.Debug(GptntDebug.FormatMessage("reset successful", span.GetTraceId(), span.GetSpanId()));
 		span.End(true);
 		return "Nuh uh";
@@ -141,7 +145,7 @@ public class RequestHandlers : MonoBehaviour
 		return gptntStates.gameState.ToString();
 	}
 
-	public string HandleObservationBuffer(HttpListenerRequest request, HttpListenerResponse response)
+	public string HandleOldObservationBuffer(HttpListenerRequest request, HttpListenerResponse response)
 	{
 		var traceContext = httpHandler.GetCurrentTraceContext();
 		OpenTelemetrySpan span = new OpenTelemetrySpan("observation.buffer", traceContext.TraceId, traceContext.SpanId);
@@ -159,6 +163,47 @@ public class RequestHandlers : MonoBehaviour
 
 		span.End(true);
 		return JsonConvert.SerializeObject(observation);
+	}
+
+	public void HandleObservationBuffer(HttpListenerRequest request, HttpListenerResponse response)
+	{
+		response.ContentType = "application/octet-stream";
+		response.StatusCode = 200;
+		byte[] rawSegmentation = GetRawSegmentation(response);
+		log.Debug("Got the raw segmentation, status code: " + response.StatusCode);
+		if (response.StatusCode == (int) HttpStatusCode.RequestTimeout)
+			return;
+		bool segmentationIncluded = rawSegmentation != null;
+
+		RawObservationPayload rawObservation = gptntBuffer.GetRawBufferData();
+		int frameCount = rawObservation.rawFrames.Count;
+		log.Debug("All frames = " + frameCount);
+
+		int totalSize = sizeof(bool) + sizeof(int) * 3; // for the segmentation bool, image count, image height, and image width
+		foreach (byte[] frame in rawObservation.rawFrames)
+			totalSize += frame.Length;
+		if (rawSegmentation != null)
+			totalSize += rawSegmentation.Length;
+
+		response.ContentLength64 = totalSize;
+		log.Debug("Content size: " + totalSize);
+
+		BinaryWriter writer = new BinaryWriter(response.OutputStream);
+		writer.Write(segmentationIncluded);
+		writer.Write(frameCount);
+		writer.Write(rawObservation.frameHeight); // Prolly safe to assume observation frames and segm is same size
+		writer.Write(rawObservation.frameWidth);
+		foreach (byte[] frameData in rawObservation.rawFrames)
+		{
+			writer.Write(frameData, 0, frameData.Length);
+		}
+		if (rawSegmentation != null)
+		{
+			writer.Write(rawSegmentation, 0, rawSegmentation.Length);
+			log.Debug("Wrote the segmentation");
+		}
+		writer.Flush();
+		log.Debug("Finished");
 	}
 
 	#region Handle Actions
@@ -214,6 +259,9 @@ public class RequestHandlers : MonoBehaviour
 				break;
 			case "magic":
 				responseString = HandleMagic();
+				break;
+			case "lottery":
+				responseString = HandleLottery();
 				break;
 			default:
 				responseString = HandleRotate(request);
@@ -281,6 +329,11 @@ public class RequestHandlers : MonoBehaviour
 		return magic.ApplyMagic();
 	}
 
+	public string HandleLottery()
+	{
+		return lottery.Scratch(GetActiveSelectables());
+	}
+
 	#endregion
 
 	private string RunOnMainThread(Func<string> func)
@@ -319,6 +372,12 @@ public class RequestHandlers : MonoBehaviour
 		List<string> components = componentsString.Split(',').ToList();
 		Time.timeScale = float.Parse(request.QueryString.Get("timeScale"));
 		timeStepSize = int.Parse(request.QueryString.Get("timeStepSize"));
+		string sessionId = request.QueryString.Get("sessionId");
+		if (sessionId != null)
+		{
+			GptntDebug.AddSessionId(sessionId);
+			log.Debug("Starting game with sessionId=" + sessionId);
+		}
 		return StartMission(seed, timeLimit, numStrikes, needyTime, isFront, optWidgets, components);
 	}
 
@@ -452,6 +511,35 @@ public class RequestHandlers : MonoBehaviour
 		return (imageBytes != null) ? Convert.ToBase64String(imageBytes) : "";
 	}
 
+	private byte[] GetRawSegmentation(HttpListenerResponse response)
+	{
+		Selectable[] selectables = GetActiveSelectables().ToArray();
+		GameObject[] objects = new GameObject[selectables.Length];
+		for (int i = 0; i < selectables.Length; i++)
+		{
+			objects[i] = selectables[i].gameObject;
+		}
+
+		byte[] imageBytes = null;
+		var waitHandle = new ManualResetEvent(false);
+
+		MainThreadQueue.Enqueue(() =>
+		{
+			StartCoroutine(segmentation.RawCapture(objects, (bytes) =>
+			{
+				imageBytes = bytes;
+				waitHandle.Set();
+			}));
+		});
+
+		if (!waitHandle.WaitOne(500))
+		{
+			response.StatusCode = (int) HttpStatusCode.RequestTimeout;
+			return null;
+		}
+		return imageBytes;
+	}
+
 	public string HandleSetTimescale(HttpListenerRequest request, HttpListenerResponse response)
 	{
 		try
@@ -492,17 +580,74 @@ public class RequestHandlers : MonoBehaviour
 
 	public string HandleTimeStep(HttpListenerRequest request, HttpListenerResponse response)
 	{
-		// Start the coroutine to handle the time step
-		MainThreadQueue.Enqueue(() => StartCoroutine(TimeStepCoroutine()));
-		return "Paused after " + timeStepSize + " in-game milliseconds";
+		var waitHandle = new ManualResetEvent(false);
+
+		MainThreadQueue.Enqueue(() =>
+		{
+			StartCoroutine(WaitForStep(() => waitHandle.Set()));
+		});
+
+		if (!waitHandle.WaitOne(10000)) // 10 second timeout
+		{
+			response.StatusCode = (int) HttpStatusCode.RequestTimeout;
+			log.Error("Time out while waiting " + timeStepSize + " seconds");
+			return "Time out while waiting " + timeStepSize + " seconds";
+		}
+
+		waitHandle.Reset();
+
+		MainThreadQueue.Enqueue(() =>
+		{
+			StartCoroutine(WaitForNotTransitioning(() => waitHandle.Set()));
+		});
+
+		if (!waitHandle.WaitOne(10000)) // 10 second timeout
+		{
+			response.StatusCode = (int) HttpStatusCode.RequestTimeout;
+			log.Error("Time out while waiting for game to exit transitioning");
+			return "Time out while waiting for game to exit transitioning";
+		}
+
+		waitHandle.Reset();
+
+		MainThreadQueue.Enqueue(() =>
+		{
+			StartCoroutine(WaitForEmerging(() => waitHandle.Set()));
+		});
+
+		if (!waitHandle.WaitOne(10000)) // 10 second timeout
+		{
+			response.StatusCode = (int) HttpStatusCode.RequestTimeout;
+			log.Error("Time out while waiting for module elements to emerge");
+			return "Time out while waiting for module elements to emerge";
+		}
+		return "Paused after " + timeStepSize + " in-game milliseconds (and modules emerged)";
 	}
 
-	private IEnumerator TimeStepCoroutine()
+	private IEnumerator WaitForStep(Action onComplete)
 	{
 		Time.timeScale = 1; // Unpause
 		yield return new WaitForSeconds(timeStepSize / 1000f);
+		onComplete?.Invoke();
+	}
+
+	private IEnumerator WaitForNotTransitioning(Action onComplete)
+	{
 		yield return new WaitUntil(() => !StateEqualsAny(GptntStates.GameState.Transitioning));
-		Time.timeScale = 0; // Pause
+		onComplete?.Invoke();
+	}
+
+	private IEnumerator WaitForEmerging(Action onComplete)
+	{
+		BombState currentBombState = gptntStates.UpdateBombState();
+		while (currentBombState.isEmerging)
+		{
+			yield return new WaitForSeconds(0.1f);
+			currentBombState = gptntStates.UpdateBombState();
+			log.Debug("Waiting for emerging modules");
+		}
+		Time.timeScale = 0;
+		onComplete?.Invoke();
 	}
 
 	private bool StateEqualsAny(params GptntStates.GameState[] states)

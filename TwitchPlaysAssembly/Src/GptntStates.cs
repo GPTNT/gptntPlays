@@ -127,7 +127,7 @@ public class GptntStates : MonoBehaviour
 
 	private BombState GetInitialBombState()
 	{
-		return new BombState
+		BombState currentBombState = new BombState
 		{
 			isLightOn = gameState == GameState.LightsOn,
 			isSolved = false,
@@ -140,6 +140,12 @@ public class GptntStates : MonoBehaviour
 			bombSide = gptntActions.GetBombSide(),
 			timerModule = new TimerModuleState(bomb.GetTimer())
 		};
+
+		currentBombState.isEmerging = currentBombState.modules
+			.OfType<IEmergingModule>()
+			.Any(m => !m.isEmerged);
+		return currentBombState;
+
 	}
 
 	public BombState UpdateBombState()
@@ -172,6 +178,10 @@ public class GptntStates : MonoBehaviour
 				log.Error(GptntDebug.FormatMessage($"Module update failed for: {module.name} because of ", span.GetTraceId(), span.GetSpanId()), ex);
 			}
 		}
+		bombState.isEmerging = bombState.modules
+			.OfType<IEmergingModule>()
+			.Any(m => !m.isEmerged);
+
 		span.End(true);
 		return bombState;
 	}

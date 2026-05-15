@@ -81,26 +81,31 @@ public class GptntActions : MonoBehaviour
 			{
 				return "Nothing clickable";
 			}
-			
-			if (selectable.FocusOnInteraction)
-			{
-				// This means the selectable is a module, update the bomb state
-				ZoomIn(selectable);
-			}
-			else
-			{
-				SimonComponent simon = CheckSimonButton(selectable);
-				selectable.HandleInteract();
-				if (selectable.HasInteractEnded)
-					lastUsedSelectable = selectable;
-				selectable.SetHighlight(false);
-				if(simon) simon.PlaySequenceDelay = 1f; // Set to the time we want. 
-			}
+
+			ClickSelectable(selectable);
 			return "clicked on: " + selectable.name;
 		}
 		else
 		{
 			return "No interactable hit";
+		}
+	}
+
+	public void ClickSelectable(Selectable selectable)
+	{
+		if (selectable.FocusOnInteraction)
+		{
+			// This means the selectable is a module, update the bomb state
+			ZoomIn(selectable);
+		}
+		else
+		{
+			SimonComponent simon = CheckSimonButton(selectable);
+			selectable.HandleInteract();
+			if (selectable.HasInteractEnded)
+				lastUsedSelectable = selectable;
+			selectable.SetHighlight(false);
+			if (simon) simon.PlaySequenceDelay = 1f; // Set to the time we want. 
 		}
 	}
 

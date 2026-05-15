@@ -23,6 +23,7 @@ public class GptntHttpHandler : MonoBehaviour
 	RequestHandlers requestHandlers;
 
 	private Dictionary<string, Func<HttpListenerRequest, HttpListenerResponse, string>> routeHandlers;
+	private Dictionary<string, Action<HttpListenerRequest, HttpListenerResponse>> binaryRouteHandlers;
 
 	// Add trace context holder
 	private string currentTraceId;
@@ -53,7 +54,7 @@ public class GptntHttpHandler : MonoBehaviour
 			["/setstepunit"] = requestHandlers.HandleSetStepUnit,
 			["/timestep"] = requestHandlers.HandleTimeStep,
 			["/action"] = requestHandlers.HandleAction,
-			["/buffer"] = requestHandlers.HandleObservationBuffer,
+			["/old-buffer"] = requestHandlers.HandleOldObservationBuffer,
 			["/health"] = requestHandlers.HandleHealth,
 			["/reset"] = requestHandlers.HandleReset,
 			["/state"] = requestHandlers.HandleGetState,
@@ -61,6 +62,10 @@ public class GptntHttpHandler : MonoBehaviour
 			["/detonate"] = requestHandlers.HandleDetonateBomb,
 			["/solve"] = requestHandlers.HandleSolveBomb,
 			["/debug"] = requestHandlers.HandleDebug,
+		};
+		binaryRouteHandlers = new Dictionary<string, Action<HttpListenerRequest, HttpListenerResponse>>()
+		{
+			["/buffer"] = requestHandlers.HandleObservationBuffer,
 		};
 	}
 
@@ -100,13 +105,23 @@ public class GptntHttpHandler : MonoBehaviour
 		GlobalContext.Properties["trace_id"] = currentTraceId;
 		GlobalContext.Properties["span_id"] = currentSpanId;
 
+		SetCorsHeaders(context.Response);
+
 		string responseString;
 		bool success = true;
 
 		try
 		{
 			// Call the route handler
-			if (routeHandlers.TryGetValue(path, out var handler))
+			if (binaryRouteHandlers.TryGetValue(path, out var binaryHandler))
+			{
+				log.Debug("getting from binary handler");
+				binaryHandler(context.Request, context.Response);
+				span.SetAttribute("http.status_code", 200);
+				context.Response.OutputStream.Close();
+				return;
+			}
+			else if (routeHandlers.TryGetValue(path, out var handler))
 			{
 				responseString = handler(context.Request, context.Response);
 				span.SetAttribute("http.status_code", 200);
@@ -138,7 +153,6 @@ public class GptntHttpHandler : MonoBehaviour
 			// End span
 			span.End(success);
 		}
-
 		SendResponse(context.Request, context.Response, responseString);
 	}
 
@@ -168,11 +182,6 @@ public class GptntHttpHandler : MonoBehaviour
 	private void SendResponse(HttpListenerRequest request, HttpListenerResponse response, string responseString)
 	{
 		byte[] buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
-
-		response.AddHeader("Access-Control-Allow-Origin", "*");
-		response.AddHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-		response.AddHeader("Access-Control-Allow-Headers", "Content-Type, traceparent, tracestate"); // Add trace headers
-		
 		if (response.StatusCode == (int) HttpStatusCode.OK && request.HttpMethod == "OPTIONS")
 		{
 			response.ContentLength64 = 0;
@@ -184,6 +193,13 @@ public class GptntHttpHandler : MonoBehaviour
 		System.IO.Stream output = response.OutputStream;
 		output.Write(buffer, 0, buffer.Length);
 		output.Close();
+	}
+
+	private void SetCorsHeaders(HttpListenerResponse response)
+	{
+		response.AddHeader("Access-Control-Allow-Origin", "*");
+		response.AddHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+		response.AddHeader("Access-Control-Allow-Headers", "Content-Type, traceparent, tracestate");
 	}
 
 	public class Worker

@@ -30,14 +30,16 @@ public class Segmentation : MonoBehaviour
 	private List<Renderer[]> renderersWithChildren;
 	private List<GameObject> objectsOnSegmentationLayer;
 	private static ILog log = LogManager.GetLogger("Segmentation");
-
+	int width, height;
 
 	public void Init(int width, int height)
 	{
+		this.width = width;
+		this.height = height;
 		renderTexture = new RenderTexture(width, height, 24);
 		renderTexture.antiAliasing = 1;
 		renderTexture.filterMode = FilterMode.Point;
-		tex = new Texture2D(width, height);
+		tex = new Texture2D(width, height, TextureFormat.RGB24, mipmap: true);
 		rect = new Rect(0, 0, width, height);
 		if (!shader)
 		{
@@ -72,6 +74,26 @@ public class Segmentation : MonoBehaviour
 		yield return new WaitForEndOfFrame();
 		byte[] bytes = RenderTextureToPNGBytes(renderTexture);
 		callback?.Invoke(bytes);
+		renderTexture.Release();
+		ResetObjects();
+	}
+
+	public IEnumerator RawCapture(GameObject[] objects, Action<byte[]> callback)
+	{
+		if (objects.Length == 0)
+		{
+			callback?.Invoke(null);
+			yield break;
+		}
+		propertyBlock = new MaterialPropertyBlock();
+		objectsOnSegmentationLayer = new List<GameObject>();
+		Segment(objects);
+		yield return new WaitForEndOfFrame();
+		byte[] segmentationBytes = ConvertRenderTextureToTexture2D(renderTexture).GetRawTextureData();
+		int validBytes = width * height * 3;
+		byte[] trimmed = new byte[validBytes];
+		Array.Copy(segmentationBytes, trimmed, validBytes);
+		callback?.Invoke(trimmed);
 		renderTexture.Release();
 		ResetObjects();
 	}
