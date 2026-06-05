@@ -308,7 +308,9 @@ The schema is intentionally exposed as ground truth: it bypasses what a human or
 - **Password**
 - **Who's On First**
 
-The timer and the four widget types (battery, indicator, port, serial number) are also fully serialised. Modded modules will still appear physically on the bomb but need to be manually added to the state schema.
+The timer and the four widget types (battery, indicator, port, serial number) are also fully serialised.
+
+Any modded module can be spawned via `/startmission` using its string module ID (discoverable at runtime via `GET /modules`). Modded modules not listed above will appear in `/state` with basic solve and focus tracking via a generic fallback state class. To add structured, module-specific attributes to `/state` for a modded module, see **[docs/adding-modded-modules.md](docs/adding-modded-modules.md)**.
 
 ## Coordinate system
 

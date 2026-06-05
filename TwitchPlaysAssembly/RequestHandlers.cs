@@ -95,6 +95,24 @@ public class RequestHandlers : MonoBehaviour
 		}
 	}
 
+	public string HandleGetModules(HttpListenerRequest request, HttpListenerResponse response)
+	{
+		KMGameInfo gameInfo = FindObjectOfType<KMGameInfo>();
+		var modules = gameInfo.GetAvailableModuleInfo()
+			.Where(m => !m.IsNeedy)
+			.Select(m =>
+			{
+				string id = m.IsMod ? m.ModuleId : m.ModuleType.ToString();
+				string displayName = ComponentSolverFactory.GetModuleInfo(id, false).moduleDisplayName;
+				return new { id, displayName, isMod = m.IsMod };
+			})
+			.OrderBy(m => m.displayName)
+			.ToList();
+
+		response.ContentType = "application/json";
+		return JsonConvert.SerializeObject(modules, Formatting.Indented);
+	}
+
 	public string HandleDebug(HttpListenerRequest request, HttpListenerResponse response)
 	{
 		log.Debug($"Current face is {KTInputManager.Instance.SelectableManager.GetActiveFace()}");
@@ -706,19 +724,17 @@ public class RequestHandlers : MonoBehaviour
 			KMComponentPool pool = new KMComponentPool();
 			pool.Count = 1;
 			string compString = components[i];
-			KMComponentPool.ComponentTypeEnum CompType;
 			try
 			{
-				CompType = (KMComponentPool.ComponentTypeEnum) Enum.Parse(typeof(KMComponentPool.ComponentTypeEnum), compString);
+				KMComponentPool.ComponentTypeEnum CompType = (KMComponentPool.ComponentTypeEnum) Enum.Parse(typeof(KMComponentPool.ComponentTypeEnum), compString);
+				pool.ComponentTypes = new List<KMComponentPool.ComponentTypeEnum> { CompType };
 			}
-			catch (Exception e)
+			catch (ArgumentException)
 			{
-				return "Invalid component found! Please try again.";
+				// Not a vanilla component type — treat as a modded module ID
+				pool.ModTypes = new List<string> { compString };
 			}
-			pool.ComponentTypes = new List<KMComponentPool.ComponentTypeEnum> { CompType };
 			pools.Add(pool);
-
-
 		}
 		setting.ComponentPools = pools;
 		mission.GeneratorSetting = setting;

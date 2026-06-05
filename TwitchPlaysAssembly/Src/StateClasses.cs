@@ -676,6 +676,38 @@ namespace TwitchPlaysAssembly
 	}
 
 
+	// --- Modded / Unknown Module ---
+	public class ModdedModuleState : SolvableModuleState
+	{
+		public string moduleType { get; set; }
+
+		public ModdedModuleState(BombComponent comp) : base(comp)
+		{
+			component = comp;
+			SetAttributes();
+		}
+
+		public override void UpdateAttributes()
+		{
+			base.UpdateAttributes();
+		}
+
+		private void SetAttributes()
+		{
+			KMBombModule kmModule = component.GetComponent<KMBombModule>();
+			if (kmModule != null)
+			{
+				name = kmModule.ModuleDisplayName;
+				moduleType = kmModule.ModuleType;
+			}
+			else
+			{
+				name = component.name;
+				moduleType = component.name;
+			}
+		}
+	}
+
 	public class TimerModuleState : BaseModuleState
 	{
 		public float secondsRemaining { get; set; }

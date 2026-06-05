@@ -61,6 +61,7 @@ public class GptntHttpHandler : MonoBehaviour
 			["/random"] = requestHandlers.HandleRandomSolve,
 			["/detonate"] = requestHandlers.HandleDetonateBomb,
 			["/solve"] = requestHandlers.HandleSolveBomb,
+			["/modules"] = requestHandlers.HandleGetModules,
 			["/debug"] = requestHandlers.HandleDebug,
 		};
 		binaryRouteHandlers = new Dictionary<string, Action<HttpListenerRequest, HttpListenerResponse>>()

@@ -221,7 +221,9 @@ public class GptntStates : MonoBehaviour
 	{
 		if (selectable != null)
 		{
-			GetModuleStateFromSelectable(selectable).inFocus = true;
+			SolvableModuleState moduleState = GetModuleStateFromSelectable(selectable);
+			if (moduleState != null)
+				moduleState.inFocus = true;
 		}
 	}
 
@@ -315,6 +317,7 @@ public class GptntStates : MonoBehaviour
 			case ComponentTypeEnum.WireSequence: return new WireSequenceModuleState(comp);
 			case ComponentTypeEnum.Maze: return new MazeModuleState(comp);
 			case ComponentTypeEnum.Password: return new PasswordModuleState(comp);
+			case ComponentTypeEnum.Mod: return new ModdedModuleState(comp);
 			default: return null;
 		}
 	}
