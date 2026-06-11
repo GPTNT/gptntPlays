@@ -13,7 +13,6 @@ This repository accompanies a research paper. If you are looking for the code, b
 - [Overview](#overview)
 - [Architecture](#architecture)
 - [Installation](#installation)
-- [Running headless in Docker](#running-headless-in-docker)
 - [Configuration](#configuration)
 - [HTTP API](#http-api)
   - [Lifecycle](#lifecycle)
@@ -96,17 +95,6 @@ We have only tested against the **Humble Store** build of KTANE; the Steam build
 
 If you prefer to build from source, see [Building the mod](#building-the-mod).
 
-## Running headless in Docker
-
-For batch experiments we recommend the Dockerfiles in [docker-ktane/](docker-ktane), which wrap the Linux build of KTANE in a virtual X display so it can run without a GPU monitor attached. See [docker-ktane/README.md](docker-ktane/README.md) for build / run commands; the short version is:
-
-```sh
-docker build . -t docker-ktane -f Dockerfile-ubuntu
-docker run --rm -p 8085:8085 docker-ktane
-```
-
-You will need to drop a Linux KTANE build (and the built mod) into the directory before building; the Dockerfiles do not (and cannot) ship the game.
-
 ## Configuration
 
 The mod reads the following environment variables at startup:
@@ -114,8 +102,8 @@ The mod reads the following environment variables at startup:
 | Variable | Default | Meaning |
 |---|---|---|
 | `port` | `8085` | Port the HTTP server binds to (localhost only). |
-| `GAME_WIDTH` | `512` | Render width, in pixels, for the screenshot/segmentation cameras. |
-| `GAME_HEIGHT` | `384` | Render height, in pixels. |
+| `GAME_WIDTH` | `640` | Render width, in pixels, for the screenshot/segmentation cameras. |
+| `GAME_HEIGHT` | `480` | Render height, in pixels. |
 
 Observation frames in `/buffer` are PNG-encoded at this resolution; the ring buffer holds the most recent 16 frames captured at one frame every 0.25 in-game seconds (see [`GptntGameHost`](TwitchPlaysAssembly/Src/GptntGameHost.cs)).
 
@@ -413,7 +401,6 @@ We chose not to commit the Mac-friendly variant as the default because the upstr
 │   │   ├── OpenTelemetrySpan.cs
 │   │   └── ...              # Inherited TwitchPlays sources kept for compatibility
 │   └── TwitchPlaysAssembly.{csproj,sln}
-├── docker-ktane/            # Headless-Linux Docker images for batch experiments
 ├── docs/                    # Generated docs (Doxygen output)
 └── README.md                # This file
 ```
