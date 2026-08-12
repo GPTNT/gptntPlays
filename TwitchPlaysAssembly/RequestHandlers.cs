@@ -470,12 +470,17 @@ public class RequestHandlers : MonoBehaviour
 		SetTimeScale(float.Parse(request.QueryString.Get("timeScale")));
 		timeStepSize = int.Parse(request.QueryString.Get("timeStepSize"));
 		string sessionId = request.QueryString.Get("sessionId");
+
+		// If the ruleSeed parameter is not provided, default to 1, otherwise parse it.
+		string ruleSeedRaw = request.QueryString.Get("ruleSeed");
+		int ruleSeed = string.IsNullOrEmpty(ruleSeedRaw) ? 1 : int.Parse(ruleSeedRaw);
+		
 		if (sessionId != null)
 		{
 			GptntDebug.AddSessionId(sessionId);
 			log.Debug("Starting game with sessionId=" + sessionId);
 		}
-		return StartMission(seed, timeLimit, numStrikes, needyTime, isFront, optWidgets, components);
+		return StartMission(seed, ruleSeed, timeLimit, numStrikes, needyTime, isFront, optWidgets, components);
 	}
 
 	public string HandleGetState(HttpListenerRequest request, HttpListenerResponse response)
@@ -757,11 +762,16 @@ public class RequestHandlers : MonoBehaviour
 		return false;
 	}
 
-	private string StartMission(string seed, int timeLimit, int numStrikes, int needyTime, bool isFront, int optWidgets, List<string> components)
+	private string StartMission(string seed, int ruleSeed, int timeLimit, int numStrikes, int needyTime, bool isFront, int optWidgets, List<string> components)
 	{
 		if (string.IsNullOrEmpty(seed))
 		{
 			return "Please enter valid seed. e.g. seed=123";
+		}
+
+		if (ruleSeed != 1 && !VanillaRuleModifier.Installed()) 
+		{
+			return "Rule Seed Modifier mod not installed and cannot instantiate when the rule seed is not 1. Please install the Rule Seed Modifier mod or set ruleSeed=1.";
 		}
 
 		if (timeLimit < 0)
@@ -817,6 +827,14 @@ public class RequestHandlers : MonoBehaviour
 		}
 		setting.ComponentPools = pools;
 		mission.GeneratorSetting = setting;
+
+		// Using the VanillaRuleModifier requires a separate mod to be installed. If it is installed,
+		// then the VanillaRuleModifierProperties GameObject will exist at runtime and then this should
+		// be true. Otherwise, it'll just be false and we then ignore the ruleSeed Parameter
+		if (VanillaRuleModifier.Installed())
+		{
+			VanillaRuleModifier.SetRuleSeed(ruleSeed, true);
+		}
 
 		KMBomb bomb = gameCommands.CreateBomb(null, setting, spawn, seed);
 		MainThreadQueue.Enqueue(delegate () { gameCommands.StartMission(mission, seed); });
