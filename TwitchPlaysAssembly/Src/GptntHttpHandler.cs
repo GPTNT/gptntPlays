@@ -67,6 +67,7 @@ public class GptntHttpHandler : MonoBehaviour
 		binaryRouteHandlers = new Dictionary<string, Action<HttpListenerRequest, HttpListenerResponse>>()
 		{
 			["/buffer"] = requestHandlers.HandleObservationBuffer,
+			["/audio"] = requestHandlers.HandleAudio,
 		};
 	}
 

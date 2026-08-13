@@ -22,6 +22,7 @@ public class RequestHandlers : MonoBehaviour
 	GptntStates gptntStates;
 	GptntActions gptntActions;
 	GptntBuffer gptntBuffer;
+	GptntAudioBuffer gptntAudioBuffer;
 	Segmentation segmentation;
 	GptntHttpHandler httpHandler;
 	MagicSolver magic;
@@ -224,6 +225,71 @@ public class RequestHandlers : MonoBehaviour
 		log.Debug("Finished");
 	}
 
+	public void HandleAudio(HttpListenerRequest request, HttpListenerResponse response)
+	{
+		var traceContext = httpHandler.GetCurrentTraceContext();
+		OpenTelemetrySpan span = new OpenTelemetrySpan("audio.read", traceContext.TraceId, traceContext.SpanId);
+
+		if (gptntAudioBuffer == null)
+			gptntAudioBuffer = GetComponent<GptntAudioBuffer>();
+
+		AudioRingBuffer ring = gptntAudioBuffer != null ? gptntAudioBuffer.Ring : null;
+		if (ring == null)
+		{
+			response.StatusCode = (int) HttpStatusCode.BadRequest;
+			WriteText(response, "Audio buffer not initialized yet");
+			span.End(false);
+			return;
+		}
+
+		short[] samples;
+		long newCursor;
+		long dropped = 0;
+		try
+		{
+			string since = request.QueryString.Get("since");
+			if (since != null)
+			{
+				samples = ring.ReadSince(long.Parse(since, CultureInfo.InvariantCulture), out newCursor, out dropped);
+			}
+			else
+			{
+				string secondsRaw = request.QueryString.Get("seconds");
+				float seconds = string.IsNullOrEmpty(secondsRaw) ? 5f : float.Parse(secondsRaw, CultureInfo.InvariantCulture);
+				samples = ring.ReadLast((int) (seconds * ring.SampleRate), out newCursor);
+			}
+		}
+		catch (Exception ex)
+		{
+			response.StatusCode = (int) HttpStatusCode.BadRequest;
+			log.Error(GptntDebug.FormatMessage("Could not parse audio request", span.GetTraceId(), span.GetSpanId()), ex);
+			WriteText(response, "Could not parse request");
+			span.End(false);
+			return;
+		}
+
+		byte[] wav = GptntAudioBuffer.ToWav(samples, ring.SampleRate);
+
+		response.ContentType = "audio/wav";
+		response.Headers["X-Audio-Cursor"] = newCursor.ToString(CultureInfo.InvariantCulture);
+		response.Headers["X-Sample-Rate"] = ring.SampleRate.ToString(CultureInfo.InvariantCulture);
+		response.Headers["X-Channels"] = "1";
+		response.Headers["X-Audio-Dropped-Samples"] = dropped.ToString(CultureInfo.InvariantCulture);
+		response.ContentLength64 = wav.Length;
+		response.OutputStream.Write(wav, 0, wav.Length);
+
+		span.SetAttribute("audio.samples", samples.Length);
+		span.SetAttribute("audio.dropped", dropped);
+		span.End(true);
+	}
+
+	private static void WriteText(HttpListenerResponse response, string text)
+	{
+		byte[] bytes = System.Text.Encoding.UTF8.GetBytes(text);
+		response.ContentLength64 = bytes.Length;
+		response.OutputStream.Write(bytes, 0, bytes.Length);
+	}
+
 	#region Handle Actions
 
 	public string HandleAction(HttpListenerRequest request, HttpListenerResponse response)
@@ -373,6 +439,19 @@ public class RequestHandlers : MonoBehaviour
 		return result;
 	}
 
+	// Single choke point for timeScale changes so audio stays paused in lockstep
+	// with the game. AudioListener.pause is main-thread-only; MainThreadQueue runs
+	// inline when already on the main thread, so coroutine callers stay synchronous.
+	private void SetTimeScale(float value)
+	{
+		MainThreadQueue.Enqueue(() =>
+		{
+			Time.timeScale = value;
+			AudioListener.pause = value == 0f;
+			GptntAudioBuffer.CaptureEnabled = value != 0f;
+		});
+	}
+
 	public string HandleStartMission(HttpListenerRequest request, HttpListenerResponse response)
 	{
 		if (!StateEqualsAny(GptntStates.GameState.Setup))
@@ -388,7 +467,7 @@ public class RequestHandlers : MonoBehaviour
 		int optWidgets = int.Parse(request.QueryString.Get("optWidgets"));
 		string componentsString = request.QueryString.Get("components");
 		List<string> components = componentsString.Split(',').ToList();
-		Time.timeScale = float.Parse(request.QueryString.Get("timeScale"));
+		SetTimeScale(float.Parse(request.QueryString.Get("timeScale")));
 		timeStepSize = int.Parse(request.QueryString.Get("timeStepSize"));
 		string sessionId = request.QueryString.Get("sessionId");
 		if (sessionId != null)
@@ -571,7 +650,7 @@ public class RequestHandlers : MonoBehaviour
 					StartCoroutine(PauseAfterTransition());
 				});
 			else
-				Time.timeScale = float.Parse(value);
+				SetTimeScale(float.Parse(value));
 			return "Set timeScale to " + value;
 		}
 		catch(Exception ex)
@@ -586,7 +665,7 @@ public class RequestHandlers : MonoBehaviour
 	private IEnumerator PauseAfterTransition()
 	{
 		yield return new WaitUntil(() => !StateEqualsAny(GptntStates.GameState.Transitioning));
-		Time.timeScale = 0;
+		SetTimeScale(0);
 	}
 
 	public string HandleSetStepUnit(HttpListenerRequest request, HttpListenerResponse response)
@@ -644,7 +723,7 @@ public class RequestHandlers : MonoBehaviour
 
 	private IEnumerator WaitForStep(Action onComplete)
 	{
-		Time.timeScale = 1; // Unpause
+		SetTimeScale(1); // Unpause
 		yield return new WaitForSeconds(timeStepSize / 1000f);
 		onComplete?.Invoke();
 	}
@@ -664,7 +743,7 @@ public class RequestHandlers : MonoBehaviour
 			currentBombState = gptntStates.UpdateBombState();
 			log.Debug("Waiting for emerging modules");
 		}
-		Time.timeScale = 0;
+		SetTimeScale(0);
 		onComplete?.Invoke();
 	}
 

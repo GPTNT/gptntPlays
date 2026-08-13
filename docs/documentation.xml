@@ -1270,6 +1270,27 @@
             Some helper extensions methods for the KMBombInfo class.
             </summary>
         </member>
+        <member name="T:AudioRingBuffer">
+            <summary>
+            Lock-guarded mono 16-bit PCM ring buffer. Written from the FMOD audio thread
+            (via <see cref="T:AudioListenerTap"/>) and read from the HTTP worker thread.
+            The absolute sample cursor is monotonic and never resets, so stale client
+            cursors are always safe to clamp.
+            </summary>
+        </member>
+        <member name="T:AudioListenerTap">
+            <summary>
+            Attached at runtime to the GameObject that carries the active AudioListener.
+            Receives the final mixed output on the audio thread and forwards it to the ring.
+            </summary>
+        </member>
+        <member name="T:GptntAudioBuffer">
+            <summary>
+            Manager component. Owns the ring buffer, keeps the tap attached across scene
+            transitions (the AudioListener is scene-owned and dies on scene changes),
+            and serializes ring slices to WAV.
+            </summary>
+        </member>
         <member name="M:IRCMessage.Duplicate(System.String)">
             <summary>
             Creates a duplicate <see cref="T:IRCMessage">Message</see> object with the Text changed.
