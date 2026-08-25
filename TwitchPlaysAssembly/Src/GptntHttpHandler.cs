@@ -68,6 +68,7 @@ public class GptntHttpHandler : MonoBehaviour
 		{
 			["/buffer"] = requestHandlers.HandleObservationBuffer,
 			["/audio"] = requestHandlers.HandleAudio,
+			["/observation"] = requestHandlers.HandleAtomicObservation,
 		};
 	}
 

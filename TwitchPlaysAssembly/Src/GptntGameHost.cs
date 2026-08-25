@@ -11,9 +11,10 @@ public class GptntGameHost : MonoBehaviour
 	private Segmentation segmentation;
 	private GptntAudioBuffer gptntAudioBuffer;
 
-	private const int MaxFrames = 16;
-	private const float FrameRateMS = 0.25f;
+	private const int DefaultVideoBufferSeconds = 10;
+	private const float DefaultVideoCaptureFps = 4f;
 	private const int DefaultAudioBufferSeconds = 30;
+	private float frameIntervalSeconds = 1f / DefaultVideoCaptureFps;
 
 	int screenWidth = 512;
 	int screenHeight = 384;
@@ -34,7 +35,7 @@ public class GptntGameHost : MonoBehaviour
 
 		gptntStates.OnFirstLightsOn += () =>
 		{
-			gptntBuffer.StartBuffer(FrameRateMS);
+			gptntBuffer.StartBuffer(frameIntervalSeconds);
 			StartCoroutine(HoldBomb());
 		};
 
@@ -45,14 +46,26 @@ public class GptntGameHost : MonoBehaviour
 		if (int.TryParse(heightEnv, out int parsedHeight)) screenHeight = parsedHeight;
 
 		Screen.SetResolution(screenWidth, screenHeight, false);
-		gptntBuffer.Init(screenWidth, screenHeight, MaxFrames);
-		segmentation.Init(screenWidth, screenHeight);
-
 		string audioSecondsEnv = Environment.GetEnvironmentVariable("AUDIO_BUFFER_SECONDS");
 		int audioBufferSeconds = DefaultAudioBufferSeconds;
 		if (int.TryParse(audioSecondsEnv, out int parsedAudioSeconds) && parsedAudioSeconds > 0)
 			audioBufferSeconds = parsedAudioSeconds;
 		gptntAudioBuffer.Init(audioBufferSeconds);
+
+		string videoSecondsEnv = Environment.GetEnvironmentVariable("VIDEO_BUFFER_SECONDS");
+		int videoBufferSeconds = DefaultVideoBufferSeconds;
+		if (int.TryParse(videoSecondsEnv, out int parsedVideoSeconds) && parsedVideoSeconds > 0)
+			videoBufferSeconds = parsedVideoSeconds;
+
+		string videoFpsEnv = Environment.GetEnvironmentVariable("VIDEO_CAPTURE_FPS");
+		float videoCaptureFps = DefaultVideoCaptureFps;
+		if (float.TryParse(videoFpsEnv, out float parsedVideoFps) && parsedVideoFps > 0f)
+			videoCaptureFps = parsedVideoFps;
+		frameIntervalSeconds = 1f / videoCaptureFps;
+
+		int videoBufferFrames = Math.Max(1, (int) Math.Ceiling(videoBufferSeconds * videoCaptureFps));
+		gptntBuffer.Init(screenWidth, screenHeight, videoBufferFrames, gptntAudioBuffer);
+		segmentation.Init(screenWidth, screenHeight);
 	}
 
 	private IEnumerator HoldBomb()

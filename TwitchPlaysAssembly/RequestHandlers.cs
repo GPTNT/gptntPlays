@@ -283,6 +283,151 @@ public class RequestHandlers : MonoBehaviour
 		span.End(true);
 	}
 
+	public void HandleAtomicObservation(HttpListenerRequest request, HttpListenerResponse response)
+	{
+		var traceContext = httpHandler.GetCurrentTraceContext();
+		OpenTelemetrySpan span = new OpenTelemetrySpan("observation.atomic", traceContext.TraceId, traceContext.SpanId);
+
+		if (!StateEqualsAny(GptntStates.GameState.LightsOn))
+		{
+			response.StatusCode = (int) HttpStatusCode.BadRequest;
+			WriteText(response, "Cannot capture an observation in " + gptntStates.gameState + " state");
+			span.End(false);
+			return;
+		}
+
+		AtomicObservationRequest observationRequest;
+		try
+		{
+			observationRequest = new AtomicObservationRequest
+			{
+				AnchorFrameSequence = ParseOptionalLong(request.QueryString.Get("anchorFrameSequence")),
+				Epoch = ParseOptionalLong(request.QueryString.Get("epoch")),
+				AudioCursor = ParseOptionalLong(request.QueryString.Get("audioCursor")),
+			};
+		}
+		catch (FormatException ex)
+		{
+			response.StatusCode = (int) HttpStatusCode.BadRequest;
+			WriteText(response, ex.Message);
+			span.End(false);
+			return;
+		}
+
+		AtomicObservationSnapshot snapshot = null;
+		Exception captureError = null;
+		ManualResetEvent waitHandle = new ManualResetEvent(false);
+		MainThreadQueue.Enqueue(() => StartCoroutine(CaptureAtomicObservation(
+			observationRequest,
+			result =>
+			{
+				snapshot = result;
+				waitHandle.Set();
+			},
+			error =>
+			{
+				captureError = error;
+				waitHandle.Set();
+			})));
+
+		if (!waitHandle.WaitOne(5000))
+		{
+			response.StatusCode = (int) HttpStatusCode.RequestTimeout;
+			WriteText(response, "Timed out while capturing the observation");
+			span.End(false);
+			return;
+		}
+		if (captureError != null)
+		{
+			response.StatusCode = (int) HttpStatusCode.InternalServerError;
+			log.Error(GptntDebug.FormatMessage("Could not capture atomic observation", span.GetTraceId(), span.GetSpanId()), captureError);
+			WriteText(response, "Could not capture the observation");
+			span.End(false);
+			return;
+		}
+
+		AtomicObservationWriter.Write(response, snapshot);
+		span.SetAttribute("observation.frames", snapshot.Frames.rawFrames.Count);
+		span.SetAttribute("observation.audio_samples", snapshot.AudioSamples.Length);
+		span.SetAttribute("observation.coverage_gap", snapshot.Frames.coverageGap || snapshot.AudioDroppedSamples > 0);
+		span.End(true);
+	}
+
+	private IEnumerator CaptureAtomicObservation(
+		AtomicObservationRequest request,
+		Action<AtomicObservationSnapshot> onSuccess,
+		Action<Exception> onError)
+	{
+		yield return new WaitForEndOfFrame();
+
+		try
+		{
+			TimedFrame endFrame = gptntBuffer.CaptureAnchorFrame();
+			Selectable[] selectables = GetActiveSelectables().ToArray();
+			GameObject[] objects = new GameObject[selectables.Length];
+			for (int index = 0; index < selectables.Length; index++)
+				objects[index] = selectables[index].gameObject;
+
+			byte[] rawSegmentation = segmentation.CaptureRawNow(objects);
+			TimedRawObservationPayload frames = gptntBuffer.GetTimedRawBufferData(
+				request.AnchorFrameSequence,
+				request.Epoch);
+
+			if (gptntAudioBuffer == null)
+				gptntAudioBuffer = GetComponent<GptntAudioBuffer>();
+			AudioRingBuffer ring = gptntAudioBuffer != null ? gptntAudioBuffer.Ring : null;
+			if (ring == null)
+				throw new InvalidOperationException("Audio buffer not initialized yet");
+
+			long requestedAudioStart;
+			if (request.AudioCursor.HasValue)
+				requestedAudioStart = request.AudioCursor.Value;
+			else if (frames.frameTiming.Count > 0)
+				requestedAudioStart = frames.frameTiming[0].audioCursor;
+			else
+				requestedAudioStart = ring.GetOldestCursor();
+
+			long audioStart;
+			long audioEnd;
+			long audioDropped;
+			short[] audio = ring.ReadBetween(
+				requestedAudioStart,
+				endFrame.AudioCursor,
+				out audioStart,
+				out audioEnd,
+				out audioDropped);
+
+			onSuccess(new AtomicObservationSnapshot
+			{
+				Frames = frames,
+				Segmentation = rawSegmentation,
+				SegmentationFrameSequence = endFrame.Sequence,
+				AudioSamples = audio,
+				AudioSampleRate = ring.SampleRate,
+				RequestedAudioCursor = request.AudioCursor,
+				AudioStartCursor = audioStart,
+				AudioEndCursor = audioEnd,
+				AudioDroppedSamples = audioDropped,
+				RequestedEpoch = request.Epoch,
+				RequestedAnchorFrameSequence = request.AnchorFrameSequence,
+			});
+		}
+		catch (Exception ex)
+		{
+			onError(ex);
+		}
+	}
+
+	private static long? ParseOptionalLong(string raw)
+	{
+		if (string.IsNullOrEmpty(raw))
+			return null;
+		long value;
+		if (!long.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out value))
+			throw new FormatException("Expected an integer cursor, got: " + raw);
+		return value;
+	}
+
 	private static void WriteText(HttpListenerResponse response, string text)
 	{
 		byte[] bytes = System.Text.Encoding.UTF8.GetBytes(text);

@@ -59,24 +59,39 @@ public class AudioRingBuffer
 	// is reported via <paramref name="dropped"/>.
 	public short[] ReadSince(long cursor, out long newCursor, out long dropped)
 	{
+		long actualStartCursor;
+		return ReadBetween(cursor, GetCursor(), out actualStartCursor, out newCursor, out dropped);
+	}
+
+	// Returns a stable interval ending at an already captured cursor. This lets an
+	// observation exclude audio that arrived after its final video frame.
+	public short[] ReadBetween(long startCursor, long endCursor, out long actualStartCursor, out long actualEndCursor, out long dropped)
+	{
 		lock (sync)
 		{
-			newCursor = writeCursor;
 			long oldest = writeCursor - validCount;
+			long newest = writeCursor;
 			dropped = 0;
 
-			if (cursor < oldest)
+			if (endCursor < oldest)
+				endCursor = oldest;
+			else if (endCursor > newest)
+				endCursor = newest;
+
+			if (startCursor < oldest)
 			{
-				dropped = oldest - cursor;
-				cursor = oldest;
+				dropped = oldest - startCursor;
+				startCursor = oldest;
 			}
-			else if (cursor > writeCursor)
+			else if (startCursor > endCursor)
 			{
-				cursor = writeCursor;
+				startCursor = endCursor;
 			}
 
-			int count = (int) (writeCursor - cursor);
-			return CopyRange(cursor, count);
+			actualStartCursor = startCursor;
+			actualEndCursor = endCursor;
+			int count = (int) (endCursor - startCursor);
+			return CopyRange(startCursor, count);
 		}
 	}
 
@@ -109,6 +124,11 @@ public class AudioRingBuffer
 	public long GetCursor()
 	{
 		lock (sync) { return writeCursor; }
+	}
+
+	public long GetOldestCursor()
+	{
+		lock (sync) { return writeCursor - validCount; }
 	}
 
 	// Empties the retained window without resetting the monotonic cursor.

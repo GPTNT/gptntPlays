@@ -6,35 +6,35 @@ using log4net;
 
 public class GptntBuffer : MonoBehaviour
 {
-	// Cameras 
-	private Camera mainCam = null;
-	private Camera screenshotCam = null;
-
-	// Camera game objects
-	private GameObject screenshotObject = null;
+	private Camera mainCam;
+	private Camera screenshotCam;
+	private GameObject screenshotObject;
 	private RenderTexture screenshotRT;
+	private Texture2D readbackTexture;
 
-	// Ring Buffer
-	private TextureRingBuffer textureBuffer;
-	private bool isRecording = false;
-
-	// Coroutine
+	private TimedFrameRingBuffer frameBuffer;
+	private GptntAudioBuffer audioBuffer;
+	private bool isRecording;
 	private Coroutine bufferCoroutine;
+	private long nextSequence;
+	private long epoch;
 
-	private static ILog log = LogManager.GetLogger("Buffer");
+	private static readonly ILog log = LogManager.GetLogger("Buffer");
 
-	public void Init(int width, int height, int bufferLength)
+	public long Epoch { get { return epoch; } }
+
+	public void Init(int width, int height, int bufferLength, GptntAudioBuffer sourceAudioBuffer)
 	{
 		screenshotRT = new RenderTexture(width, height, 24);
-		textureBuffer = new TextureRingBuffer(bufferLength);
+		readbackTexture = new Texture2D(width, height, TextureFormat.RGB24, false);
+		frameBuffer = new TimedFrameRingBuffer(bufferLength);
+		audioBuffer = sourceAudioBuffer;
 
 		OpenTelemetrySpan span = new OpenTelemetrySpan("buffer.init");
 		span.SetAttribute("width", width);
 		span.SetAttribute("height", height);
 		span.SetAttribute("bufferLength", bufferLength);
-
 		log.Debug(GptntDebug.FormatMessage("Initialized the Buffer", span.GetTraceId(), span.GetSpanId()));
-
 		span.End(true);
 	}
 
@@ -64,61 +64,149 @@ public class GptntBuffer : MonoBehaviour
 	public void ClearBuffer()
 	{
 		StopBuffer();
-		textureBuffer.Clear();
+		frameBuffer.Clear();
+		epoch++;
 		OpenTelemetrySpan span = new OpenTelemetrySpan("buffer.clear");
+		span.SetAttribute("epoch", epoch);
 		log.Debug(GptntDebug.FormatMessage("Cleared the buffer"));
 		span.End(true);
+	}
+
+	// Must run on Unity's main thread, after the frame has rendered.
+	public TimedFrame CaptureAnchorFrame()
+	{
+		return CaptureFrame();
+	}
+
+	// Must run on Unity's main thread. The returned arrays are immutable copies,
+	// so the HTTP worker can safely serialize them after the main thread resumes.
+	public TimedRawObservationPayload GetTimedRawBufferData(long? anchorSequence, long? requestedEpoch)
+	{
+		TimedFrameWindow window = frameBuffer.GetWindow(anchorSequence, requestedEpoch, epoch);
+		List<byte[]> rawFrames = new List<byte[]>(window.Frames.Count);
+		List<FrameTimingPayload> timing = new List<FrameTimingPayload>(window.Frames.Count);
+
+		foreach (TimedFrame frame in window.Frames)
+		{
+			rawFrames.Add(frame.Pixels);
+			timing.Add(new FrameTimingPayload
+			{
+				sequence = frame.Sequence,
+				epoch = frame.Epoch,
+				audioCursor = frame.AudioCursor,
+				gameTimeSeconds = frame.GameTimeSeconds,
+				realtimeSeconds = frame.RealtimeSeconds,
+			});
+		}
+
+		return new TimedRawObservationPayload
+		{
+			rawFrames = rawFrames,
+			frameTiming = timing,
+			frameHeight = screenshotRT.height,
+			frameWidth = screenshotRT.width,
+			epoch = epoch,
+			anchorRequested = anchorSequence.HasValue,
+			anchorIncluded = window.AnchorIncluded,
+			coverageGap = window.CoverageGap,
+			oldestAvailableSequence = window.OldestAvailableSequence,
+			endFrameSequence = window.EndFrameSequence,
+		};
 	}
 
 	public ObservationPayload GetBufferJSON()
 	{
 		List<string> frameStrings = new List<string>();
-		foreach (Texture2D frame in textureBuffer.GetLastFrames())
-		{
-			byte[] frameBytes = frame.EncodeToPNG();
-			frameStrings.Add(Convert.ToBase64String(frameBytes));
-		}
-
+		foreach (TimedFrame frame in frameBuffer.GetAll())
+			frameStrings.Add(Convert.ToBase64String(EncodeToPng(frame.Pixels)));
 		return new ObservationPayload { frames = frameStrings };
 	}
 
 	public RawObservationPayload GetRawBufferData()
 	{
 		List<byte[]> rawFrames = new List<byte[]>();
-		foreach (Texture2D frame in textureBuffer.GetLastFrames())
+		foreach (TimedFrame frame in frameBuffer.GetAll())
+			rawFrames.Add(frame.Pixels);
+		return new RawObservationPayload
 		{
-			byte[] frameBytes = frame.GetRawTextureData();
-			// crop out the padding added by unity for the gpu
-			int validBytes = frame.width * frame.height * 3;
-			byte[] trimmed = new byte[validBytes];
-			Array.Copy(frameBytes, trimmed, validBytes);
-			rawFrames.Add(trimmed);
-		}
-		return new RawObservationPayload { rawFrames = rawFrames, frameHeight = screenshotRT.height, frameWidth = screenshotRT.width };
+			rawFrames = rawFrames,
+			frameHeight = screenshotRT.height,
+			frameWidth = screenshotRT.width,
+		};
 	}
 
 	public byte[] GetLastFrame()
 	{
-		return textureBuffer.GetLastFrame().EncodeToPNG();
+		TimedFrame frame = frameBuffer.GetLastFrame();
+		return frame == null ? null : EncodeToPng(frame.Pixels);
 	}
 
 	private IEnumerator BufferCoroutine(float frequency)
 	{
-		if (isRecording) yield break;
+		if (isRecording)
+			yield break;
 		isRecording = true;
-		var wait = new WaitForSeconds(frequency);
+		WaitForSeconds wait = new WaitForSeconds(frequency);
 		while (isRecording)
 		{
 			yield return new WaitForEndOfFrame();
-			textureBuffer.Add(ConvertRenderTextureToTexture2D(screenshotRT));
+			CaptureFrame();
 			yield return wait;
 		}
 	}
 
-	// Helper functions
+	private TimedFrame CaptureFrame()
+	{
+		byte[] pixels = ReadRenderTexture();
+		AudioRingBuffer ring = audioBuffer != null ? audioBuffer.Ring : null;
+		long audioCursor = ring != null ? ring.GetCursor() : 0;
+		TimedFrame frame = new TimedFrame
+		{
+			Sequence = nextSequence++,
+			Epoch = epoch,
+			AudioCursor = audioCursor,
+			GameTimeSeconds = Time.time,
+			RealtimeSeconds = Time.realtimeSinceStartup,
+			Pixels = pixels,
+		};
+		frameBuffer.Add(frame);
+		return frame;
+	}
+
+	private byte[] ReadRenderTexture()
+	{
+		RenderTexture previous = RenderTexture.active;
+		RenderTexture.active = screenshotRT;
+		readbackTexture.ReadPixels(new Rect(0, 0, screenshotRT.width, screenshotRT.height), 0, 0);
+		readbackTexture.Apply();
+		RenderTexture.active = previous;
+
+		byte[] source = readbackTexture.GetRawTextureData();
+		int validBytes = screenshotRT.width * screenshotRT.height * 3;
+		byte[] pixels = new byte[validBytes];
+		Array.Copy(source, pixels, validBytes);
+		return pixels;
+	}
+
+	private byte[] EncodeToPng(byte[] pixels)
+	{
+		Texture2D texture = new Texture2D(screenshotRT.width, screenshotRT.height, TextureFormat.RGB24, false);
+		try
+		{
+			texture.LoadRawTextureData(pixels);
+			texture.Apply();
+			return texture.EncodeToPNG();
+		}
+		finally
+		{
+			Destroy(texture);
+		}
+	}
+
 	private void DuplicateCamera()
 	{
-		if (screenshotObject) return;
+		if (screenshotObject)
+			return;
 
 		if (!mainCam)
 		{
@@ -133,15 +221,12 @@ public class GptntBuffer : MonoBehaviour
 			}
 		}
 
-		// duplicate game object
-		screenshotObject = new GameObject();
-		screenshotObject.name = "ScreenshotCamera";
+		screenshotObject = new GameObject { name = "ScreenshotCamera" };
 		screenshotObject.transform.SetParent(mainCam.transform);
 		screenshotObject.transform.localPosition = Vector3.zero;
 		screenshotObject.transform.localRotation = Quaternion.identity;
 		screenshotObject.transform.localScale = Vector3.one;
 
-		// Adding camera
 		screenshotCam = screenshotObject.AddComponent<Camera>();
 		screenshotCam.cullingMask = mainCam.cullingMask;
 		screenshotCam.aspect = mainCam.aspect;
@@ -152,72 +237,103 @@ public class GptntBuffer : MonoBehaviour
 		screenshotCam.depth = mainCam.depth + 1;
 		screenshotCam.targetTexture = screenshotRT;
 	}
-
-	// Convert a RenderTexture to a Texture2D
-	private Texture2D ConvertRenderTextureToTexture2D(RenderTexture rt)
-	{
-		RenderTexture.active = rt;
-		Texture2D tex = new Texture2D(rt.width, rt.height, TextureFormat.RGB24, mipmap: true);
-		Rect rect = new Rect(0, 0, rt.width, rt.height);
-		tex.ReadPixels(rect, 0, 0);
-		tex.Apply();
-		RenderTexture.active = null;
-		return tex;
-	}
 }
 
-public class TextureRingBuffer
+public class TimedFrame
 {
-	private readonly Texture2D[] buffer;
-	private int index = 0;
-	private int count = 0;
+	public long Sequence;
+	public long Epoch;
+	public long AudioCursor;
+	public float GameTimeSeconds;
+	public float RealtimeSeconds;
+	public byte[] Pixels;
+}
 
-	public TextureRingBuffer(int size)
+public class TimedFrameWindow
+{
+	public List<TimedFrame> Frames;
+	public bool AnchorIncluded;
+	public bool CoverageGap;
+	public long OldestAvailableSequence;
+	public long EndFrameSequence;
+}
+
+public class TimedFrameRingBuffer
+{
+	private readonly TimedFrame[] buffer;
+	private int index;
+	private int count;
+
+	public TimedFrameRingBuffer(int size)
 	{
-		buffer = new Texture2D[size];
+		buffer = new TimedFrame[Math.Max(1, size)];
 	}
 
-	public void Add(Texture2D tex)
+	public void Add(TimedFrame frame)
 	{
-		if (buffer[index] != null)
-		{
-			UnityEngine.Object.Destroy(buffer[index]); // Free memory
-		}
-
-		buffer[index] = tex;
+		buffer[index] = frame;
 		index = (index + 1) % buffer.Length;
 		count = Math.Min(count + 1, buffer.Length);
 	}
 
-	public List<Texture2D> GetLastFrames()
+	public List<TimedFrame> GetAll()
 	{
-		List<Texture2D> frames = new List<Texture2D>(count);
+		List<TimedFrame> frames = new List<TimedFrame>(count);
 		int start = (index - count + buffer.Length) % buffer.Length;
-
-		for (int i = 0; i < count; i++)
-		{
-			int pos = (start + i) % buffer.Length;
-			frames.Add(buffer[pos]);
-		}
-
-		return frames; // the last element in the list is the most recent
+		for (int offset = 0; offset < count; offset++)
+			frames.Add(buffer[(start + offset) % buffer.Length]);
+		return frames;
 	}
 
-	public Texture2D GetLastFrame()
+	public TimedFrameWindow GetWindow(long? anchorSequence, long? requestedEpoch, long currentEpoch)
 	{
-		int lastIndex = (index - 1 + buffer.Length) % buffer.Length;
-		return buffer[lastIndex];
+		List<TimedFrame> all = GetAll();
+		List<TimedFrame> selected = new List<TimedFrame>();
+		bool epochMismatch = requestedEpoch.HasValue && requestedEpoch.Value != currentEpoch;
+		bool anchorIncluded = false;
+		bool coverageGap = epochMismatch;
+
+		if (!anchorSequence.HasValue || epochMismatch)
+		{
+			selected.AddRange(all);
+		}
+		else
+		{
+			foreach (TimedFrame frame in all)
+			{
+				if (frame.Sequence < anchorSequence.Value)
+					continue;
+				if (frame.Sequence == anchorSequence.Value)
+					anchorIncluded = true;
+				selected.Add(frame);
+			}
+			coverageGap = !anchorIncluded;
+		}
+
+		long oldest = all.Count == 0 ? -1 : all[0].Sequence;
+		long newest = all.Count == 0 ? -1 : all[all.Count - 1].Sequence;
+		return new TimedFrameWindow
+		{
+			Frames = selected,
+			AnchorIncluded = anchorIncluded,
+			CoverageGap = coverageGap,
+			OldestAvailableSequence = oldest,
+			EndFrameSequence = newest,
+		};
+	}
+
+	public TimedFrame GetLastFrame()
+	{
+		if (count == 0)
+			return null;
+		return buffer[(index - 1 + buffer.Length) % buffer.Length];
 	}
 
 	public void Clear()
 	{
-		foreach (Texture2D item in buffer)
-		{
-			if (item != null)
-				UnityEngine.Object.Destroy(item);
-			index = 0;
-			count = 0;
-		}
+		Array.Clear(buffer, 0, buffer.Length);
+		index = 0;
+		count = 0;
 	}
 }
 
@@ -232,4 +348,24 @@ public class RawObservationPayload
 	public List<byte[]> rawFrames { get; set; }
 	public int frameWidth;
 	public int frameHeight;
+}
+
+public class FrameTimingPayload
+{
+	public long sequence;
+	public long epoch;
+	public long audioCursor;
+	public float gameTimeSeconds;
+	public float realtimeSeconds;
+}
+
+public class TimedRawObservationPayload : RawObservationPayload
+{
+	public List<FrameTimingPayload> frameTiming;
+	public long epoch;
+	public bool anchorRequested;
+	public bool anchorIncluded;
+	public bool coverageGap;
+	public long oldestAvailableSequence;
+	public long endFrameSequence;
 }
