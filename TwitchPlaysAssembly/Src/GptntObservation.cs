@@ -7,8 +7,8 @@ using Newtonsoft.Json;
 
 public class AtomicObservationRequest
 {
-	// The anchor is the final frame returned previously. Repeating it at the start
-	// of the next window lets the model compare before and after an action.
+	// The anchor is the final video frame returned previously. Repeating it at the
+	// start of the next video lets the model compare before and after an action.
 	public long? AnchorFrameSequence;
 
 	// An epoch is one mission/reset generation. A cursor from another epoch cannot
@@ -24,8 +24,9 @@ public class AtomicObservationRequest
 public class AtomicObservationSnapshot
 {
 	public TimedRawObservationPayload Frames;
+	public byte[] CurrentImage;
+	public FrameTimingPayload CurrentImageTiming;
 	public byte[] Segmentation;
-	public long SegmentationFrameSequence;
 	public short[] AudioSamples;
 	public int AudioSampleRate;
 	public long? RequestedAudioCursor;
@@ -58,6 +59,8 @@ public class AtomicObservationHeader
 	public bool frameCoverageGap;
 	public long oldestAvailableFrameSequence;
 	public long endFrameSequence;
+	public int currentImageByteLength;
+	public FrameTimingPayload currentImageTiming;
 	public bool segmentationIncluded;
 	public int segmentationByteLength;
 	public long segmentationFrameSequence;
@@ -84,6 +87,7 @@ public static class AtomicObservationWriter
 	{
 		TimedRawObservationPayload frames = snapshot.Frames;
 		int frameByteLength = frames.frameWidth * frames.frameHeight * 3;
+		int currentImageLength = snapshot.CurrentImage.Length;
 		int segmentationLength = snapshot.Segmentation == null ? 0 : snapshot.Segmentation.Length;
 		int audioByteLength = snapshot.AudioSamples.Length * sizeof(short);
 		bool audioCoverageGap = snapshot.RequestedAudioCursor.HasValue
@@ -107,9 +111,11 @@ public static class AtomicObservationWriter
 			frameCoverageGap = frames.coverageGap,
 			oldestAvailableFrameSequence = frames.oldestAvailableSequence,
 			endFrameSequence = frames.endFrameSequence,
+			currentImageByteLength = currentImageLength,
+			currentImageTiming = snapshot.CurrentImageTiming,
 			segmentationIncluded = snapshot.Segmentation != null,
 			segmentationByteLength = segmentationLength,
-			segmentationFrameSequence = snapshot.SegmentationFrameSequence,
+			segmentationFrameSequence = snapshot.CurrentImageTiming.sequence,
 			audioEncoding = "pcm_s16le",
 			audioSampleRate = snapshot.AudioSampleRate,
 			audioChannels = 1,
@@ -129,6 +135,7 @@ public static class AtomicObservationWriter
 		// response. Raw media follows the small JSON header without base64 expansion.
 		long contentLength = Magic.Length + sizeof(int) + headerBytes.Length
 			+ ((long) frameByteLength * frames.rawFrames.Count)
+			+ currentImageLength
 			+ segmentationLength
 			+ audioByteLength;
 
@@ -138,13 +145,15 @@ public static class AtomicObservationWriter
 
 		using (BinaryWriter writer = new BinaryWriter(response.OutputStream, Encoding.UTF8))
 		{
-			// Wire order: magic, JSON header, RGB frames, segmentation, then PCM audio.
+			// Wire order: magic, JSON header, video frames, current RGB image,
+			// segmentation, then PCM audio.
 			// The header carries every count needed to split the untagged binary sections.
 			writer.Write(Magic);
 			writer.Write(headerBytes.Length);
 			writer.Write(headerBytes);
 			foreach (byte[] frame in frames.rawFrames)
 				writer.Write(frame);
+			writer.Write(snapshot.CurrentImage);
 			if (snapshot.Segmentation != null)
 				writer.Write(snapshot.Segmentation);
 			foreach (short sample in snapshot.AudioSamples)

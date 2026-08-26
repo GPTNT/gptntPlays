@@ -90,12 +90,12 @@ public class GptntBuffer : MonoBehaviour
 		span.End(true);
 	}
 
-	// Must run on Unity's main thread, after the frame has rendered. This explicit
-	// final frame is the endpoint's linearization point: video, segmentation, and
-	// the end of the audio interval are all tied to it.
-	public TimedFrame CaptureAnchorFrame()
+	// Must run on Unity's main thread, after the frame has rendered. The returned
+	// frame is paired with the current segmentation mask but is not added to the
+	// periodic ring, so observation requests cannot change the video's frame rate.
+	public TimedFrame CaptureCurrentImage()
 	{
-		return CaptureFrame();
+		return CaptureFrame(false);
 	}
 
 	// Must run on Unity's main thread. Pixel arrays are never mutated after capture;
@@ -110,14 +110,7 @@ public class GptntBuffer : MonoBehaviour
 		foreach (TimedFrame frame in window.Frames)
 		{
 			rawFrames.Add(frame.Pixels);
-			timing.Add(new FrameTimingPayload
-			{
-				sequence = frame.Sequence,
-				epoch = frame.Epoch,
-				audioCursor = frame.AudioCursor,
-				gameTimeSeconds = frame.GameTimeSeconds,
-				realtimeSeconds = frame.RealtimeSeconds,
-			});
+			timing.Add(FrameTimingPayload.FromFrame(frame));
 		}
 
 		return new TimedRawObservationPayload
@@ -156,12 +149,6 @@ public class GptntBuffer : MonoBehaviour
 		};
 	}
 
-	public byte[] GetLastFrame()
-	{
-		TimedFrame frame = frameBuffer.GetLastFrame();
-		return frame == null ? null : EncodeToPng(frame.Pixels);
-	}
-
 	private IEnumerator BufferCoroutine(float frequency)
 	{
 		if (isRecording)
@@ -171,12 +158,12 @@ public class GptntBuffer : MonoBehaviour
 		while (isRecording)
 		{
 			yield return new WaitForEndOfFrame();
-			CaptureFrame();
+			CaptureFrame(true);
 			yield return wait;
 		}
 	}
 
-	private TimedFrame CaptureFrame()
+	private TimedFrame CaptureFrame(bool addToBuffer)
 	{
 		byte[] pixels = ReadRenderTexture();
 		AudioRingBuffer ring = audioBuffer != null ? audioBuffer.Ring : null;
@@ -193,7 +180,8 @@ public class GptntBuffer : MonoBehaviour
 			RealtimeSeconds = Time.realtimeSinceStartup,
 			Pixels = pixels,
 		};
-		frameBuffer.Add(frame);
+		if (addToBuffer)
+			frameBuffer.Add(frame);
 		return frame;
 	}
 
@@ -341,7 +329,7 @@ public class TimedFrameRingBuffer
 		else
 		{
 			// Include the anchor itself, not only newer frames. This carries the last
-			// image seen by the model into the next clip so action effects have context.
+			// video frame into the next clip so action effects have visual context.
 			foreach (TimedFrame frame in all)
 			{
 				if (frame.Sequence < anchorSequence.Value)
@@ -402,6 +390,18 @@ public class FrameTimingPayload
 	public long audioCursor;
 	public float gameTimeSeconds;
 	public float realtimeSeconds;
+
+	public static FrameTimingPayload FromFrame(TimedFrame frame)
+	{
+		return new FrameTimingPayload
+		{
+			sequence = frame.Sequence,
+			epoch = frame.Epoch,
+			audioCursor = frame.AudioCursor,
+			gameTimeSeconds = frame.GameTimeSeconds,
+			realtimeSeconds = frame.RealtimeSeconds,
+		};
+	}
 }
 
 public class TimedRawObservationPayload : RawObservationPayload

@@ -368,20 +368,26 @@ public class RequestHandlers : MonoBehaviour
 
 		try
 		{
-			// Capture normal RGB before segmentation temporarily moves selectable
-			// objects onto its private render layer.
-			TimedFrame endFrame = gptntBuffer.CaptureAnchorFrame();
+			// Capture the current RGB image without adding it to the periodic video ring.
+			// This image is the background for the SoM mask returned below.
+			TimedFrame currentImage = gptntBuffer.CaptureCurrentImage();
 			Selectable[] selectables = GetActiveSelectables().ToArray();
 			GameObject[] objects = new GameObject[selectables.Length];
 			for (int index = 0; index < selectables.Length; index++)
 				objects[index] = selectables[index].gameObject;
 
 			// Capture the mask immediately, on the same main-thread turn, so it labels
-			// the exact scene represented by endFrame.
+			// the exact scene represented by currentImage.
 			byte[] rawSegmentation = segmentation.CaptureRawNow(objects);
 			TimedRawObservationPayload frames = gptntBuffer.GetTimedRawBufferData(
 				request.AnchorFrameSequence,
 				request.Epoch);
+			// Video and audio share the newest regularly scheduled frame as their end
+			// boundary. Keeping that boundary independent of request timing preserves
+			// the configured capture cadence and the ring's time horizon.
+			if (frames.frameTiming.Count == 0)
+				throw new InvalidOperationException("Video buffer does not contain a frame yet");
+			FrameTimingPayload videoEndFrame = frames.frameTiming[frames.frameTiming.Count - 1];
 
 			if (gptntAudioBuffer == null)
 				gptntAudioBuffer = GetComponent<GptntAudioBuffer>();
@@ -401,11 +407,11 @@ public class RequestHandlers : MonoBehaviour
 			long audioStart;
 			long audioEnd;
 			long audioDropped;
-			// endFrame.AudioCursor freezes the audio boundary at the RGB capture. Audio
-			// produced while segmentation and serialization run belongs to the next call.
+			// End audio at the newest periodic frame. The current SoM image is newer and
+			// remains separate, so requesting an image cannot change the video's timing.
 			short[] audio = ring.ReadBetween(
 				requestedAudioStart,
-				endFrame.AudioCursor,
+				videoEndFrame.AudioCursor,
 				out audioStart,
 				out audioEnd,
 				out audioDropped);
@@ -413,8 +419,9 @@ public class RequestHandlers : MonoBehaviour
 			onSuccess(new AtomicObservationSnapshot
 			{
 				Frames = frames,
+				CurrentImage = currentImage.Pixels,
+				CurrentImageTiming = FrameTimingPayload.FromFrame(currentImage),
 				Segmentation = rawSegmentation,
-				SegmentationFrameSequence = endFrame.Sequence,
 				AudioSamples = audio,
 				AudioSampleRate = ring.SampleRate,
 				RequestedAudioCursor = request.AudioCursor,

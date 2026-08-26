@@ -174,10 +174,12 @@ Returns the full bomb state as JSON. Only available once the bomb has reached it
 
 Atomically captures the material needed to build an audio-video observation:
 
-- The recent RGB frame window, ending with a newly captured frame.
+- The recent RGB video window, containing only frames captured at `VIDEO_CAPTURE_FPS`.
 - Timing metadata for every frame: its sequence, mission epoch, audio-sample cursor, scaled game time, and unscaled monotonic time.
-- A fresh segmentation mask rendered against the same game state as the final RGB frame.
-- Mono 16-bit PCM audio ending at the final frame's audio cursor.
+- A separate current RGB image and segmentation mask captured against the same game state.
+- Mono 16-bit PCM audio ending at the newest video frame's audio cursor.
+
+The current image is not inserted into the video ring. Observation frequency therefore cannot change the video frame rate or shorten the ring's configured time horizon. The next video repeats the preceding video's final regular frame, then includes the regular frames that show the effect of the intervening action.
 
 This endpoint intentionally contains **no structured bomb state**. It does not call `/state` or expose module answers. `containsBombState` is always `false` in the response header.
 
@@ -189,7 +191,7 @@ The client should feed the previous response's `endFrameSequence`, `epoch`, and 
 
 | Parameter | Type | Meaning |
 |---|---|---|
-| `anchorFrameSequence` | int64, optional | The previous observation's last frame. If retained, it is deliberately repeated first so the new clip begins with the last visual state the model saw. |
+| `anchorFrameSequence` | int64, optional | The previous video's last frame. If retained, it is deliberately repeated first so the new video begins with the last video frame the model saw. |
 | `epoch` | int64, optional | The previous observation's mission epoch. A mismatch is reported as a coverage gap. |
 | `audioCursor` | int64, optional | Start the PCM interval at this absolute sample cursor. Normally the previous response's `audioEndCursor`. |
 
@@ -201,6 +203,7 @@ The response uses `Content-Type: application/vnd.gptnt.observation` and this lit
 | Header length | 4 bytes | UTF-8 JSON header length as `int32`. |
 | Header | variable | Metadata and the lengths/counts needed to decode the remaining sections. |
 | RGB frames | `frameCount * frameByteLength` | Raw RGB24 frames, oldest first. |
+| Current image | `currentImageByteLength` | Raw RGB24 image captured when the observation was requested. |
 | Segmentation | `segmentationByteLength` | Raw RGB24 mask aligned with `segmentationFrameSequence`. |
 | Audio | `audioByteLength` | Mono `pcm_s16le`, with its sample rate in `audioSampleRate`. |
 
