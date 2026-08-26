@@ -6,16 +6,28 @@ using log4net;
 
 public class GptntBuffer : MonoBehaviour
 {
+	// Cameras
 	private Camera mainCam;
 	private Camera screenshotCam;
+
+	// Camera game object and reusable GPU/CPU readback resources
 	private GameObject screenshotObject;
 	private RenderTexture screenshotRT;
 	private Texture2D readbackTexture;
 
+	// Ring buffer. A frame owns its pixel array for the rest of its lifetime: once
+	// captured, readers may safely treat those bytes as read-only while the ring
+	// replaces the slot with a different frame.
 	private TimedFrameRingBuffer frameBuffer;
 	private GptntAudioBuffer audioBuffer;
 	private bool isRecording;
+
+	// Coroutine responsible for periodically adding rendered frames to the ring.
 	private Coroutine bufferCoroutine;
+
+	// Sequence numbers identify individual frames for incremental reads. The epoch
+	// identifies the mission/reset generation. It prevents a cursor retained by a
+	// client from being mistaken for a valid cursor in a later mission.
 	private long nextSequence;
 	private long epoch;
 
@@ -63,8 +75,14 @@ public class GptntBuffer : MonoBehaviour
 
 	public void ClearBuffer()
 	{
+		// Stop first so the capture coroutine cannot add a frame while the retained
+		// window is being discarded. Old mission pixels must never leak into the
+		// first observation of the next mission.
 		StopBuffer();
 		frameBuffer.Clear();
+
+		// Frame sequences stay monotonic for the lifetime of the process, while the
+		// epoch makes mission boundaries explicit to clients.
 		epoch++;
 		OpenTelemetrySpan span = new OpenTelemetrySpan("buffer.clear");
 		span.SetAttribute("epoch", epoch);
@@ -72,14 +90,17 @@ public class GptntBuffer : MonoBehaviour
 		span.End(true);
 	}
 
-	// Must run on Unity's main thread, after the frame has rendered.
+	// Must run on Unity's main thread, after the frame has rendered. This explicit
+	// final frame is the endpoint's linearization point: video, segmentation, and
+	// the end of the audio interval are all tied to it.
 	public TimedFrame CaptureAnchorFrame()
 	{
 		return CaptureFrame();
 	}
 
-	// Must run on Unity's main thread. The returned arrays are immutable copies,
-	// so the HTTP worker can safely serialize them after the main thread resumes.
+	// Must run on Unity's main thread. Pixel arrays are never mutated after capture;
+	// the returned list therefore forms a stable, read-only snapshot that the HTTP
+	// worker can serialize after the main thread resumes.
 	public TimedRawObservationPayload GetTimedRawBufferData(long? anchorSequence, long? requestedEpoch)
 	{
 		TimedFrameWindow window = frameBuffer.GetWindow(anchorSequence, requestedEpoch, epoch);
@@ -159,6 +180,9 @@ public class GptntBuffer : MonoBehaviour
 	{
 		byte[] pixels = ReadRenderTexture();
 		AudioRingBuffer ring = audioBuffer != null ? audioBuffer.Ring : null;
+
+		// The absolute audio-sample cursor is our shared AV clock. Unlike wall time,
+		// it directly identifies which audio belongs before and after this frame.
 		long audioCursor = ring != null ? ring.GetCursor() : 0;
 		TimedFrame frame = new TimedFrame
 		{
@@ -175,6 +199,8 @@ public class GptntBuffer : MonoBehaviour
 
 	private byte[] ReadRenderTexture()
 	{
+		// Convert the screenshot RenderTexture into raw RGB24 bytes. Reusing the
+		// Texture2D avoids allocating another Unity object for every buffered frame.
 		RenderTexture previous = RenderTexture.active;
 		RenderTexture.active = screenshotRT;
 		readbackTexture.ReadPixels(new Rect(0, 0, screenshotRT.width, screenshotRT.height), 0, 0);
@@ -182,6 +208,9 @@ public class GptntBuffer : MonoBehaviour
 		RenderTexture.active = previous;
 
 		byte[] source = readbackTexture.GetRawTextureData();
+
+		// Crop any row/mipmap padding Unity may expose. Every wire frame has exactly
+		// width * height * 3 bytes, which keeps the binary protocol deterministic.
 		int validBytes = screenshotRT.width * screenshotRT.height * 3;
 		byte[] pixels = new byte[validBytes];
 		Array.Copy(source, pixels, validBytes);
@@ -190,6 +219,8 @@ public class GptntBuffer : MonoBehaviour
 
 	private byte[] EncodeToPng(byte[] pixels)
 	{
+		// Legacy JSON endpoints still require PNG. New observation traffic keeps the
+		// raw RGB bytes and avoids this extra encoding work.
 		Texture2D texture = new Texture2D(screenshotRT.width, screenshotRT.height, TextureFormat.RGB24, false);
 		try
 		{
@@ -221,12 +252,15 @@ public class GptntBuffer : MonoBehaviour
 			}
 		}
 
+		// Duplicate the main camera's transform and projection so buffered frames use
+		// exactly the viewpoint visible to the player.
 		screenshotObject = new GameObject { name = "ScreenshotCamera" };
 		screenshotObject.transform.SetParent(mainCam.transform);
 		screenshotObject.transform.localPosition = Vector3.zero;
 		screenshotObject.transform.localRotation = Quaternion.identity;
 		screenshotObject.transform.localScale = Vector3.one;
 
+		// Add the camera and render into our private texture instead of the display.
 		screenshotCam = screenshotObject.AddComponent<Camera>();
 		screenshotCam.cullingMask = mainCam.cullingMask;
 		screenshotCam.aspect = mainCam.aspect;
@@ -241,6 +275,8 @@ public class GptntBuffer : MonoBehaviour
 
 public class TimedFrame
 {
+	// These fields describe one indivisible frame. GameTimeSeconds follows
+	// Time.timeScale; RealtimeSeconds continues while paused and exposes latency.
 	public long Sequence;
 	public long Epoch;
 	public long AudioCursor;
@@ -260,6 +296,9 @@ public class TimedFrameWindow
 
 public class TimedFrameRingBuffer
 {
+	// readonly prevents replacing the fixed-capacity backing store after
+	// construction. Individual slots are intentionally overwritten as the window
+	// advances, keeping memory bounded.
 	private readonly TimedFrame[] buffer;
 	private int index;
 	private int count;
@@ -271,6 +310,8 @@ public class TimedFrameRingBuffer
 
 	public void Add(TimedFrame frame)
 	{
+		// Replacing a full slot releases the ring's reference to the oldest frame.
+		// Any in-flight snapshot still owns its reference until serialization ends.
 		buffer[index] = frame;
 		index = (index + 1) % buffer.Length;
 		count = Math.Min(count + 1, buffer.Length);
@@ -282,7 +323,7 @@ public class TimedFrameRingBuffer
 		int start = (index - count + buffer.Length) % buffer.Length;
 		for (int offset = 0; offset < count; offset++)
 			frames.Add(buffer[(start + offset) % buffer.Length]);
-		return frames;
+		return frames; // The final element is the most recently captured frame.
 	}
 
 	public TimedFrameWindow GetWindow(long? anchorSequence, long? requestedEpoch, long currentEpoch)
@@ -299,6 +340,8 @@ public class TimedFrameRingBuffer
 		}
 		else
 		{
+			// Include the anchor itself, not only newer frames. This carries the last
+			// image seen by the model into the next clip so action effects have context.
 			foreach (TimedFrame frame in all)
 			{
 				if (frame.Sequence < anchorSequence.Value)
@@ -331,6 +374,8 @@ public class TimedFrameRingBuffer
 
 	public void Clear()
 	{
+		// Releasing every reference allows old frame arrays to be collected and
+		// guarantees that GetAll cannot return pixels from the previous mission.
 		Array.Clear(buffer, 0, buffer.Length);
 		index = 0;
 		count = 0;

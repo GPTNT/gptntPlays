@@ -317,6 +317,10 @@ public class RequestHandlers : MonoBehaviour
 		AtomicObservationSnapshot snapshot = null;
 		Exception captureError = null;
 		ManualResetEvent waitHandle = new ManualResetEvent(false);
+
+		// Unity rendering APIs are main-thread-only. The HTTP worker waits only for
+		// the immutable snapshot; the larger binary response is written afterward on
+		// the worker so the Unity main loop is not occupied by network writes.
 		MainThreadQueue.Enqueue(() => StartCoroutine(CaptureAtomicObservation(
 			observationRequest,
 			result =>
@@ -358,16 +362,22 @@ public class RequestHandlers : MonoBehaviour
 		Action<AtomicObservationSnapshot> onSuccess,
 		Action<Exception> onError)
 	{
+		// Waiting for the rendered frame gives the observation a clear boundary. No
+		// game update can occur while the following synchronous captures run.
 		yield return new WaitForEndOfFrame();
 
 		try
 		{
+			// Capture normal RGB before segmentation temporarily moves selectable
+			// objects onto its private render layer.
 			TimedFrame endFrame = gptntBuffer.CaptureAnchorFrame();
 			Selectable[] selectables = GetActiveSelectables().ToArray();
 			GameObject[] objects = new GameObject[selectables.Length];
 			for (int index = 0; index < selectables.Length; index++)
 				objects[index] = selectables[index].gameObject;
 
+			// Capture the mask immediately, on the same main-thread turn, so it labels
+			// the exact scene represented by endFrame.
 			byte[] rawSegmentation = segmentation.CaptureRawNow(objects);
 			TimedRawObservationPayload frames = gptntBuffer.GetTimedRawBufferData(
 				request.AnchorFrameSequence,
@@ -383,6 +393,7 @@ public class RequestHandlers : MonoBehaviour
 			if (request.AudioCursor.HasValue)
 				requestedAudioStart = request.AudioCursor.Value;
 			else if (frames.frameTiming.Count > 0)
+				// On the first request, align audio with the first returned video frame.
 				requestedAudioStart = frames.frameTiming[0].audioCursor;
 			else
 				requestedAudioStart = ring.GetOldestCursor();
@@ -390,6 +401,8 @@ public class RequestHandlers : MonoBehaviour
 			long audioStart;
 			long audioEnd;
 			long audioDropped;
+			// endFrame.AudioCursor freezes the audio boundary at the RGB capture. Audio
+			// produced while segmentation and serialization run belongs to the next call.
 			short[] audio = ring.ReadBetween(
 				requestedAudioStart,
 				endFrame.AudioCursor,

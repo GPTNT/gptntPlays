@@ -7,11 +7,20 @@ using Newtonsoft.Json;
 
 public class AtomicObservationRequest
 {
+	// The anchor is the final frame returned previously. Repeating it at the start
+	// of the next window lets the model compare before and after an action.
 	public long? AnchorFrameSequence;
+
+	// An epoch is one mission/reset generation. A cursor from another epoch cannot
+	// establish continuous coverage even if its numeric value looks plausible.
 	public long? Epoch;
+
+	// Absolute mono-sample cursor returned by the preceding observation.
 	public long? AudioCursor;
 }
 
+// A main-thread capture result. None of its arrays are modified after creation,
+// allowing the HTTP worker to serialize it without touching Unity APIs or locks.
 public class AtomicObservationSnapshot
 {
 	public TimedRawObservationPayload Frames;
@@ -29,7 +38,11 @@ public class AtomicObservationSnapshot
 
 public class AtomicObservationHeader
 {
+	// Version covers both this JSON schema and the order of binary body sections.
 	public int version;
+
+	// This is deliberately explicit: visual observations must not silently acquire
+	// privileged module state as the endpoint evolves.
 	public bool containsBombState;
 	public long epoch;
 	public int frameWidth;
@@ -63,6 +76,8 @@ public class AtomicObservationHeader
 
 public static class AtomicObservationWriter
 {
+	// Eight-byte magic identifies the payload before a client trusts any lengths.
+	// The final digit is the wire-format version for quick inspection and recovery.
 	private static readonly byte[] Magic = Encoding.ASCII.GetBytes("GPTNTOB1");
 
 	public static void Write(HttpListenerResponse response, AtomicObservationSnapshot snapshot)
@@ -109,6 +124,9 @@ public static class AtomicObservationWriter
 		};
 
 		byte[] headerBytes = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(header));
+
+		// Precompute the exact length because HttpListener sends a fixed-length local
+		// response. Raw media follows the small JSON header without base64 expansion.
 		long contentLength = Magic.Length + sizeof(int) + headerBytes.Length
 			+ ((long) frameByteLength * frames.rawFrames.Count)
 			+ segmentationLength
@@ -120,6 +138,8 @@ public static class AtomicObservationWriter
 
 		using (BinaryWriter writer = new BinaryWriter(response.OutputStream, Encoding.UTF8))
 		{
+			// Wire order: magic, JSON header, RGB frames, segmentation, then PCM audio.
+			// The header carries every count needed to split the untagged binary sections.
 			writer.Write(Magic);
 			writer.Write(headerBytes.Length);
 			writer.Write(headerBytes);

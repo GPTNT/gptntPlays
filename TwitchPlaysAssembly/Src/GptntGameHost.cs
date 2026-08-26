@@ -11,6 +11,8 @@ public class GptntGameHost : MonoBehaviour
 	private Segmentation segmentation;
 	private GptntAudioBuffer gptntAudioBuffer;
 
+	// Keep a modest raw-frame window inside Unity. Longer-term collection and media
+	// encoding belong in the external service so they cannot block the game loop.
 	private const int DefaultVideoBufferSeconds = 10;
 	private const float DefaultVideoCaptureFps = 4f;
 	private const int DefaultAudioBufferSeconds = 30;
@@ -63,6 +65,8 @@ public class GptntGameHost : MonoBehaviour
 			videoCaptureFps = parsedVideoFps;
 		frameIntervalSeconds = 1f / videoCaptureFps;
 
+		// The ring is fixed-size, so convert the configured time horizon into slots
+		// once at startup. Ceiling ensures the requested duration is not rounded down.
 		int videoBufferFrames = Math.Max(1, (int) Math.Ceiling(videoBufferSeconds * videoCaptureFps));
 		gptntBuffer.Init(screenWidth, screenHeight, videoBufferFrames, gptntAudioBuffer);
 		segmentation.Init(screenWidth, screenHeight);

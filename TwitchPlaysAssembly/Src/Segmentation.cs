@@ -120,6 +120,8 @@ public class Segmentation : MonoBehaviour
 		}
 		finally
 		{
+			// Segmentation temporarily changes layers and material properties on live
+			// game objects. Always restore them, including when rendering fails.
 			ResetObjects();
 		}
 	}
@@ -150,6 +152,8 @@ public class Segmentation : MonoBehaviour
 
 	private void ResetObjects()
 	{
+		// Clear the temporary colour overrides before returning objects to the normal
+		// gameplay layer; otherwise the player camera could display segmentation data.
 		if (renderersWithChildren != null)
 		{
 			foreach (Renderer[] list in renderersWithChildren)
