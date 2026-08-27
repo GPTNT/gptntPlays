@@ -98,6 +98,34 @@ public class Segmentation : MonoBehaviour
 		ResetObjects();
 	}
 
+	// Captures a segmentation mask without yielding. Call this from the main
+	// thread after the matching RGB frame has been captured. Unity cannot advance
+	// the scene between the two renders, so they describe the same game state.
+	public byte[] CaptureRawNow(GameObject[] objects)
+	{
+		if (objects.Length == 0)
+			return null;
+
+		propertyBlock = new MaterialPropertyBlock();
+		objectsOnSegmentationLayer = new List<GameObject>();
+		try
+		{
+			Segment(objects);
+			duplicateCam.Render();
+			byte[] segmentationBytes = ConvertRenderTextureToTexture2D(renderTexture).GetRawTextureData();
+			int validBytes = width * height * 3;
+			byte[] trimmed = new byte[validBytes];
+			Array.Copy(segmentationBytes, trimmed, validBytes);
+			return trimmed;
+		}
+		finally
+		{
+			// Segmentation temporarily changes layers and material properties on live
+			// game objects. Always restore them, including when rendering fails.
+			ResetObjects();
+		}
+	}
+
 	public void Segment(GameObject[] objects)
 	{
 		DuplicateCamera();
@@ -124,17 +152,19 @@ public class Segmentation : MonoBehaviour
 
 	private void ResetObjects()
 	{
-		foreach (Renderer[] list in renderersWithChildren)
+		// Clear the temporary colour overrides before returning objects to the normal
+		// gameplay layer; otherwise the player camera could display segmentation data.
+		if (renderersWithChildren != null)
 		{
-			foreach (Renderer r in list)
+			foreach (Renderer[] list in renderersWithChildren)
 			{
-				r.SetPropertyBlock(null);
-			}
-			foreach (var obj in objectsOnSegmentationLayer)
-			{
-				obj.layer = defaultLayer;
+				foreach (Renderer renderer in list)
+					renderer.SetPropertyBlock(null);
 			}
 		}
+		if (objectsOnSegmentationLayer != null)
+			foreach (GameObject obj in objectsOnSegmentationLayer)
+				obj.layer = defaultLayer;
 	}
 
 	private void SetObjectsToSegmentationLayer(GameObject[] objects)

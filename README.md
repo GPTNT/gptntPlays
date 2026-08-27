@@ -61,7 +61,7 @@ The new mod code lives in [TwitchPlaysAssembly/Src/](TwitchPlaysAssembly/Src) an
 | [`RequestHandlers`](TwitchPlaysAssembly/RequestHandlers.cs) | Per-endpoint handler methods. Validates request state, marshals work to the main thread, and serialises responses. |
 | [`GptntStates`](TwitchPlaysAssembly/Src/GptntStates.cs) | Tracks the high-level game state machine (`Setup`, `LightsOn`, `Transitioning`, …), maintains the current `BombState`, and fires `OnFirstLightsOn` / `OnReset` / `OnGameEnd` events. |
 | [`GptntActions`](TwitchPlaysAssembly/Src/GptntActions.cs) | Implements the action primitives: ray-cast clicks in screen space, hold/release, 90° and 180° bomb rotations, zoom-out. Tracks which face of the bomb is currently active. |
-| [`GptntBuffer`](TwitchPlaysAssembly/Src/GptntBuffer.cs) | Maintains a fixed-size ring buffer of recent rendered frames (PNG-encoded) so the controller can recover short observation histories. |
+| [`GptntBuffer`](TwitchPlaysAssembly/Src/GptntBuffer.cs) | Maintains a fixed-size ring buffer of RGB24 frames with frame sequence, audio cursor, game-time, wall-time, and mission-epoch metadata. |
 | [`Segmentation`](TwitchPlaysAssembly/Src/Segmentation.cs) | Renders a separate segmentation pass that colours each interactable selectable on a dedicated layer, used to produce instance masks aligned with the observation frame. |
 | [`MagicSolver`](TwitchPlaysAssembly/Src/MagicSolver.cs) | Oracle controller that solves the next module in a randomised sequence. Used as an upper-bound baseline and for end-to-end smoke tests of the action pipeline. |
 | [`GptntGameHost`](TwitchPlaysAssembly/Src/GptntGameHost.cs) | Bootstraps screen resolution, the frame buffer, segmentation, and the initial "pick up the bomb" coroutine on first lights-on. |
@@ -104,8 +104,11 @@ The mod reads the following environment variables at startup:
 | `port` | `8085` | Port the HTTP server binds to (localhost only). |
 | `GAME_WIDTH` | `640` | Render width, in pixels, for the screenshot/segmentation cameras. |
 | `GAME_HEIGHT` | `480` | Render height, in pixels. |
+| `VIDEO_BUFFER_SECONDS` | `10` | Approximate amount of recent video retained by the mod. |
+| `VIDEO_CAPTURE_FPS` | `4` | Rate at which game frames are added to the video ring while game time advances. |
+| `AUDIO_BUFFER_SECONDS` | `30` | Amount of mono PCM audio retained by the audio ring. |
 
-Observation frames in `/buffer` are PNG-encoded at this resolution; the ring buffer holds the most recent 16 frames captured at one frame every 0.25 in-game seconds (see [`GptntGameHost`](TwitchPlaysAssembly/Src/GptntGameHost.cs)).
+The video ring capacity is `ceil(VIDEO_BUFFER_SECONDS * VIDEO_CAPTURE_FPS)`. Frames are retained as raw RGB24 and captured according to in-game time, so pausing the game does not fill the ring with duplicate frames.
 
 ## HTTP API
 
@@ -167,6 +170,45 @@ Force-solves every remaining module. Only valid in `LightsOn`. Intended as an up
 
 Returns the full bomb state as JSON. Only available once the bomb has reached its first lights-on and not after reset. See [Game state schema](#game-state-schema).
 
+#### `GET /observation`
+
+Atomically captures the material needed to build an audio-video observation:
+
+- The recent RGB video window, containing only frames captured at `VIDEO_CAPTURE_FPS`.
+- Timing metadata for every frame: its sequence, mission epoch, audio-sample cursor, scaled game time, and unscaled monotonic time.
+- A separate current RGB image and segmentation mask captured against the same game state.
+- Mono 16-bit PCM audio ending at the newest video frame's audio cursor.
+
+The current image is not inserted into the video ring. Observation frequency therefore cannot change the video frame rate or shorten the ring's configured time horizon. The next video repeats the preceding video's final regular frame, then includes the regular frames that show the effect of the intervening action.
+
+This endpoint intentionally contains **no structured bomb state**. It does not call `/state` or expose module answers. `containsBombState` is always `false` in the response header.
+
+The client should feed the previous response's `endFrameSequence`, `epoch`, and `audioEndCursor` back into the next request:
+
+```text
+/observation?anchorFrameSequence=123&epoch=4&audioCursor=801920
+```
+
+| Parameter | Type | Meaning |
+|---|---|---|
+| `anchorFrameSequence` | int64, optional | The previous video's last frame. If retained, it is deliberately repeated first so the new video begins with the last video frame the model saw. |
+| `epoch` | int64, optional | The previous observation's mission epoch. A mismatch is reported as a coverage gap. |
+| `audioCursor` | int64, optional | Start the PCM interval at this absolute sample cursor. Normally the previous response's `audioEndCursor`. |
+
+The response uses `Content-Type: application/vnd.gptnt.observation` and this little-endian layout:
+
+| Part | Size | Contents |
+|---|---:|---|
+| Magic | 8 bytes | ASCII `GPTNTOB1`. |
+| Header length | 4 bytes | UTF-8 JSON header length as `int32`. |
+| Header | variable | Metadata and the lengths/counts needed to decode the remaining sections. |
+| RGB frames | `frameCount * frameByteLength` | Raw RGB24 frames, oldest first. |
+| Current image | `currentImageByteLength` | Raw RGB24 image captured when the observation was requested. |
+| Segmentation | `segmentationByteLength` | Raw RGB24 mask aligned with `segmentationFrameSequence`. |
+| Audio | `audioByteLength` | Mono `pcm_s16le`, with its sample rate in `audioSampleRate`. |
+
+`coverageGap` is true when requested video or audio has already fallen out of its ring. The more specific `frameCoverageGap`, `audioCoverageGap`, `anchorIncluded`, `oldestAvailableFrameSequence`, `audioStartCursor`, and `audioDroppedSamples` fields explain what was retained. Consumers must not silently treat a response with a gap as complete.
+
 #### `GET /buffer`
 
 Returns the most recent buffered RGB frames plus a single fresh segmentation mask as a packed **binary** payload (`Content-Type: application/octet-stream`). The wire format avoids the cost of PNG-encoding + base64 + JSON parsing on the hot observation path.
@@ -182,7 +224,7 @@ Layout (little-endian, written via `System.IO.BinaryWriter`):
 | 13 | `frameCount × (frameWidth · frameHeight · 3)` bytes | Raw RGB24 pixels, frames concatenated in chronological order (oldest first). |
 | … | `frameWidth · frameHeight · 3` bytes | Raw RGB24 pixels of the segmentation mask. Present iff `segmentationIncluded == 1`. |
 
-Each frame is exactly `frameWidth * frameHeight * 3` bytes; GPU row padding from `Texture2D.GetRawTextureData()` is stripped before serialisation. The ring buffer holds up to 16 frames captured at one frame every 0.25 in-game seconds.
+Each frame is exactly `frameWidth * frameHeight * 3` bytes; GPU row padding from `Texture2D.GetRawTextureData()` is stripped before serialisation. The ring capacity and capture rate are controlled by `VIDEO_BUFFER_SECONDS` and `VIDEO_CAPTURE_FPS`.
 If the segmentation render does not complete within 500 ms the response returns `408 Request Timeout` and no body is written.
 
 The segmentation mask colours all currently active interactable `Selectable`s on a dedicated render layer; pixel colour identifies which selectable a pixel belongs to.

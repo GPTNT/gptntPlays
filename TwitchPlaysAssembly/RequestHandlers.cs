@@ -283,6 +283,171 @@ public class RequestHandlers : MonoBehaviour
 		span.End(true);
 	}
 
+	public void HandleAtomicObservation(HttpListenerRequest request, HttpListenerResponse response)
+	{
+		var traceContext = httpHandler.GetCurrentTraceContext();
+		OpenTelemetrySpan span = new OpenTelemetrySpan("observation.atomic", traceContext.TraceId, traceContext.SpanId);
+
+		if (!StateEqualsAny(GptntStates.GameState.LightsOn))
+		{
+			response.StatusCode = (int) HttpStatusCode.BadRequest;
+			WriteText(response, "Cannot capture an observation in " + gptntStates.gameState + " state");
+			span.End(false);
+			return;
+		}
+
+		AtomicObservationRequest observationRequest;
+		try
+		{
+			observationRequest = new AtomicObservationRequest
+			{
+				AnchorFrameSequence = ParseOptionalLong(request.QueryString.Get("anchorFrameSequence")),
+				Epoch = ParseOptionalLong(request.QueryString.Get("epoch")),
+				AudioCursor = ParseOptionalLong(request.QueryString.Get("audioCursor")),
+			};
+		}
+		catch (FormatException ex)
+		{
+			response.StatusCode = (int) HttpStatusCode.BadRequest;
+			WriteText(response, ex.Message);
+			span.End(false);
+			return;
+		}
+
+		AtomicObservationSnapshot snapshot = null;
+		Exception captureError = null;
+		ManualResetEvent waitHandle = new ManualResetEvent(false);
+
+		// Unity rendering APIs are main-thread-only. The HTTP worker waits only for
+		// the immutable snapshot; the larger binary response is written afterward on
+		// the worker so the Unity main loop is not occupied by network writes.
+		MainThreadQueue.Enqueue(() => StartCoroutine(CaptureAtomicObservation(
+			observationRequest,
+			result =>
+			{
+				snapshot = result;
+				waitHandle.Set();
+			},
+			error =>
+			{
+				captureError = error;
+				waitHandle.Set();
+			})));
+
+		if (!waitHandle.WaitOne(5000))
+		{
+			response.StatusCode = (int) HttpStatusCode.RequestTimeout;
+			WriteText(response, "Timed out while capturing the observation");
+			span.End(false);
+			return;
+		}
+		if (captureError != null)
+		{
+			response.StatusCode = (int) HttpStatusCode.InternalServerError;
+			log.Error(GptntDebug.FormatMessage("Could not capture atomic observation", span.GetTraceId(), span.GetSpanId()), captureError);
+			WriteText(response, "Could not capture the observation");
+			span.End(false);
+			return;
+		}
+
+		AtomicObservationWriter.Write(response, snapshot);
+		span.SetAttribute("observation.frames", snapshot.Frames.rawFrames.Count);
+		span.SetAttribute("observation.audio_samples", snapshot.AudioSamples.Length);
+		span.SetAttribute("observation.coverage_gap", snapshot.Frames.coverageGap || snapshot.AudioDroppedSamples > 0);
+		span.End(true);
+	}
+
+	private IEnumerator CaptureAtomicObservation(
+		AtomicObservationRequest request,
+		Action<AtomicObservationSnapshot> onSuccess,
+		Action<Exception> onError)
+	{
+		// Waiting for the rendered frame gives the observation a clear boundary. No
+		// game update can occur while the following synchronous captures run.
+		yield return new WaitForEndOfFrame();
+
+		try
+		{
+			// Capture the current RGB image without adding it to the periodic video ring.
+			// This image is the background for the SoM mask returned below.
+			TimedFrame currentImage = gptntBuffer.CaptureCurrentImage();
+			Selectable[] selectables = GetActiveSelectables().ToArray();
+			GameObject[] objects = new GameObject[selectables.Length];
+			for (int index = 0; index < selectables.Length; index++)
+				objects[index] = selectables[index].gameObject;
+
+			// Capture the mask immediately, on the same main-thread turn, so it labels
+			// the exact scene represented by currentImage.
+			byte[] rawSegmentation = segmentation.CaptureRawNow(objects);
+			TimedRawObservationPayload frames = gptntBuffer.GetTimedRawBufferData(
+				request.AnchorFrameSequence,
+				request.Epoch);
+			// Video and audio share the newest regularly scheduled frame as their end
+			// boundary. Keeping that boundary independent of request timing preserves
+			// the configured capture cadence and the ring's time horizon.
+			if (frames.frameTiming.Count == 0)
+				throw new InvalidOperationException("Video buffer does not contain a frame yet");
+			FrameTimingPayload videoEndFrame = frames.frameTiming[frames.frameTiming.Count - 1];
+
+			if (gptntAudioBuffer == null)
+				gptntAudioBuffer = GetComponent<GptntAudioBuffer>();
+			AudioRingBuffer ring = gptntAudioBuffer != null ? gptntAudioBuffer.Ring : null;
+			if (ring == null)
+				throw new InvalidOperationException("Audio buffer not initialized yet");
+
+			long requestedAudioStart;
+			if (request.AudioCursor.HasValue)
+				requestedAudioStart = request.AudioCursor.Value;
+			else if (frames.frameTiming.Count > 0)
+				// On the first request, align audio with the first returned video frame.
+				requestedAudioStart = frames.frameTiming[0].audioCursor;
+			else
+				requestedAudioStart = ring.GetOldestCursor();
+
+			long audioStart;
+			long audioEnd;
+			long audioDropped;
+			// End audio at the newest periodic frame. The current SoM image is newer and
+			// remains separate, so requesting an image cannot change the video's timing.
+			short[] audio = ring.ReadBetween(
+				requestedAudioStart,
+				videoEndFrame.AudioCursor,
+				out audioStart,
+				out audioEnd,
+				out audioDropped);
+
+			onSuccess(new AtomicObservationSnapshot
+			{
+				Frames = frames,
+				CurrentImage = currentImage.Pixels,
+				CurrentImageTiming = FrameTimingPayload.FromFrame(currentImage),
+				Segmentation = rawSegmentation,
+				AudioSamples = audio,
+				AudioSampleRate = ring.SampleRate,
+				RequestedAudioCursor = request.AudioCursor,
+				AudioStartCursor = audioStart,
+				AudioEndCursor = audioEnd,
+				AudioDroppedSamples = audioDropped,
+				RequestedEpoch = request.Epoch,
+				RequestedAnchorFrameSequence = request.AnchorFrameSequence,
+			});
+		}
+		catch (Exception ex)
+		{
+			onError(ex);
+		}
+	}
+
+	private static long? ParseOptionalLong(string raw)
+	{
+		if (string.IsNullOrEmpty(raw))
+			return null;
+		long value;
+		if (!long.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out value))
+			throw new FormatException("Expected an integer cursor, got: " + raw);
+		return value;
+	}
+
 	private static void WriteText(HttpListenerResponse response, string text)
 	{
 		byte[] bytes = System.Text.Encoding.UTF8.GetBytes(text);

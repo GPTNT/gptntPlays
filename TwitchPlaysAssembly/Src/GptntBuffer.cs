@@ -6,35 +6,47 @@ using log4net;
 
 public class GptntBuffer : MonoBehaviour
 {
-	// Cameras 
-	private Camera mainCam = null;
-	private Camera screenshotCam = null;
+	// Cameras
+	private Camera mainCam;
+	private Camera screenshotCam;
 
-	// Camera game objects
-	private GameObject screenshotObject = null;
+	// Camera game object and reusable GPU/CPU readback resources
+	private GameObject screenshotObject;
 	private RenderTexture screenshotRT;
+	private Texture2D readbackTexture;
 
-	// Ring Buffer
-	private TextureRingBuffer textureBuffer;
-	private bool isRecording = false;
+	// Ring buffer. A frame owns its pixel array for the rest of its lifetime: once
+	// captured, readers may safely treat those bytes as read-only while the ring
+	// replaces the slot with a different frame.
+	private TimedFrameRingBuffer frameBuffer;
+	private GptntAudioBuffer audioBuffer;
+	private bool isRecording;
 
-	// Coroutine
+	// Coroutine responsible for periodically adding rendered frames to the ring.
 	private Coroutine bufferCoroutine;
 
-	private static ILog log = LogManager.GetLogger("Buffer");
+	// Sequence numbers identify individual frames for incremental reads. The epoch
+	// identifies the mission/reset generation. It prevents a cursor retained by a
+	// client from being mistaken for a valid cursor in a later mission.
+	private long nextSequence;
+	private long epoch;
 
-	public void Init(int width, int height, int bufferLength)
+	private static readonly ILog log = LogManager.GetLogger("Buffer");
+
+	public long Epoch { get { return epoch; } }
+
+	public void Init(int width, int height, int bufferLength, GptntAudioBuffer sourceAudioBuffer)
 	{
 		screenshotRT = new RenderTexture(width, height, 24);
-		textureBuffer = new TextureRingBuffer(bufferLength);
+		readbackTexture = new Texture2D(width, height, TextureFormat.RGB24, false);
+		frameBuffer = new TimedFrameRingBuffer(bufferLength);
+		audioBuffer = sourceAudioBuffer;
 
 		OpenTelemetrySpan span = new OpenTelemetrySpan("buffer.init");
 		span.SetAttribute("width", width);
 		span.SetAttribute("height", height);
 		span.SetAttribute("bufferLength", bufferLength);
-
 		log.Debug(GptntDebug.FormatMessage("Initialized the Buffer", span.GetTraceId(), span.GetSpanId()));
-
 		span.End(true);
 	}
 
@@ -63,62 +75,157 @@ public class GptntBuffer : MonoBehaviour
 
 	public void ClearBuffer()
 	{
+		// Stop first so the capture coroutine cannot add a frame while the retained
+		// window is being discarded. Old mission pixels must never leak into the
+		// first observation of the next mission.
 		StopBuffer();
-		textureBuffer.Clear();
+		frameBuffer.Clear();
+
+		// Frame sequences stay monotonic for the lifetime of the process, while the
+		// epoch makes mission boundaries explicit to clients.
+		epoch++;
 		OpenTelemetrySpan span = new OpenTelemetrySpan("buffer.clear");
+		span.SetAttribute("epoch", epoch);
 		log.Debug(GptntDebug.FormatMessage("Cleared the buffer"));
 		span.End(true);
+	}
+
+	// Must run on Unity's main thread, after the frame has rendered. The returned
+	// frame is paired with the current segmentation mask but is not added to the
+	// periodic ring, so observation requests cannot change the video's frame rate.
+	public TimedFrame CaptureCurrentImage()
+	{
+		return CaptureFrame(false);
+	}
+
+	// Must run on Unity's main thread. Pixel arrays are never mutated after capture;
+	// the returned list therefore forms a stable, read-only snapshot that the HTTP
+	// worker can serialize after the main thread resumes.
+	public TimedRawObservationPayload GetTimedRawBufferData(long? anchorSequence, long? requestedEpoch)
+	{
+		TimedFrameWindow window = frameBuffer.GetWindow(anchorSequence, requestedEpoch, epoch);
+		List<byte[]> rawFrames = new List<byte[]>(window.Frames.Count);
+		List<FrameTimingPayload> timing = new List<FrameTimingPayload>(window.Frames.Count);
+
+		foreach (TimedFrame frame in window.Frames)
+		{
+			rawFrames.Add(frame.Pixels);
+			timing.Add(FrameTimingPayload.FromFrame(frame));
+		}
+
+		return new TimedRawObservationPayload
+		{
+			rawFrames = rawFrames,
+			frameTiming = timing,
+			frameHeight = screenshotRT.height,
+			frameWidth = screenshotRT.width,
+			epoch = epoch,
+			anchorRequested = anchorSequence.HasValue,
+			anchorIncluded = window.AnchorIncluded,
+			coverageGap = window.CoverageGap,
+			oldestAvailableSequence = window.OldestAvailableSequence,
+			endFrameSequence = window.EndFrameSequence,
+		};
 	}
 
 	public ObservationPayload GetBufferJSON()
 	{
 		List<string> frameStrings = new List<string>();
-		foreach (Texture2D frame in textureBuffer.GetLastFrames())
-		{
-			byte[] frameBytes = frame.EncodeToPNG();
-			frameStrings.Add(Convert.ToBase64String(frameBytes));
-		}
-
+		foreach (TimedFrame frame in frameBuffer.GetAll())
+			frameStrings.Add(Convert.ToBase64String(EncodeToPng(frame.Pixels)));
 		return new ObservationPayload { frames = frameStrings };
 	}
 
 	public RawObservationPayload GetRawBufferData()
 	{
 		List<byte[]> rawFrames = new List<byte[]>();
-		foreach (Texture2D frame in textureBuffer.GetLastFrames())
+		foreach (TimedFrame frame in frameBuffer.GetAll())
+			rawFrames.Add(frame.Pixels);
+		return new RawObservationPayload
 		{
-			byte[] frameBytes = frame.GetRawTextureData();
-			// crop out the padding added by unity for the gpu
-			int validBytes = frame.width * frame.height * 3;
-			byte[] trimmed = new byte[validBytes];
-			Array.Copy(frameBytes, trimmed, validBytes);
-			rawFrames.Add(trimmed);
-		}
-		return new RawObservationPayload { rawFrames = rawFrames, frameHeight = screenshotRT.height, frameWidth = screenshotRT.width };
-	}
-
-	public byte[] GetLastFrame()
-	{
-		return textureBuffer.GetLastFrame().EncodeToPNG();
+			rawFrames = rawFrames,
+			frameHeight = screenshotRT.height,
+			frameWidth = screenshotRT.width,
+		};
 	}
 
 	private IEnumerator BufferCoroutine(float frequency)
 	{
-		if (isRecording) yield break;
+		if (isRecording)
+			yield break;
 		isRecording = true;
-		var wait = new WaitForSeconds(frequency);
+		WaitForSeconds wait = new WaitForSeconds(frequency);
 		while (isRecording)
 		{
 			yield return new WaitForEndOfFrame();
-			textureBuffer.Add(ConvertRenderTextureToTexture2D(screenshotRT));
+			CaptureFrame(true);
 			yield return wait;
 		}
 	}
 
-	// Helper functions
+	private TimedFrame CaptureFrame(bool addToBuffer)
+	{
+		byte[] pixels = ReadRenderTexture();
+		AudioRingBuffer ring = audioBuffer != null ? audioBuffer.Ring : null;
+
+		// The absolute audio-sample cursor is our shared AV clock. Unlike wall time,
+		// it directly identifies which audio belongs before and after this frame.
+		long audioCursor = ring != null ? ring.GetCursor() : 0;
+		TimedFrame frame = new TimedFrame
+		{
+			Sequence = nextSequence++,
+			Epoch = epoch,
+			AudioCursor = audioCursor,
+			GameTimeSeconds = Time.time,
+			RealtimeSeconds = Time.realtimeSinceStartup,
+			Pixels = pixels,
+		};
+		if (addToBuffer)
+			frameBuffer.Add(frame);
+		return frame;
+	}
+
+	private byte[] ReadRenderTexture()
+	{
+		// Convert the screenshot RenderTexture into raw RGB24 bytes. Reusing the
+		// Texture2D avoids allocating another Unity object for every buffered frame.
+		RenderTexture previous = RenderTexture.active;
+		RenderTexture.active = screenshotRT;
+		readbackTexture.ReadPixels(new Rect(0, 0, screenshotRT.width, screenshotRT.height), 0, 0);
+		readbackTexture.Apply();
+		RenderTexture.active = previous;
+
+		byte[] source = readbackTexture.GetRawTextureData();
+
+		// Crop any row/mipmap padding Unity may expose. Every wire frame has exactly
+		// width * height * 3 bytes, which keeps the binary protocol deterministic.
+		int validBytes = screenshotRT.width * screenshotRT.height * 3;
+		byte[] pixels = new byte[validBytes];
+		Array.Copy(source, pixels, validBytes);
+		return pixels;
+	}
+
+	private byte[] EncodeToPng(byte[] pixels)
+	{
+		// Legacy JSON endpoints still require PNG. New observation traffic keeps the
+		// raw RGB bytes and avoids this extra encoding work.
+		Texture2D texture = new Texture2D(screenshotRT.width, screenshotRT.height, TextureFormat.RGB24, false);
+		try
+		{
+			texture.LoadRawTextureData(pixels);
+			texture.Apply();
+			return texture.EncodeToPNG();
+		}
+		finally
+		{
+			Destroy(texture);
+		}
+	}
+
 	private void DuplicateCamera()
 	{
-		if (screenshotObject) return;
+		if (screenshotObject)
+			return;
 
 		if (!mainCam)
 		{
@@ -133,15 +240,15 @@ public class GptntBuffer : MonoBehaviour
 			}
 		}
 
-		// duplicate game object
-		screenshotObject = new GameObject();
-		screenshotObject.name = "ScreenshotCamera";
+		// Duplicate the main camera's transform and projection so buffered frames use
+		// exactly the viewpoint visible to the player.
+		screenshotObject = new GameObject { name = "ScreenshotCamera" };
 		screenshotObject.transform.SetParent(mainCam.transform);
 		screenshotObject.transform.localPosition = Vector3.zero;
 		screenshotObject.transform.localRotation = Quaternion.identity;
 		screenshotObject.transform.localScale = Vector3.one;
 
-		// Adding camera
+		// Add the camera and render into our private texture instead of the display.
 		screenshotCam = screenshotObject.AddComponent<Camera>();
 		screenshotCam.cullingMask = mainCam.cullingMask;
 		screenshotCam.aspect = mainCam.aspect;
@@ -152,72 +259,114 @@ public class GptntBuffer : MonoBehaviour
 		screenshotCam.depth = mainCam.depth + 1;
 		screenshotCam.targetTexture = screenshotRT;
 	}
-
-	// Convert a RenderTexture to a Texture2D
-	private Texture2D ConvertRenderTextureToTexture2D(RenderTexture rt)
-	{
-		RenderTexture.active = rt;
-		Texture2D tex = new Texture2D(rt.width, rt.height, TextureFormat.RGB24, mipmap: true);
-		Rect rect = new Rect(0, 0, rt.width, rt.height);
-		tex.ReadPixels(rect, 0, 0);
-		tex.Apply();
-		RenderTexture.active = null;
-		return tex;
-	}
 }
 
-public class TextureRingBuffer
+public class TimedFrame
 {
-	private readonly Texture2D[] buffer;
-	private int index = 0;
-	private int count = 0;
+	// These fields describe one indivisible frame. GameTimeSeconds follows
+	// Time.timeScale; RealtimeSeconds continues while paused and exposes latency.
+	public long Sequence;
+	public long Epoch;
+	public long AudioCursor;
+	public float GameTimeSeconds;
+	public float RealtimeSeconds;
+	public byte[] Pixels;
+}
 
-	public TextureRingBuffer(int size)
+public class TimedFrameWindow
+{
+	public List<TimedFrame> Frames;
+	public bool AnchorIncluded;
+	public bool CoverageGap;
+	public long OldestAvailableSequence;
+	public long EndFrameSequence;
+}
+
+public class TimedFrameRingBuffer
+{
+	// readonly prevents replacing the fixed-capacity backing store after
+	// construction. Individual slots are intentionally overwritten as the window
+	// advances, keeping memory bounded.
+	private readonly TimedFrame[] buffer;
+	private int index;
+	private int count;
+
+	public TimedFrameRingBuffer(int size)
 	{
-		buffer = new Texture2D[size];
+		buffer = new TimedFrame[Math.Max(1, size)];
 	}
 
-	public void Add(Texture2D tex)
+	public void Add(TimedFrame frame)
 	{
-		if (buffer[index] != null)
-		{
-			UnityEngine.Object.Destroy(buffer[index]); // Free memory
-		}
-
-		buffer[index] = tex;
+		// Replacing a full slot releases the ring's reference to the oldest frame.
+		// Any in-flight snapshot still owns its reference until serialization ends.
+		buffer[index] = frame;
 		index = (index + 1) % buffer.Length;
 		count = Math.Min(count + 1, buffer.Length);
 	}
 
-	public List<Texture2D> GetLastFrames()
+	public List<TimedFrame> GetAll()
 	{
-		List<Texture2D> frames = new List<Texture2D>(count);
+		List<TimedFrame> frames = new List<TimedFrame>(count);
 		int start = (index - count + buffer.Length) % buffer.Length;
-
-		for (int i = 0; i < count; i++)
-		{
-			int pos = (start + i) % buffer.Length;
-			frames.Add(buffer[pos]);
-		}
-
-		return frames; // the last element in the list is the most recent
+		for (int offset = 0; offset < count; offset++)
+			frames.Add(buffer[(start + offset) % buffer.Length]);
+		return frames; // The final element is the most recently captured frame.
 	}
 
-	public Texture2D GetLastFrame()
+	public TimedFrameWindow GetWindow(long? anchorSequence, long? requestedEpoch, long currentEpoch)
 	{
-		int lastIndex = (index - 1 + buffer.Length) % buffer.Length;
-		return buffer[lastIndex];
+		List<TimedFrame> all = GetAll();
+		List<TimedFrame> selected = new List<TimedFrame>();
+		bool epochMismatch = requestedEpoch.HasValue && requestedEpoch.Value != currentEpoch;
+		bool anchorIncluded = false;
+		bool coverageGap = epochMismatch;
+
+		if (!anchorSequence.HasValue || epochMismatch)
+		{
+			selected.AddRange(all);
+		}
+		else
+		{
+			// Include the anchor itself, not only newer frames. This carries the last
+			// video frame into the next clip so action effects have visual context.
+			foreach (TimedFrame frame in all)
+			{
+				if (frame.Sequence < anchorSequence.Value)
+					continue;
+				if (frame.Sequence == anchorSequence.Value)
+					anchorIncluded = true;
+				selected.Add(frame);
+			}
+			coverageGap = !anchorIncluded;
+		}
+
+		long oldest = all.Count == 0 ? -1 : all[0].Sequence;
+		long newest = all.Count == 0 ? -1 : all[all.Count - 1].Sequence;
+		return new TimedFrameWindow
+		{
+			Frames = selected,
+			AnchorIncluded = anchorIncluded,
+			CoverageGap = coverageGap,
+			OldestAvailableSequence = oldest,
+			EndFrameSequence = newest,
+		};
+	}
+
+	public TimedFrame GetLastFrame()
+	{
+		if (count == 0)
+			return null;
+		return buffer[(index - 1 + buffer.Length) % buffer.Length];
 	}
 
 	public void Clear()
 	{
-		foreach (Texture2D item in buffer)
-		{
-			if (item != null)
-				UnityEngine.Object.Destroy(item);
-			index = 0;
-			count = 0;
-		}
+		// Releasing every reference allows old frame arrays to be collected and
+		// guarantees that GetAll cannot return pixels from the previous mission.
+		Array.Clear(buffer, 0, buffer.Length);
+		index = 0;
+		count = 0;
 	}
 }
 
@@ -232,4 +381,36 @@ public class RawObservationPayload
 	public List<byte[]> rawFrames { get; set; }
 	public int frameWidth;
 	public int frameHeight;
+}
+
+public class FrameTimingPayload
+{
+	public long sequence;
+	public long epoch;
+	public long audioCursor;
+	public float gameTimeSeconds;
+	public float realtimeSeconds;
+
+	public static FrameTimingPayload FromFrame(TimedFrame frame)
+	{
+		return new FrameTimingPayload
+		{
+			sequence = frame.Sequence,
+			epoch = frame.Epoch,
+			audioCursor = frame.AudioCursor,
+			gameTimeSeconds = frame.GameTimeSeconds,
+			realtimeSeconds = frame.RealtimeSeconds,
+		};
+	}
+}
+
+public class TimedRawObservationPayload : RawObservationPayload
+{
+	public List<FrameTimingPayload> frameTiming;
+	public long epoch;
+	public bool anchorRequested;
+	public bool anchorIncluded;
+	public bool coverageGap;
+	public long oldestAvailableSequence;
+	public long endFrameSequence;
 }

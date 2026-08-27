@@ -11,11 +11,16 @@ using log4net;
 /// </summary>
 public class AudioRingBuffer
 {
+	// The backing array and lock object never change after construction. Keeping
+	// them readonly makes that ownership rule explicit across the Unity audio and
+	// HTTP threads; the samples inside the ring remain intentionally mutable.
 	private readonly short[] buffer;
 	private long writeCursor; // absolute samples written since startup; never resets
 	private int validCount;   // samples currently readable (reset by Clear)
 	private readonly object sync = new object();
 
+	// Cursor values are only meaningful at one sample rate, so the rate is fixed
+	// for the lifetime of the ring and published alongside every audio response.
 	public readonly int SampleRate;
 
 	public AudioRingBuffer(int sampleRate, int capacitySeconds)
@@ -59,24 +64,41 @@ public class AudioRingBuffer
 	// is reported via <paramref name="dropped"/>.
 	public short[] ReadSince(long cursor, out long newCursor, out long dropped)
 	{
+		long actualStartCursor;
+		return ReadBetween(cursor, GetCursor(), out actualStartCursor, out newCursor, out dropped);
+	}
+
+	// Returns a stable interval ending at an already captured cursor. This lets an
+	// observation exclude audio that arrived after its final video frame. Both
+	// bounds are clamped while holding the same lock used by the audio callback, so
+	// the returned samples and reported cursors describe one consistent interval.
+	public short[] ReadBetween(long startCursor, long endCursor, out long actualStartCursor, out long actualEndCursor, out long dropped)
+	{
 		lock (sync)
 		{
-			newCursor = writeCursor;
 			long oldest = writeCursor - validCount;
+			long newest = writeCursor;
 			dropped = 0;
 
-			if (cursor < oldest)
+			if (endCursor < oldest)
+				endCursor = oldest;
+			else if (endCursor > newest)
+				endCursor = newest;
+
+			if (startCursor < oldest)
 			{
-				dropped = oldest - cursor;
-				cursor = oldest;
+				dropped = oldest - startCursor;
+				startCursor = oldest;
 			}
-			else if (cursor > writeCursor)
+			else if (startCursor > endCursor)
 			{
-				cursor = writeCursor;
+				startCursor = endCursor;
 			}
 
-			int count = (int) (writeCursor - cursor);
-			return CopyRange(cursor, count);
+			actualStartCursor = startCursor;
+			actualEndCursor = endCursor;
+			int count = (int) (endCursor - startCursor);
+			return CopyRange(startCursor, count);
 		}
 	}
 
@@ -111,7 +133,15 @@ public class AudioRingBuffer
 		lock (sync) { return writeCursor; }
 	}
 
-	// Empties the retained window without resetting the monotonic cursor.
+	public long GetOldestCursor()
+	{
+		lock (sync) { return writeCursor - validCount; }
+	}
+
+	// Empties the retained window without resetting the monotonic cursor. Clearing
+	// removes audio from the previous mission, while preserving cursor continuity
+	// means a stale client request is detected and reported as a gap rather than
+	// accidentally pointing at unrelated samples in the new mission.
 	public void Clear()
 	{
 		lock (sync) { validCount = 0; }
