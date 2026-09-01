@@ -411,7 +411,7 @@ public class RequestHandlers : MonoBehaviour
 			// remains separate, so requesting an image cannot change the video's timing.
 			short[] audio = ring.ReadBetween(
 				requestedAudioStart,
-				videoEndFrame.AudioCursor,
+				videoEndFrame.audioCursor,
 				out audioStart,
 				out audioEnd,
 				out audioDropped);
