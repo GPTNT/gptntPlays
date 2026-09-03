@@ -24,10 +24,18 @@ public static class VanillaRuleModifier
 			? (int) value
 			: 1;
 
-	public static void SetRuleSeed(int seed, bool saveSettings = false)
+	public static void SetRuleSeed(int seed, bool saveSettings = false, bool deferInstallation = false)
 	{
 		if (Properties != null && Properties.ContainsKey(RuleSeed))
 			Properties[RuleSeed] = new object[] { seed, saveSettings };
+		if (deferInstallation && Properties != null && Properties.ContainsKey(DeferredRuleInstallation))
+			Properties[DeferredRuleInstallation] = true;
+	}
+
+	public static void ApplyDeferredRules()
+	{
+		if (Properties != null && Properties.ContainsKey(ApplyDeferredRulesKey))
+			Properties[ApplyDeferredRulesKey] = true;
 	}
 
 	public static string GetRuleManualDirectory() => (Properties != null && Properties.TryGetValue(GetRuleManual, out object value))
@@ -51,4 +59,6 @@ public static class VanillaRuleModifier
 	private const string SeedIsVanilla = "IsSeedVanilla";
 	private const string SeedIsModded = "IsSeedModded";
 	private const string GetRuleManual = "GetRuleManual";
+	private const string DeferredRuleInstallation = "DeferredRuleInstallation";
+	private const string ApplyDeferredRulesKey = "ApplyDeferredRules";
 }

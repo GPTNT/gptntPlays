@@ -120,6 +120,7 @@ public class GptntStates : MonoBehaviour
 	private IEnumerator FirstLightOn()
 	{
 		yield return new WaitForSeconds(1.5f); // wait for a bit for the bomb to fully initiate.
+		VanillaRuleModifier.ApplyDeferredRules();
 		OnFirstLightsOn?.Invoke();
 		gameState = GameState.LightsOn;
 		bombState = GetInitialBombState();
