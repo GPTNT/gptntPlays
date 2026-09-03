@@ -1000,7 +1000,7 @@ public class RequestHandlers : MonoBehaviour
 		// so gameplay and validation use the requested rules.
 		if (VanillaRuleModifier.Installed())
 		{
-			VanillaRuleModifier.SetRuleSeed(ruleSeed, true);
+			VanillaRuleModifier.SetRuleSeed(ruleSeed, true, deferInstallation: true);
 		}
 
 		MainThreadQueue.Enqueue(delegate () { gameCommands.StartMission(mission, seed); });
