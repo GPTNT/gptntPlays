@@ -993,15 +993,16 @@ public class RequestHandlers : MonoBehaviour
 		setting.ComponentPools = pools;
 		mission.GeneratorSetting = setting;
 
-		// Using the VanillaRuleModifier requires a separate mod to be installed. If it is installed,
-		// then the VanillaRuleModifierProperties GameObject will exist at runtime and then this should
-		// be true. Otherwise, it'll just be false and we then ignore the ruleSeed Parameter
+		KMBomb bomb = gameCommands.CreateBomb(null, setting, spawn, seed);
+
+		// Apply the rule seed after creating the bomb so that the rule modifier cannot change the
+		// seeded random sequence used for bomb generation. It is still set before the mission starts,
+		// so gameplay and validation use the requested rules.
 		if (VanillaRuleModifier.Installed())
 		{
-			VanillaRuleModifier.SetRuleSeed(ruleSeed, true);
+			VanillaRuleModifier.SetRuleSeed(ruleSeed, true, deferInstallation: true);
 		}
 
-		KMBomb bomb = gameCommands.CreateBomb(null, setting, spawn, seed);
 		MainThreadQueue.Enqueue(delegate () { gameCommands.StartMission(mission, seed); });
 
 		return seed;
