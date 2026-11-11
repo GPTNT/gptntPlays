@@ -211,7 +211,7 @@ The response uses `Content-Type: application/vnd.gptnt.observation` and this lit
 
 #### `GET /buffer`
 
-Returns the most recent buffered RGB frames plus a single fresh segmentation mask as a packed **binary** payload (`Content-Type: application/octet-stream`). The wire format avoids the cost of PNG-encoding + base64 + JSON parsing on the hot observation path.
+Returns up to the 16 most recent buffered RGB frames plus a single fresh segmentation mask as a packed **binary** payload (`Content-Type: application/octet-stream`). The wire format avoids the cost of PNG-encoding + base64 + JSON parsing on the hot observation path.
 
 Layout (little-endian, written via `System.IO.BinaryWriter`):
 

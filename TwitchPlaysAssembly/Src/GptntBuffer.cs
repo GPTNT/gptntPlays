@@ -138,9 +138,11 @@ public class GptntBuffer : MonoBehaviour
 
 	public RawObservationPayload GetRawBufferData()
 	{
-		List<byte[]> rawFrames = new List<byte[]>();
-		foreach (TimedFrame frame in frameBuffer.GetAll())
-			rawFrames.Add(frame.Pixels);
+		List<TimedFrame> frames = frameBuffer.GetAll();
+		int firstFrame = Math.Max(0, frames.Count - 16);
+		List<byte[]> rawFrames = new List<byte[]>(frames.Count - firstFrame);
+		for (int index = firstFrame; index < frames.Count; index++)
+			rawFrames.Add(frames[index].Pixels);
 		return new RawObservationPayload
 		{
 			rawFrames = rawFrames,
