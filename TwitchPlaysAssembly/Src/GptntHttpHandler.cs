@@ -50,6 +50,7 @@ public class GptntHttpHandler : MonoBehaviour
 		routeHandlers = new Dictionary<string, Func<HttpListenerRequest, HttpListenerResponse, string>>()
 		{
 			["/startmission"] = requestHandlers.HandleStartMission,
+			["/needycontrols"] = requestHandlers.HandleNeedyControls,
 			["/settimescale"] = requestHandlers.HandleSetTimescale,
 			["/setstepunit"] = requestHandlers.HandleSetStepUnit,
 			["/timestep"] = requestHandlers.HandleTimeStep,

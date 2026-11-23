@@ -617,6 +617,12 @@ public class RequestHandlers : MonoBehaviour
 		});
 	}
 
+	public string HandleNeedyControls(HttpListenerRequest request, HttpListenerResponse response)
+	{
+		response.ContentType = "application/json";
+		return gptntStates.ControlsAcknowledgement;
+	}
+
 	public string HandleStartMission(HttpListenerRequest request, HttpListenerResponse response)
 	{
 		if (!StateEqualsAny(GptntStates.GameState.Setup))
@@ -624,6 +630,9 @@ public class RequestHandlers : MonoBehaviour
 			response.StatusCode = (int) HttpStatusCode.BadRequest;
 			return "Cannot start a game from " + gptntStates.gameState + " state";
 		}
+		NeedyControls controls;
+		try { controls = NeedyControls.Parse(request.QueryString); }
+		catch (ArgumentException ex) { response.StatusCode = (int) HttpStatusCode.BadRequest; return ex.Message; }
 		string seed = request.QueryString.Get("seed");
 		int timeLimit = int.Parse(request.QueryString.Get("timeLimit"));
 		int numStrikes = int.Parse(request.QueryString.Get("numStrikes"));
@@ -645,6 +654,7 @@ public class RequestHandlers : MonoBehaviour
 			GptntDebug.AddSessionId(sessionId);
 			log.Debug("Starting game with sessionId=" + sessionId);
 		}
+		gptntStates.SetNeedyControls(controls, sessionId);
 		return StartMission(seed, ruleSeed, timeLimit, numStrikes, needyTime, isFront, optWidgets, components);
 	}
 

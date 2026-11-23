@@ -132,7 +132,9 @@ Starts a new mission. Only valid from `Setup`.
 | `seed` | string | Mission seed (string; passed verbatim to KTANE). |
 | `timeLimit` | int | Total bomb time in seconds. |
 | `numStrikes` | int | Maximum strikes before detonation. |
-| `needyTime` | int | Delay (seconds) before needy modules activate; must satisfy `0 ≤ needyTime ≤ timeLimit`. |
+| `needyTime` | int | Forced first activation threshold in elapsed bomb time, in seconds; a solve or strike may trigger activation earlier. Must satisfy `0 ≤ needyTime ≤ timeLimit`. |
+| `needyFirstEventProbability` | float, optional | Probability from 0 to 1 that the first qualifying non-final solve or strike triggers a needy activation. |
+| `needyCooldownMin`, `needyCooldownMax` | float, optional | Paired, nonnegative minimum and maximum reactivation cooldowns in scaled simulation seconds. |
 | `isFront` | bool | If `true`, all modules placed on the front face. |
 | `optWidgets` | int | Number of optional widgets (batteries, indicators, ports, serial). |
 | `components` | csv | Comma-separated list of `KMComponentPool.ComponentTypeEnum` values, 1–11 entries. |
@@ -146,7 +148,22 @@ Example:
 /startmission?seed=1&timeLimit=300&numStrikes=3&needyTime=90&isFront=true&optWidgets=5&components=Venn&timeScale=1.0&timeStepSize=250
 ```
 
-Returns the seed on success.
+Returns the seed on success. Omitting the optional needy controls leaves the game's configured
+values unchanged. A probability of 1 makes the first qualifying event schedule activation, but the
+bomb can end before that scheduled activation occurs. Cooldown applies only to needies that can
+reactivate. A cooldown is measured in scaled simulation time, which can differ from bomb-countdown
+time after a strike.
+
+#### `GET /needycontrols`
+
+Returns protocol version 1 and an acknowledgement for the current mission. After the bomb is
+initialised, `sessionId` identifies the mission and `applied` lists each needy by `name`, `onFront`,
+and `index`, with its applied `firstEventProbability`, `cooldownMin`, and `cooldownMax`. Fields for
+unrequested overrides are `null`. Before application, `applied` is `null`; a failed application also
+returns `applied: null` and an `error`. No acknowledgement is produced when no controls are
+requested. A controller requesting overrides should check the protocol version, session ID,
+component locations and applied values before allowing player actions. A mission with overrides but
+no needy components fails acknowledgement.
 
 #### `GET /reset`
 
@@ -307,9 +324,21 @@ Each of the three waits has a 10 s wall-clock timeout; if any times out the resp
   "timerModule": { "secondsRemaining": 287.4, "onFront": true, "index": 0, "name": "Timer" },
   "widgets":  [ /* BatteryWidgetState | IndicatorWidgetState | PortWidgetState | SerialNumberWidgetState */ ],
   "modules":  [ /* one entry per solvable module, see below */ ],
-  "strikes":  [ "ButtonModuleState: wrong release", ... ]
+  "needyStatuses": [
+    { "name": "NeedyVentGas", "onFront": false, "index": 4, "isBeingNeedy": true }
+  ],
+  "strikes":  [ "Wires", "NeedyVentGas" ]
 }
 ```
+
+`needyStatuses` reports all needy modules, including those on the hidden face. `isBeingNeedy`
+indicates that the module is currently running; it does not say whether the model noticed or handled
+it. Successive snapshots can show changes in activity but are not a complete event history. `strikes`
+records the component name for each strike, including strikes from needies.
+
+Both fields are observer telemetry: `/state` contains ground truth and must not be passed to a
+player that should see only the image or audio observation. `/observation` remains free of bomb
+state.
 
 Every module entry inherits from [`SolvableModuleState`](TwitchPlaysAssembly/Src/StateClasses.cs) and includes:
 

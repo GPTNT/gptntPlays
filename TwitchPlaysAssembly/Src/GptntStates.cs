@@ -7,6 +7,9 @@ using TwitchPlaysAssembly;
 using System.Collections;
 using KModkit;
 using log4net;
+using Events;
+using System.Reflection;
+using Newtonsoft.Json;
 
 public class GptntStates : MonoBehaviour 
 {
@@ -24,6 +27,19 @@ public class GptntStates : MonoBehaviour
 	public event Action OnFirstLightsOn;
 	public event Action OnReset;
 	public event Action OnGameEnd;
+
+	private NeedyControls pendingControls;
+	private string pendingSession;
+	private volatile string controlsAcknowledgement = "{\"protocolVersion\":1,\"sessionId\":null,\"applied\":null}";
+
+	public string ControlsAcknowledgement { get { return controlsAcknowledgement; } }
+
+	public void SetNeedyControls(NeedyControls controls, string session)
+	{
+		pendingControls = controls;
+		pendingSession = session;
+		controlsAcknowledgement = "{\"protocolVersion\":1,\"sessionId\":null,\"applied\":null}";
+	}
 
 	private static ILog log = LogManager.GetLogger("GptntStates");
 
@@ -46,6 +62,7 @@ public class GptntStates : MonoBehaviour
 		httpHandler = GetComponent<GptntHttpHandler>();
 
 		gptntActions.OnZoomOut += OnZoomOut;
+		BombComponentEvents.OnComponentStrike += RecordComponentStrike;
 
 		bombInfo.OnBombExploded += () =>
 		{
@@ -78,6 +95,8 @@ public class GptntStates : MonoBehaviour
 				case KMGameInfo.State.Setup:
 					gameState = GameState.Setup;
 					isStarted = false;
+					bombState = null;
+					SetNeedyControls(null, null);
 					OnReset?.Invoke();
 					break;
 				case KMGameInfo.State.PostGame:
@@ -101,7 +120,11 @@ public class GptntStates : MonoBehaviour
 			catch (Exception ex)
 			{
 				log.Warn(GptntDebug.FormatMessage("Twitch bomb is null"), ex);
+				return;
 			}
+			if (!bomb) return;
+			if (!isStarted && pendingControls != null && pendingControls.HasOverrides)
+				ApplyNeedyControls();
 			gptntActions.bomb = twitchBomb;
 			gptntActions.InitRotation();
 			GameState newGameState = gameState.EqualsAny(GameState.Gameplay, GameState.LightsOn, GameState.LightsOff) ? (on ? GameState.LightsOn : GameState.LightsOff) : gameState;
@@ -135,6 +158,7 @@ public class GptntStates : MonoBehaviour
 			isDetonated = false,
 			widgets = WidgetStates(bomb.WidgetManager.GetWidgets()),
 			modules = ModuleStates(bomb.BombComponents),
+			needyStatuses = bomb.BombComponents.OfType<NeedyComponent>().Select(c => new NeedyStatus(c)).ToList(),
 			strikes = new List<string>(),
 			seed = bomb.Seed,
 			maxStrikes = bomb.NumStrikesToLose,
@@ -179,6 +203,8 @@ public class GptntStates : MonoBehaviour
 				log.Error(GptntDebug.FormatMessage($"Module update failed for: {module.name} because of ", span.GetTraceId(), span.GetSpanId()), ex);
 			}
 		}
+		foreach (NeedyStatus status in bombState.needyStatuses)
+			status.UpdateAttributes();
 		bombState.isEmerging = bombState.modules
 			.OfType<IEmergingModule>()
 			.Any(m => !m.isEmerged);
@@ -285,14 +311,6 @@ public class GptntStates : MonoBehaviour
 			SolvableModuleState moduleState = CreateModuleState(comp);
 			if (moduleState != null)
 			{
-				moduleState.OnStrike += () =>
-				{
-					bombState.strikes.Add(moduleState.name);
-					if (bombState.strikes.Count == 2)
-					{
-						RemoveBlinking();
-					}
-				};
 				moduleStates.Add(moduleState);
 			}
 			else
@@ -321,6 +339,81 @@ public class GptntStates : MonoBehaviour
 			case ComponentTypeEnum.Mod: return new ModdedModuleState(comp);
 			default: return null;
 		}
+	}
+
+	private void OnDestroy()
+	{
+		BombComponentEvents.OnComponentStrike -= RecordComponentStrike;
+	}
+
+	private void RecordComponentStrike(BombComponent component, bool finalStrike)
+	{
+		if (bombState == null || component == null || component.Bomb != bomb) return;
+		var state = bombState.modules.FirstOrDefault(module => module.component == component);
+		bombState.strikes.Add(state != null ? state.name : component.ComponentType.ToString());
+		if (bombState.strikes.Count == 2) RemoveBlinking();
+	}
+
+	private void ApplyNeedyControls()
+	{
+		var controls = pendingControls;
+		if (controls == null || !controls.HasOverrides) return;
+		var original = new Dictionary<NeedyComponent, float[]>();
+		FieldInfo probabilityField = null;
+		try
+		{
+			var needy = bomb.BombComponents.OfType<NeedyComponent>().ToList();
+			if (needy.Count == 0) throw new InvalidOperationException("No needy components were instantiated");
+			probabilityField = typeof(NeedyComponent).GetField("activationChanceAfterFirstChange", BindingFlags.NonPublic | BindingFlags.Instance);
+			if (controls.FirstEventProbability.HasValue && (probabilityField == null || probabilityField.FieldType != typeof(float)))
+				throw new InvalidOperationException("Needy activation probability field unavailable");
+			foreach (var component in needy)
+			{
+				if (component.State != NeedyComponent.NeedyStateEnum.InitialSetup && component.State != NeedyComponent.NeedyStateEnum.AwaitingActivation)
+					throw new InvalidOperationException("Needy activation began before controls were applied");
+			}
+			foreach (var component in needy)
+				original.Add(component, new[] { controls.FirstEventProbability.HasValue ? (float) probabilityField.GetValue(component) : 0f, component.ResetDelayMin, component.ResetDelayMax });
+			var applied = new List<object>();
+			foreach (var component in needy)
+			{
+				// Random.value is nonnegative, but the game compares with <=. A negative
+				// sentinel therefore implements a true zero-probability override.
+				float effectiveProbability = controls.FirstEventProbability == 0f ? -1f : controls.FirstEventProbability.GetValueOrDefault();
+				if (controls.FirstEventProbability.HasValue) probabilityField.SetValue(component, effectiveProbability);
+				if (controls.CooldownMin.HasValue) { component.ResetDelayMin = controls.CooldownMin.Value; component.ResetDelayMax = controls.CooldownMax.Value; }
+				float? probability = null;
+				if (controls.FirstEventProbability.HasValue)
+				{
+					float actual = (float) probabilityField.GetValue(component);
+					if (actual != effectiveProbability) throw new InvalidOperationException("Needy probability failed readback");
+					probability = actual == -1f ? 0f : actual;
+				}
+				float? min = controls.CooldownMin.HasValue ? (float?) component.ResetDelayMin : null;
+				float? max = controls.CooldownMax.HasValue ? (float?) component.ResetDelayMax : null;
+				if (probability != controls.FirstEventProbability || min != controls.CooldownMin || max != controls.CooldownMax)
+					throw new InvalidOperationException("Needy controls failed readback");
+				var location = new NeedyStatus(component);
+				applied.Add(new { name = location.name, index = location.index, onFront = location.onFront, firstEventProbability = probability, cooldownMin = min, cooldownMax = max });
+			}
+			controlsAcknowledgement = JsonConvert.SerializeObject(new { protocolVersion = 1, sessionId = pendingSession, applied });
+		}
+		catch (Exception ex)
+		{
+			foreach (var previous in original)
+			{
+				try
+				{
+					if (controls.FirstEventProbability.HasValue && probabilityField != null) probabilityField.SetValue(previous.Key, previous.Value[0]);
+					previous.Key.ResetDelayMin = previous.Value[1];
+					previous.Key.ResetDelayMax = previous.Value[2];
+				}
+				catch (Exception rollbackError) { log.Error(GptntDebug.FormatMessage("Could not restore needy controls"), rollbackError); }
+			}
+			log.Error(GptntDebug.FormatMessage("Could not apply needy controls"), ex);
+			controlsAcknowledgement = JsonConvert.SerializeObject(new { protocolVersion = 1, sessionId = pendingSession, applied = (object) null, error = ex.Message });
+		}
+		pendingControls = null;
 	}
 
 	private void RemoveBlinking()

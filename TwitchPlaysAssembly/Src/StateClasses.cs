@@ -812,6 +812,21 @@ namespace TwitchPlaysAssembly
 		}
 	}
 
+	public class NeedyStatus : BaseModuleState
+	{
+		public bool isBeingNeedy { get; set; }
+		public NeedyStatus(NeedyComponent needy) : base(needy)
+		{
+			component = needy;
+			name = needy.ComponentType.ToString();
+			UpdateAttributes();
+		}
+		public override void UpdateAttributes()
+		{
+			isBeingNeedy = ((NeedyComponent) component).State == NeedyComponent.NeedyStateEnum.Running;
+		}
+	}
+
 	public class BombState
 	{
 		public int seed { get; set; }
@@ -824,6 +839,7 @@ namespace TwitchPlaysAssembly
 		public List<BaseWidgetState> widgets { get; set; }
 		public List<SolvableModuleState> modules { get; set; }
 		public List<string> strikes { get; set; }
+		public List<NeedyStatus> needyStatuses { get; set; }
 		[JsonIgnore] public bool isEmerging { get; set; }
 	}
 }

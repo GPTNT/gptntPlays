@@ -35,3 +35,7 @@ sysinfo.txt
 !/Assets/Plugins/Managed/BouncyCastle.Crypto.dll.meta
 
 /docker-ktane/ktane/
+# Hand-written mod tests
+!/tests/NeedyControls/NeedyControls.csproj
+/tests/NeedyControls/bin/
+/tests/NeedyControls/obj/
