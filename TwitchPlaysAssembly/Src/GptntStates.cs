@@ -112,6 +112,10 @@ public class GptntStates : MonoBehaviour
 		gameInfo.OnLightsChange += (bool on) =>
 		{
 			log.Debug(GptntDebug.FormatMessage("Lights on changes to " + on.ToString()));
+			// The TwitchBomb wrapper may not exist until after the lights turn on.
+			// Report the initial lights-off state independently so the controller can pause.
+			if (!on && gameState.EqualsAny(GameState.Gameplay, GameState.LightsOn, GameState.LightsOff))
+				gameState = GameState.LightsOff;
 			TwitchBomb twitchBomb = FindObjectOfType<TwitchBomb>();
 			try
 			{
