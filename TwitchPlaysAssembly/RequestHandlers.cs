@@ -658,6 +658,15 @@ public class RequestHandlers : MonoBehaviour
 		return StartMission(seed, ruleSeed, timeLimit, numStrikes, needyTime, isFront, optWidgets, components);
 	}
 
+	public string HandleNeedyOpportunity(HttpListenerRequest request, HttpListenerResponse response)
+	{
+		return RunOnMainThread(() =>
+		{
+			gptntStates.MarkNeedyOpportunity();
+			return "ok";
+		});
+	}
+
 	public string HandleGetState(HttpListenerRequest request, HttpListenerResponse response)
 	{
 		var traceContext = httpHandler.GetCurrentTraceContext();

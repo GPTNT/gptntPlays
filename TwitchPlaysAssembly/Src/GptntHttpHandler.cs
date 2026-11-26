@@ -51,6 +51,7 @@ public class GptntHttpHandler : MonoBehaviour
 		{
 			["/startmission"] = requestHandlers.HandleStartMission,
 			["/needycontrols"] = requestHandlers.HandleNeedyControls,
+			["/needyopportunity"] = requestHandlers.HandleNeedyOpportunity,
 			["/settimescale"] = requestHandlers.HandleSetTimescale,
 			["/setstepunit"] = requestHandlers.HandleSetStepUnit,
 			["/timestep"] = requestHandlers.HandleTimeStep,

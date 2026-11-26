@@ -5,16 +5,20 @@ using System.Globalization;
 public sealed class NeedyControls
 {
     public float? FirstEventProbability { get; private set; }
+    public float? ResponseDuration { get; private set; }
     public float? CooldownMin { get; private set; }
     public float? CooldownMax { get; private set; }
-    public bool HasOverrides { get { return FirstEventProbability.HasValue || CooldownMin.HasValue; } }
+    public bool HasOverrides { get { return FirstEventProbability.HasValue || CooldownMin.HasValue || ResponseDuration.HasValue; } }
 
     public static NeedyControls Parse(NameValueCollection query)
     {
         var result = new NeedyControls();
         result.FirstEventProbability = ParseNumber(query["needyFirstEventProbability"]);
+        result.ResponseDuration = ParseNumber(query["needyResponseDuration"]);
         result.CooldownMin = ParseNumber(query["needyCooldownMin"]);
         result.CooldownMax = ParseNumber(query["needyCooldownMax"]);
+        if (result.ResponseDuration.HasValue && result.ResponseDuration.Value <= 0)
+            throw new ArgumentException("needyResponseDuration must be positive");
         // Zero is implemented with a negative sentinel because the game compares <=.
         if (result.FirstEventProbability.HasValue && (result.FirstEventProbability.Value < 0 || result.FirstEventProbability.Value > 1))
             throw new ArgumentException("needyFirstEventProbability must be between 0 and 1");
