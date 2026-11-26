@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Rendering;
 using Assets.Scripts.Missions;
 using TwitchPlaysAssembly;
 
@@ -34,8 +35,8 @@ public class FeedbackFrame
 	public List<FeedbackRegion> regions = new List<FeedbackRegion>();
 }
 
-// Uses neutral copies of every state variant's mesh. The live enabled/active state
-// never selects the footprint. A full-scene depth pass establishes visibility;
+// Draws neutral geometry from every physical indicator variant, including inactive
+// renderers. A full-scene depth pass establishes visibility;
 // occluded or uncertain footprints are unavailable rather than guessed.
 public sealed class GptntFeedback : IDisposable
 {
@@ -66,8 +67,8 @@ public sealed class GptntFeedback : IDisposable
 	private RenderTexture target;
 	private Texture2D readback;
 	private Material material;
-	private readonly List<GameObject> proxies = new List<GameObject>();
-	private readonly List<Mesh> meshes = new List<Mesh>();
+	private readonly List<Material> regionMaterials = new List<Material>();
+	private CommandBuffer feedbackDraws;
 	private readonly List<SavedRenderer> saved = new List<SavedRenderer>();
 
 	public FeedbackFrame Capture(Camera source, Shader shader, long sequence, long epoch, int width, int height)
@@ -93,8 +94,6 @@ public sealed class GptntFeedback : IDisposable
 			black.SetFloat("_Cutoff", 0);
 			foreach (Renderer renderer in scene)
 			{
-				if (renderer.gameObject.layer == 31 && renderer.enabled)
-					throw new InvalidOperationException("Feedback proxy layer is already in use");
 				SavedRenderer state = new SavedRenderer
 				{
 					Renderer = renderer, Enabled = renderer.enabled,
@@ -113,10 +112,15 @@ public sealed class GptntFeedback : IDisposable
 				{
 					bool hasSnapshot = false;
 					foreach (SavedRenderer state in saved) if (state.Renderer == renderer) hasSnapshot = true;
-					if (!hasSnapshot) saved.Add(new SavedRenderer { Renderer = renderer, Enabled = renderer.enabled });
+					if (!hasSnapshot)
+					{
+						SavedRenderer state = new SavedRenderer { Renderer = renderer, Enabled = renderer.enabled, Block = new MaterialPropertyBlock() };
+						renderer.GetPropertyBlock(state.Block);
+						saved.Add(state);
+					}
 					if ((source.cullingMask & (1 << renderer.gameObject.layer)) == 0)
 						throw new InvalidOperationException("Feedback mesh excluded from RGB camera");
-					Bounds bounds = MakeProxy(renderer, index + 1);
+					Bounds bounds = QueueRegionDraw(renderer, index + 1);
 					if (group.WorldBounds.HasValue)
 					{
 						Bounds union = group.WorldBounds.Value;
@@ -129,9 +133,9 @@ public sealed class GptntFeedback : IDisposable
 			}
 			// The isolated pass supplies a state-independent footprint. The second
 			// pass includes every RGB layer, so the bomb and room occlude that footprint.
-			camera.cullingMask = 1 << 31;
+			camera.cullingMask = 0;
 			byte[] footprint = Render();
-			camera.cullingMask = source.cullingMask | (1 << 31);
+			camera.cullingMask = source.cullingMask;
 			byte[] visible = Render();
 			Plane[] frustum = GeometryUtility.CalculateFrustumPlanes(camera);
 			for (int index = 0; index < groups.Count; index++)
@@ -160,16 +164,9 @@ public sealed class GptntFeedback : IDisposable
 		}
 		finally
 		{
-			foreach (GameObject proxy in proxies)
-			{
-				if (!proxy) continue;
-				Renderer renderer = proxy.GetComponent<Renderer>();
-				if (renderer) renderer.enabled = false;
-				UnityEngine.Object.Destroy(proxy);
-			}
-			proxies.Clear();
-			foreach (Mesh mesh in meshes) UnityEngine.Object.Destroy(mesh);
-			meshes.Clear();
+			if (feedbackDraws != null) feedbackDraws.Clear();
+			foreach (Material regionMaterial in regionMaterials) UnityEngine.Object.Destroy(regionMaterial);
+			regionMaterials.Clear();
 			foreach (SavedRenderer state in saved)
 			{
 				if (!state.Renderer) continue;
@@ -276,7 +273,12 @@ public sealed class GptntFeedback : IDisposable
 			if (node.name != name) continue;
 			matches++;
 			foreach (Renderer renderer in node.GetComponentsInChildren<Renderer>(true))
+			{
+				// The glow is a transparent effect quad. The status circle covers its
+				// bloom; only physical LED meshes establish neutral geometry.
+				if (group.Region.kind == "status" && renderer.name == "LightGlow") continue;
 				if (!group.Sources.Contains(renderer)) group.Sources.Add(renderer);
+			}
 		}
 		if (matches != 1) throw new InvalidOperationException("Expected one feedback object: " + name);
 	}
@@ -289,6 +291,9 @@ public sealed class GptntFeedback : IDisposable
 			camera = host.AddComponent<Camera>();
 			camera.enabled = false;
 			material = new Material(shader);
+			feedbackDraws = new CommandBuffer();
+			feedbackDraws.name = "Neutral feedback geometry";
+			camera.AddCommandBuffer(CameraEvent.AfterForwardOpaque, feedbackDraws);
 		}
 		if (!target || target.width != width || target.height != height)
 		{
@@ -311,34 +316,25 @@ public sealed class GptntFeedback : IDisposable
 		camera.SetReplacementShader(shader, "");
 	}
 
-	private Bounds MakeProxy(Renderer source, int id)
+	private Bounds QueueRegionDraw(Renderer source, int id)
 	{
 		MeshFilter filter = source.GetComponent<MeshFilter>();
 		if (!(source is MeshRenderer) || !filter || !filter.sharedMesh)
 			throw new InvalidOperationException("Unsupported feedback renderer: " + source.name);
-		Matrix4x4 matrix = source.transform.localToWorldMatrix;
-		if (matrix.determinant <= 0) throw new InvalidOperationException("Unsupported mirrored feedback mesh");
-		Mesh original = filter.sharedMesh;
-		Mesh mesh = new Mesh();
-		meshes.Add(mesh);
-		Vector3[] vertices = original.vertices;
-		int[] triangles = original.triangles;
-		if (vertices.Length == 0 || triangles.Length == 0)
-			throw new InvalidOperationException("Feedback mesh has no surface");
-		for (int index = 0; index < vertices.Length; index++) vertices[index] = matrix.MultiplyPoint3x4(vertices[index]);
-		mesh.vertices = vertices;
-		mesh.triangles = triangles;
-		mesh.RecalculateBounds();
-		GameObject proxy = new GameObject("FeedbackProxy");
-		proxies.Add(proxy);
-		proxy.layer = 31;
-		proxy.AddComponent<MeshFilter>().sharedMesh = mesh;
-		MeshRenderer renderer = proxy.AddComponent<MeshRenderer>();
-		renderer.sharedMaterial = material;
+		// Draw the renderer through Unity so static-batch submesh ranges and GPU-only
+		// meshes remain valid. Reading sharedMesh vertices loses both guarantees.
+		Material regionMaterial = new Material(material);
+		regionMaterials.Add(regionMaterial);
+		Color color = new Color(id / 255f, 0, 0, 1);
+		regionMaterial.SetColor("_ObjectColor", color);
 		MaterialPropertyBlock block = new MaterialPropertyBlock();
-		block.SetColor("_ObjectColor", new Color(id / 255f, 0, 0, 1));
-		renderer.SetPropertyBlock(block);
-		return mesh.bounds;
+		block.SetColor("_ObjectColor", color);
+		source.SetPropertyBlock(block);
+		int materialCount = source.sharedMaterials.Length;
+		if (materialCount == 0) throw new InvalidOperationException("Feedback mesh has no materials");
+		for (int submesh = 0; submesh < materialCount; submesh++)
+			feedbackDraws.DrawRenderer(source, regionMaterial, submesh);
+		return source.bounds;
 	}
 
 	private byte[] Render()
@@ -402,6 +398,12 @@ public sealed class GptntFeedback : IDisposable
 
 	public void Dispose()
 	{
+		if (feedbackDraws != null)
+		{
+			if (camera) camera.RemoveCommandBuffer(CameraEvent.AfterForwardOpaque, feedbackDraws);
+			feedbackDraws.Release();
+			feedbackDraws = null;
+		}
 		if (camera) UnityEngine.Object.Destroy(camera.gameObject);
 		if (target) { target.Release(); UnityEngine.Object.Destroy(target); }
 		if (readback) UnityEngine.Object.Destroy(readback);
