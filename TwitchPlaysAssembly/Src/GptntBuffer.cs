@@ -17,6 +17,23 @@ public class GptntBuffer : MonoBehaviour
 	// Ring Buffer
 	private TextureRingBuffer textureBuffer;
 	private bool isRecording = false;
+	private bool feedbackEnabled;
+	private GptntFeedback feedbackCapture;
+	private Camera feedbackRgbCamera;
+	private long feedbackSequence;
+	private long feedbackEpoch;
+
+	public void SetFeedbackEnabled(bool enabled)
+	{
+		feedbackEnabled = enabled;
+		if (feedbackCapture != null) feedbackCapture.ResetTarget();
+	}
+
+	private void OnDestroy()
+	{
+		if (feedbackCapture != null) feedbackCapture.Dispose();
+		if (feedbackRgbCamera) UnityEngine.Object.Destroy(feedbackRgbCamera.gameObject);
+	}
 
 	// Coroutine
 	private Coroutine bufferCoroutine;
@@ -65,6 +82,8 @@ public class GptntBuffer : MonoBehaviour
 	{
 		StopBuffer();
 		textureBuffer.Clear();
+		feedbackEpoch++;
+		if (feedbackCapture != null) feedbackCapture.ResetTarget();
 		OpenTelemetrySpan span = new OpenTelemetrySpan("buffer.clear");
 		log.Debug(GptntDebug.FormatMessage("Cleared the buffer"));
 		span.End(true);
@@ -110,9 +129,65 @@ public class GptntBuffer : MonoBehaviour
 		while (isRecording)
 		{
 			yield return new WaitForEndOfFrame();
-			textureBuffer.Add(ConvertRenderTextureToTexture2D(screenshotRT));
+			FeedbackFrame feedback = null;
+			Texture2D texture = feedbackEnabled
+				? CaptureFeedbackFrame(out feedback)
+				: ConvertRenderTextureToTexture2D(screenshotRT);
+			textureBuffer.Add(texture, feedback);
 			yield return wait;
 		}
+	}
+
+	public FeedbackObservationSnapshot CaptureFeedbackObservation()
+	{
+		if (!feedbackEnabled)
+			throw new InvalidOperationException("Start the mission with feedbackVersion=1 before reading feedback");
+		FeedbackFrame currentFeedback;
+		Texture2D current = CaptureFeedbackFrame(out currentFeedback);
+		try
+		{
+			int length = screenshotRT.width * screenshotRT.height * 3;
+			byte[] currentImage = new byte[length];
+			Array.Copy(current.GetRawTextureData(), currentImage, length);
+			FeedbackObservationSnapshot snapshot = new FeedbackObservationSnapshot
+			{
+				Frames = GetRawBufferData(), FrameFeedback = textureBuffer.GetFeedbackFrames(), Epoch = feedbackEpoch,
+				CurrentImage = currentImage, CurrentImageFeedback = currentFeedback,
+			};
+			// The fresh capture is the sixteenth observation image.
+			int remove = Math.Max(0, snapshot.Frames.rawFrames.Count - 15);
+			snapshot.Frames.rawFrames.RemoveRange(0, remove);
+			snapshot.FrameFeedback.RemoveRange(0, remove);
+			return snapshot;
+		}
+		finally { UnityEngine.Object.Destroy(current); }
+	}
+
+	private Texture2D CaptureFeedbackFrame(out FeedbackFrame feedback)
+	{
+		DuplicateCamera();
+		if (!mainCam || !screenshotCam)
+			throw new InvalidOperationException("RGB camera unavailable for feedback capture");
+		// RGB and geometry render on one main-thread call without advancing the scene.
+		if (!feedbackRgbCamera)
+		{
+			GameObject host = new GameObject("FeedbackRgbCamera");
+			feedbackRgbCamera = host.AddComponent<Camera>();
+			feedbackRgbCamera.enabled = false;
+		}
+		feedbackRgbCamera.CopyFrom(mainCam);
+		feedbackRgbCamera.enabled = false;
+		feedbackRgbCamera.transform.position = mainCam.transform.position;
+		feedbackRgbCamera.transform.rotation = mainCam.transform.rotation;
+		feedbackRgbCamera.targetTexture = screenshotRT;
+		feedbackRgbCamera.useOcclusionCulling = false;
+		feedbackRgbCamera.Render();
+		Texture2D texture = ConvertRenderTextureToTexture2D(screenshotRT);
+		if (feedbackCapture == null) feedbackCapture = new GptntFeedback();
+		Segmentation segmentation = GetComponent<Segmentation>();
+		feedback = feedbackCapture.Capture(feedbackRgbCamera, segmentation ? segmentation.shader : null,
+			++feedbackSequence, feedbackEpoch, screenshotRT.width, screenshotRT.height);
+		return texture;
 	}
 
 	// Helper functions
@@ -169,15 +244,17 @@ public class GptntBuffer : MonoBehaviour
 public class TextureRingBuffer
 {
 	private readonly Texture2D[] buffer;
+	private readonly FeedbackFrame[] feedback;
 	private int index = 0;
 	private int count = 0;
 
 	public TextureRingBuffer(int size)
 	{
 		buffer = new Texture2D[size];
+		feedback = new FeedbackFrame[size];
 	}
 
-	public void Add(Texture2D tex)
+	public void Add(Texture2D tex, FeedbackFrame frameFeedback = null)
 	{
 		if (buffer[index] != null)
 		{
@@ -185,6 +262,7 @@ public class TextureRingBuffer
 		}
 
 		buffer[index] = tex;
+		feedback[index] = frameFeedback;
 		index = (index + 1) % buffer.Length;
 		count = Math.Min(count + 1, buffer.Length);
 	}
@@ -203,6 +281,15 @@ public class TextureRingBuffer
 		return frames; // the last element in the list is the most recent
 	}
 
+	public List<FeedbackFrame> GetFeedbackFrames()
+	{
+		List<FeedbackFrame> frames = new List<FeedbackFrame>(count);
+		int start = (index - count + buffer.Length) % buffer.Length;
+		for (int i = 0; i < count; i++)
+			frames.Add(feedback[(start + i) % buffer.Length]);
+		return frames;
+	}
+
 	public Texture2D GetLastFrame()
 	{
 		int lastIndex = (index - 1 + buffer.Length) % buffer.Length;
@@ -211,6 +298,7 @@ public class TextureRingBuffer
 
 	public void Clear()
 	{
+		Array.Clear(feedback, 0, feedback.Length);
 		foreach (Texture2D item in buffer)
 		{
 			if (item != null)
