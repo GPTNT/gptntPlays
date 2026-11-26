@@ -28,6 +28,51 @@ public class GptntStates : MonoBehaviour
 	public event Action OnReset;
 	public event Action OnGameEnd;
 
+	private readonly Dictionary<NeedyComponent, NeedyCycleTelemetry> cycleTelemetry = new Dictionary<NeedyComponent, NeedyCycleTelemetry>();
+	private int terminalFrame = -1;
+
+	private NeedyCycleTelemetry Counter(NeedyComponent needy)
+	{
+		NeedyCycleTelemetry counter;
+		if (!cycleTelemetry.TryGetValue(needy, out counter)) cycleTelemetry.Add(needy, counter = new NeedyCycleTelemetry());
+		return counter;
+	}
+
+	private void SyncNeedyTelemetry()
+	{
+		if (bombState == null || bombState.needyStatuses == null) return;
+		foreach (var status in bombState.needyStatuses)
+		{
+			var needy = status.component as NeedyVentComponent;
+			if (needy == null) continue;
+			var counter = Counter(needy);
+			if (isStarted) counter.Observe((int) needy.State);
+			else if (terminalFrame >= 0 && Time.frameCount > terminalFrame) counter.FinalizeEnd();
+			status.activationCount = counter.ActivationCount;
+			status.successCount = counter.SuccessCount;
+			status.strikeCount = counter.StrikeCount;
+			status.unresolvedCount = counter.UnresolvedCount;
+			status.activeAtEnd = counter.ActiveAtEnd;
+			status.terminalReconciled = counter.TerminalReconciled;
+		}
+	}
+
+	private void EndNeedyTelemetry()
+	{
+		if (bombState == null || bombState.needyStatuses == null) return;
+		foreach (var status in bombState.needyStatuses)
+		{
+			var needy = status.component as NeedyVentComponent;
+			if (needy != null) Counter(needy).End((int) needy.State);
+		}
+		terminalFrame = Time.frameCount;
+	}
+
+	private void Update()
+	{
+		if (bomb != null) SyncNeedyTelemetry();
+	}
+
 	private NeedyControls pendingControls;
 	private string pendingSession;
 	private volatile string controlsAcknowledgement = "{\"protocolVersion\":1,\"sessionId\":null,\"applied\":null}";
@@ -66,6 +111,7 @@ public class GptntStates : MonoBehaviour
 
 		bombInfo.OnBombExploded += () =>
 		{
+			EndNeedyTelemetry();
 			isStarted = false;
 			bombState.isDetonated = true;
 			bombState.timerModule.secondsRemaining = bomb.GetTimer().TimeRemaining;
@@ -78,6 +124,7 @@ public class GptntStates : MonoBehaviour
 
 		bombInfo.OnBombSolved += () =>
 		{
+			EndNeedyTelemetry();
 			isStarted = false;
 			bombState.isSolved = true;
 			bombState.timerModule.secondsRemaining = bomb.GetTimer().TimeRemaining;
@@ -96,6 +143,8 @@ public class GptntStates : MonoBehaviour
 					gameState = GameState.Setup;
 					isStarted = false;
 					bombState = null;
+					cycleTelemetry.Clear();
+					terminalFrame = -1;
 					SetNeedyControls(null, null);
 					OnReset?.Invoke();
 					break;
@@ -179,6 +228,7 @@ public class GptntStates : MonoBehaviour
 
 	public BombState UpdateBombState()
 	{
+		SyncNeedyTelemetry();
 		var traceContext = httpHandler.GetCurrentTraceContext();
 
 		OpenTelemetrySpan span = new OpenTelemetrySpan("state.update", traceContext.TraceId, traceContext.SpanId);
@@ -352,6 +402,8 @@ public class GptntStates : MonoBehaviour
 
 	private void RecordComponentStrike(BombComponent component, bool finalStrike)
 	{
+		var needy = component as NeedyVentComponent;
+		if (needy != null && component.Bomb == bomb) Counter(needy).Strike();
 		if (bombState == null || component == null || component.Bomb != bomb) return;
 		var state = bombState.modules.FirstOrDefault(module => module.component == component);
 		bombState.strikes.Add(state != null ? state.name : component.ComponentType.ToString());

@@ -815,6 +815,12 @@ namespace TwitchPlaysAssembly
 	public class NeedyStatus : BaseModuleState
 	{
 		public bool isBeingNeedy { get; set; }
+		public int? activationCount { get; set; }
+		public int? successCount { get; set; }
+		public int? strikeCount { get; set; }
+		public int? unresolvedCount { get; set; }
+		public bool? activeAtEnd { get; set; }
+		public bool? terminalReconciled { get; set; }
 		public NeedyStatus(NeedyComponent needy) : base(needy)
 		{
 			component = needy;
