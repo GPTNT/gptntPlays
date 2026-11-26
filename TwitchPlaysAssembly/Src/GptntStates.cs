@@ -48,12 +48,13 @@ public class GptntStates : MonoBehaviour
 			var counter = Counter(needy);
 			if (isStarted) counter.Observe((int) needy.State);
 			else if (terminalFrame >= 0 && Time.frameCount > terminalFrame) counter.FinalizeEnd();
-			status.activationCount = counter.ActivationCount;
-			status.successCount = counter.SuccessCount;
+			status.activationCount = counter.CountsReliable ? counter.ActivationCount : (int?) null;
+			status.successCount = counter.CountsReliable ? counter.SuccessCount : (int?) null;
 			status.strikeCount = counter.StrikeCount;
-			status.unresolvedCount = counter.UnresolvedCount;
-			status.activeAtEnd = counter.ActiveAtEnd;
+			status.unresolvedCount = counter.CountsReliable ? counter.UnresolvedCount : (int?) null;
+			status.activeAtEnd = counter.CountsReliable ? counter.ActiveAtEnd : null;
 			status.terminalReconciled = counter.TerminalReconciled;
+			status.opportunityTracking = true;
 		}
 	}
 
@@ -66,6 +67,16 @@ public class GptntStates : MonoBehaviour
 			if (needy != null) Counter(needy).End((int) needy.State);
 		}
 		terminalFrame = Time.frameCount;
+	}
+
+	public void MarkNeedyOpportunity()
+	{
+		if (!isStarted || bombState == null || bombState.needyStatuses == null) return;
+		foreach (var status in bombState.needyStatuses)
+		{
+			var needy = status.component as NeedyVentComponent;
+			if (needy != null) Counter(needy).Opportunity((int) needy.State);
+		}
 	}
 
 	private void Update()

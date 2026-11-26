@@ -821,6 +821,7 @@ namespace TwitchPlaysAssembly
 		public int? unresolvedCount { get; set; }
 		public bool? activeAtEnd { get; set; }
 		public bool? terminalReconciled { get; set; }
+		public bool? opportunityTracking { get; set; }
 		public NeedyStatus(NeedyComponent needy) : base(needy)
 		{
 			component = needy;

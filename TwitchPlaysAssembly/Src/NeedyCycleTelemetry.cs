@@ -1,12 +1,12 @@
-// Tracks the native needy state each frame and defers terminal reconciliation until
-// the component strike callback has had a chance to run.
+// Counts cycles that were available at a player decision or caused a strike.
+// Terminal reconciliation allows a delayed strike callback to settle first.
 public sealed class NeedyCycleTelemetry
 {
     private const int Running = 2;
     private const int Cooldown = 3;
     private bool openCycle;
+    private bool cycleEligible;
     private bool cycleStruck;
-    private bool lastCycleCountedSuccess;
     private bool terminalPending;
     private int terminalState;
 
@@ -16,45 +16,54 @@ public sealed class NeedyCycleTelemetry
     public int UnresolvedCount { get; private set; }
     public bool? ActiveAtEnd { get; private set; }
     public bool TerminalReconciled { get; private set; }
+    public bool CountsReliable { get; private set; } = true;
 
     public void Observe(int state)
     {
         if (terminalPending || TerminalReconciled) return;
         if (state == Running && !openCycle)
         {
-            ActivationCount++;
             openCycle = true;
+            cycleEligible = false;
             cycleStruck = false;
-            lastCycleCountedSuccess = false;
         }
         else if (state == Cooldown && openCycle)
         {
-            if (!cycleStruck)
+            if (cycleEligible && !cycleStruck)
             {
                 SuccessCount++;
-                lastCycleCountedSuccess = true;
             }
             openCycle = false;
             cycleStruck = false;
         }
     }
 
+    public void Opportunity(int state)
+    {
+        Observe(state);
+        if (!terminalPending && !TerminalReconciled && openCycle && !cycleEligible)
+        {
+            cycleEligible = true;
+            ActivationCount++;
+        }
+    }
+
     public void Strike()
     {
         StrikeCount++;
-        if (openCycle) cycleStruck = true;
-        else if (lastCycleCountedSuccess)
+        if (openCycle)
         {
-            // A component strike callback can arrive after the cooldown state.
-            SuccessCount--;
-            lastCycleCountedSuccess = false;
+            if (!cycleEligible) { cycleEligible = true; ActivationCount++; }
+            cycleStruck = true;
         }
+        // Without an open cycle we cannot distinguish a delayed callback from
+        // a strike in a new cycle that state polling did not observe.
+        else CountsReliable = false;
     }
 
     public void End(int state)
     {
         if (terminalPending || TerminalReconciled) return;
-        if (state == Running && !openCycle) Observe(state);
         terminalState = state;
         terminalPending = true;
     }
@@ -63,18 +72,12 @@ public sealed class NeedyCycleTelemetry
     {
         if (!terminalPending || TerminalReconciled) return;
         if (openCycle && cycleStruck) ActiveAtEnd = false;
-        else if (terminalState == 5)
-        {
-            // Off can be imposed by the bomb ending; it does not prove whether
-            // an unobserved cycle was active. Count only a known open cycle.
-            if (openCycle) UnresolvedCount++;
-        }
-        else if (!openCycle) ActiveAtEnd = false;
+        else if (!openCycle || !cycleEligible) ActiveAtEnd = false;
+        else if (terminalState == 5) UnresolvedCount++;
         else if (terminalState == Running) ActiveAtEnd = true;
         else if (terminalState == Cooldown)
         {
             SuccessCount++;
-            lastCycleCountedSuccess = true;
             ActiveAtEnd = false;
         }
         else UnresolvedCount++;
