@@ -242,7 +242,11 @@ public sealed class GptntFeedback : IDisposable
 			}
 		}
 		if (targetModule.ComponentType == ComponentTypeEnum.Memory || targetModule.ComponentType == ComponentTypeEnum.WhosOnFirst || targetModule.ComponentType == ComponentTypeEnum.WireSequence)
-			AddNamed(AddGroup(frame, groups, frame.targetModuleId + "/stage", "stage"), targetModule.transform, "StageIndicator");
+		{
+			StageIndicatorBar[] indicators = targetModule.GetComponentsInChildren<StageIndicatorBar>(true);
+			if (indicators.Length != 1) throw new InvalidOperationException("Expected one stage indicator component");
+			AddRenderers(AddGroup(frame, groups, frame.targetModuleId + "/stage", "stage"), indicators[0].transform);
+		}
 		return groups;
 	}
 
@@ -272,15 +276,20 @@ public sealed class GptntFeedback : IDisposable
 		{
 			if (node.name != name) continue;
 			matches++;
-			foreach (Renderer renderer in node.GetComponentsInChildren<Renderer>(true))
-			{
-				// The glow is a transparent effect quad. The status circle covers its
-				// bloom; only physical LED meshes establish neutral geometry.
-				if (group.Region.kind == "status" && renderer.name == "LightGlow") continue;
-				if (!group.Sources.Contains(renderer)) group.Sources.Add(renderer);
-			}
+			AddRenderers(group, node);
 		}
 		if (matches != 1) throw new InvalidOperationException("Expected one feedback object: " + name);
+	}
+
+	private static void AddRenderers(Group group, Transform root)
+	{
+		foreach (Renderer renderer in root.GetComponentsInChildren<Renderer>(true))
+		{
+			// The glow is a transparent effect quad. The status circle covers its
+			// bloom; only physical LED meshes establish neutral geometry.
+			if (group.Region.kind == "status" && renderer.name == "LightGlow") continue;
+			if (!group.Sources.Contains(renderer)) group.Sources.Add(renderer);
+		}
 	}
 
 	private void PrepareCamera(Camera source, Shader shader, int width, int height)
