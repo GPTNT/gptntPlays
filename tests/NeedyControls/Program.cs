@@ -5,6 +5,17 @@ static class Test
 {
     static void Main()
     {
+        var duration = NeedyControls.Parse(new NameValueCollection { { "needyResponseDuration", "20" } });
+        Require(duration.HasOverrides && duration.ResponseDuration == 20, "response duration");
+        foreach (var badDuration in new[] { "0", "-1", "NaN", "Infinity" })
+        {
+            try
+            {
+                NeedyControls.Parse(new NameValueCollection { { "needyResponseDuration", badDuration } });
+                throw new Exception("accepted invalid duration " + badDuration);
+            }
+            catch (ArgumentException) { }
+        }
         var omitted = NeedyControls.Parse(new NameValueCollection());
         Require(!omitted.HasOverrides, "omitted controls");
         var values = new NameValueCollection { { "needyFirstEventProbability", "1" }, { "needyCooldownMin", "0" }, { "needyCooldownMax", "0" } };

@@ -364,6 +364,8 @@ public class GptntStates : MonoBehaviour
 		if (controls == null || !controls.HasOverrides) return;
 		var original = new Dictionary<NeedyComponent, float[]>();
 		FieldInfo probabilityField = null;
+		FieldInfo timerField = null;
+		var originalTimers = new Dictionary<NeedyComponent, float[]>();
 		try
 		{
 			var needy = bomb.BombComponents.OfType<NeedyComponent>().ToList();
@@ -371,6 +373,9 @@ public class GptntStates : MonoBehaviour
 			probabilityField = typeof(NeedyComponent).GetField("activationChanceAfterFirstChange", BindingFlags.NonPublic | BindingFlags.Instance);
 			if (controls.FirstEventProbability.HasValue && (probabilityField == null || probabilityField.FieldType != typeof(float)))
 				throw new InvalidOperationException("Needy activation probability field unavailable");
+			timerField = typeof(NeedyComponent).GetField("timer", BindingFlags.NonPublic | BindingFlags.Instance);
+			if (controls.ResponseDuration.HasValue && (timerField == null || timerField.FieldType != typeof(NeedyTimer)))
+				throw new InvalidOperationException("Needy timer field unavailable");
 			foreach (var component in needy)
 			{
 				if (component.State != NeedyComponent.NeedyStateEnum.InitialSetup && component.State != NeedyComponent.NeedyStateEnum.AwaitingActivation)
@@ -378,9 +383,25 @@ public class GptntStates : MonoBehaviour
 			}
 			foreach (var component in needy)
 				original.Add(component, new[] { controls.FirstEventProbability.HasValue ? (float) probabilityField.GetValue(component) : 0f, component.ResetDelayMin, component.ResetDelayMax });
+			if (controls.ResponseDuration.HasValue)
+				foreach (var component in needy)
+				{
+					var timer = (NeedyTimer) timerField.GetValue(component);
+					if (timer == null) throw new InvalidOperationException("Needy timer unavailable");
+					originalTimers.Add(component, new[] { component.CountdownTime, timer.TotalTime, timer.TimeRemaining });
+				}
 			var applied = new List<object>();
 			foreach (var component in needy)
 			{
+				if (controls.ResponseDuration.HasValue)
+				{
+					var timer = (NeedyTimer) timerField.GetValue(component);
+					component.CountdownTime = controls.ResponseDuration.Value;
+					timer.TotalTime = controls.ResponseDuration.Value;
+					timer.TimeRemaining = controls.ResponseDuration.Value;
+					if (component.CountdownTime != controls.ResponseDuration.Value || timer.TotalTime != controls.ResponseDuration.Value || timer.TimeRemaining != controls.ResponseDuration.Value)
+						throw new InvalidOperationException("Needy response duration failed readback");
+				}
 				// Random.value is nonnegative, but the game compares with <=. A negative
 				// sentinel therefore implements a true zero-probability override.
 				float effectiveProbability = controls.FirstEventProbability == 0f ? -1f : controls.FirstEventProbability.GetValueOrDefault();
@@ -398,12 +419,23 @@ public class GptntStates : MonoBehaviour
 				if (probability != controls.FirstEventProbability || min != controls.CooldownMin || max != controls.CooldownMax)
 					throw new InvalidOperationException("Needy controls failed readback");
 				var location = new NeedyStatus(component);
-				applied.Add(new { name = location.name, index = location.index, onFront = location.onFront, firstEventProbability = probability, cooldownMin = min, cooldownMax = max });
+				applied.Add(new { name = location.name, index = location.index, onFront = location.onFront, firstEventProbability = probability, cooldownMin = min, cooldownMax = max, responseDuration = controls.ResponseDuration });
 			}
 			controlsAcknowledgement = JsonConvert.SerializeObject(new { protocolVersion = 1, sessionId = pendingSession, applied });
 		}
 		catch (Exception ex)
 		{
+			foreach (var previous in originalTimers)
+			{
+				try
+				{
+					var timer = (NeedyTimer) timerField.GetValue(previous.Key);
+					previous.Key.CountdownTime = previous.Value[0];
+					timer.TotalTime = previous.Value[1];
+					timer.TimeRemaining = previous.Value[2];
+				}
+				catch (Exception rollbackError) { log.Error(GptntDebug.FormatMessage("Could not restore needy timer"), rollbackError); }
+			}
 			foreach (var previous in original)
 			{
 				try
