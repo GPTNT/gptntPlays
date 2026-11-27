@@ -186,6 +186,11 @@ public class RequestHandlers : MonoBehaviour
 
 	public void HandleObservationBuffer(HttpListenerRequest request, HttpListenerResponse response)
 	{
+		if (request.QueryString.Get("feedbackVersion") != null)
+		{
+			HandleFeedbackObservation(request, response);
+			return;
+		}
 		response.ContentType = "application/octet-stream";
 		response.StatusCode = 200;
 		byte[] rawSegmentation = GetRawSegmentation(response);
@@ -223,6 +228,64 @@ public class RequestHandlers : MonoBehaviour
 		}
 		writer.Flush();
 		log.Debug("Finished");
+	}
+
+	private static int? ParseFeedbackVersion(string raw)
+	{
+		if (raw == null) return null;
+		if (raw == "1") return 1;
+		if (raw == "2") return 2;
+		throw new FormatException("feedbackVersion must be 1 or 2");
+	}
+
+	private void HandleFeedbackObservation(HttpListenerRequest request, HttpListenerResponse response)
+	{
+		int? feedbackVersion;
+		try { feedbackVersion = ParseFeedbackVersion(request.QueryString.Get("feedbackVersion")); }
+		catch (FormatException error)
+		{
+			response.StatusCode = (int) HttpStatusCode.BadRequest;
+			WriteText(response, error.Message);
+			return;
+		}
+		FeedbackObservationSnapshot snapshot = null;
+		Exception failure = null;
+		// No coroutine yield separates RGB, geometry, and the selectable mask.
+		// The worker serializes only copied arrays after the main-thread capture ends.
+		object completionGate = new object();
+		bool abandoned = false;
+		using (ManualResetEvent done = new ManualResetEvent(false))
+		{
+			MainThreadQueue.Enqueue(() =>
+			{
+				try
+				{
+					snapshot = gptntBuffer.CaptureFeedbackObservation(feedbackVersion.Value);
+					Selectable[] selectables = GetActiveSelectables().ToArray();
+					GameObject[] objects = selectables.Select(item => item.gameObject).ToArray();
+					snapshot.Segmentation = segmentation.CaptureRawNow(objects);
+				}
+				catch (Exception error) { failure = error; }
+				finally
+				{
+					lock (completionGate) { if (!abandoned) done.Set(); }
+				}
+			});
+			if (!done.WaitOne(10000))
+			{
+				lock (completionGate) { abandoned = true; }
+				response.StatusCode = (int) HttpStatusCode.RequestTimeout;
+				WriteText(response, "Feedback capture did not finish within 10 seconds");
+				return;
+			}
+		}
+		if (failure != null)
+		{
+			response.StatusCode = (int) HttpStatusCode.BadRequest;
+			WriteText(response, failure.Message);
+			return;
+		}
+		FeedbackObservationWriter.Write(response, snapshot);
 	}
 
 	public void HandleAudio(HttpListenerRequest request, HttpListenerResponse response)
@@ -459,6 +522,13 @@ public class RequestHandlers : MonoBehaviour
 			response.StatusCode = (int) HttpStatusCode.BadRequest;
 			return "Cannot start a game from " + gptntStates.gameState + " state";
 		}
+		int? feedback;
+		try { feedback = ParseFeedbackVersion(request.QueryString.Get("feedbackVersion")); }
+		catch (FormatException error)
+		{
+			response.StatusCode = (int) HttpStatusCode.BadRequest;
+			return error.Message;
+		}
 		string seed = request.QueryString.Get("seed");
 		int timeLimit = int.Parse(request.QueryString.Get("timeLimit"));
 		int numStrikes = int.Parse(request.QueryString.Get("numStrikes"));
@@ -467,6 +537,11 @@ public class RequestHandlers : MonoBehaviour
 		int optWidgets = int.Parse(request.QueryString.Get("optWidgets"));
 		string componentsString = request.QueryString.Get("components");
 		List<string> components = componentsString.Split(',').ToList();
+		if (feedback == 2 && components.Any(component => !GptntFeedback.SupportsFeedbackModule(component)))
+		{
+			response.StatusCode = (int) HttpStatusCode.BadRequest;
+			return "feedbackVersion=2 requires supported vanilla feedback modules";
+		}
 		SetTimeScale(float.Parse(request.QueryString.Get("timeScale")));
 		timeStepSize = int.Parse(request.QueryString.Get("timeStepSize"));
 		string sessionId = request.QueryString.Get("sessionId");
@@ -480,6 +555,7 @@ public class RequestHandlers : MonoBehaviour
 			GptntDebug.AddSessionId(sessionId);
 			log.Debug("Starting game with sessionId=" + sessionId);
 		}
+		MainThreadQueue.Enqueue(() => gptntBuffer.SetFeedbackVersion(feedback));
 		return StartMission(seed, ruleSeed, timeLimit, numStrikes, needyTime, isFront, optWidgets, components);
 	}
 
