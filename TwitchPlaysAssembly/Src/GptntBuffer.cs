@@ -18,6 +18,7 @@ public class GptntBuffer : MonoBehaviour
 	private TextureRingBuffer textureBuffer;
 	private bool isRecording = false;
 	private bool feedbackEnabled;
+	private int feedbackVersion = 1;
 	private GptntFeedback feedbackCapture;
 	private Camera feedbackRgbCamera;
 	private long feedbackSequence;
@@ -25,7 +26,15 @@ public class GptntBuffer : MonoBehaviour
 
 	public void SetFeedbackEnabled(bool enabled)
 	{
-		feedbackEnabled = enabled;
+		SetFeedbackVersion(enabled ? (int?) 1 : null);
+	}
+
+	public void SetFeedbackVersion(int? version)
+	{
+		if (version.HasValue && version.Value != 1 && version.Value != 2)
+			throw new ArgumentOutOfRangeException("version", "Feedback version must be 1 or 2");
+		feedbackEnabled = version.HasValue;
+		feedbackVersion = version ?? 1;
 		if (feedbackCapture != null) feedbackCapture.ResetTarget();
 	}
 
@@ -140,8 +149,13 @@ public class GptntBuffer : MonoBehaviour
 
 	public FeedbackObservationSnapshot CaptureFeedbackObservation()
 	{
-		if (!feedbackEnabled)
-			throw new InvalidOperationException("Start the mission with feedbackVersion=1 before reading feedback");
+		return CaptureFeedbackObservation(1);
+	}
+
+	public FeedbackObservationSnapshot CaptureFeedbackObservation(int requestedVersion)
+	{
+		if (!feedbackEnabled || requestedVersion != feedbackVersion)
+			throw new InvalidOperationException("Requested feedback version does not match the mission");
 		FeedbackFrame currentFeedback;
 		Texture2D current = CaptureFeedbackFrame(out currentFeedback);
 		try
@@ -186,7 +200,7 @@ public class GptntBuffer : MonoBehaviour
 		if (feedbackCapture == null) feedbackCapture = new GptntFeedback();
 		Segmentation segmentation = GetComponent<Segmentation>();
 		feedback = feedbackCapture.Capture(feedbackRgbCamera, segmentation ? segmentation.shader : null,
-			++feedbackSequence, feedbackEpoch, screenshotRT.width, screenshotRT.height);
+			++feedbackSequence, feedbackEpoch, screenshotRT.width, screenshotRT.height, feedbackVersion);
 		return texture;
 	}
 

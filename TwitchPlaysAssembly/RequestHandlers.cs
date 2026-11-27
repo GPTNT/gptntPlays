@@ -230,16 +230,18 @@ public class RequestHandlers : MonoBehaviour
 		log.Debug("Finished");
 	}
 
-	private static bool ParseFeedbackVersion(string raw)
+	private static int? ParseFeedbackVersion(string raw)
 	{
-		if (raw == null) return false;
-		if (raw != "1") throw new FormatException("feedbackVersion must be 1");
-		return true;
+		if (raw == null) return null;
+		if (raw == "1") return 1;
+		if (raw == "2") return 2;
+		throw new FormatException("feedbackVersion must be 1 or 2");
 	}
 
 	private void HandleFeedbackObservation(HttpListenerRequest request, HttpListenerResponse response)
 	{
-		try { ParseFeedbackVersion(request.QueryString.Get("feedbackVersion")); }
+		int? feedbackVersion;
+		try { feedbackVersion = ParseFeedbackVersion(request.QueryString.Get("feedbackVersion")); }
 		catch (FormatException error)
 		{
 			response.StatusCode = (int) HttpStatusCode.BadRequest;
@@ -258,7 +260,7 @@ public class RequestHandlers : MonoBehaviour
 			{
 				try
 				{
-					snapshot = gptntBuffer.CaptureFeedbackObservation();
+					snapshot = gptntBuffer.CaptureFeedbackObservation(feedbackVersion.Value);
 					Selectable[] selectables = GetActiveSelectables().ToArray();
 					GameObject[] objects = selectables.Select(item => item.gameObject).ToArray();
 					snapshot.Segmentation = segmentation.CaptureRawNow(objects);
@@ -520,7 +522,7 @@ public class RequestHandlers : MonoBehaviour
 			response.StatusCode = (int) HttpStatusCode.BadRequest;
 			return "Cannot start a game from " + gptntStates.gameState + " state";
 		}
-		bool feedback;
+		int? feedback;
 		try { feedback = ParseFeedbackVersion(request.QueryString.Get("feedbackVersion")); }
 		catch (FormatException error)
 		{
@@ -535,6 +537,11 @@ public class RequestHandlers : MonoBehaviour
 		int optWidgets = int.Parse(request.QueryString.Get("optWidgets"));
 		string componentsString = request.QueryString.Get("components");
 		List<string> components = componentsString.Split(',').ToList();
+		if (feedback == 2 && components.Any(component => !GptntFeedback.SupportsFeedbackModule(component)))
+		{
+			response.StatusCode = (int) HttpStatusCode.BadRequest;
+			return "feedbackVersion=2 requires supported vanilla feedback modules";
+		}
 		SetTimeScale(float.Parse(request.QueryString.Get("timeScale")));
 		timeStepSize = int.Parse(request.QueryString.Get("timeStepSize"));
 		string sessionId = request.QueryString.Get("sessionId");
@@ -548,7 +555,7 @@ public class RequestHandlers : MonoBehaviour
 			GptntDebug.AddSessionId(sessionId);
 			log.Debug("Starting game with sessionId=" + sessionId);
 		}
-		MainThreadQueue.Enqueue(() => gptntBuffer.SetFeedbackEnabled(feedback));
+		MainThreadQueue.Enqueue(() => gptntBuffer.SetFeedbackVersion(feedback));
 		return StartMission(seed, ruleSeed, timeLimit, numStrikes, needyTime, isFront, optWidgets, components);
 	}
 

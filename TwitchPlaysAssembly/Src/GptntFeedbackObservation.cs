@@ -40,6 +40,7 @@ public static class FeedbackObservationWriter
 		RawObservationPayload frames = snapshot.Frames;
 		FeedbackObservationHeader header = new FeedbackObservationHeader
 		{
+			feedbackVersion = snapshot.CurrentImageFeedback.version,
 			epoch = snapshot.Epoch,
 			frameWidth = frames.frameWidth, frameHeight = frames.frameHeight,
 			frameByteLength = frames.frameWidth * frames.frameHeight * 3,

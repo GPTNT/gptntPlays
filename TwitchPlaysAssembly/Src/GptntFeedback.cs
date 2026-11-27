@@ -2,12 +2,22 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
+using Newtonsoft.Json;
 using Assets.Scripts.Missions;
 using TwitchPlaysAssembly;
 
 // Coordinates refer to the RGB frame, with the origin at the top left.
+public class FeedbackModule
+{
+	public string id;
+	public string type;
+	public int location;
+}
+
 public class FeedbackRegion
 {
+	[JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+	public string moduleId;
 	public string id;
 	public string kind;
 	public string visibility;
@@ -20,6 +30,8 @@ public class FeedbackRegion
 
 public class FeedbackFrame
 {
+	[JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+	public List<FeedbackModule> modules;
 	public int version = 1;
 	public long sequence;
 	public long epoch;
@@ -44,6 +56,7 @@ public sealed class GptntFeedback : IDisposable
 	{
 		public FeedbackRegion Region;
 		public List<Renderer> Sources = new List<Renderer>();
+		public List<Renderer> Envelope = new List<Renderer>();
 		public Bounds? WorldBounds;
 	}
 
@@ -73,9 +86,14 @@ public sealed class GptntFeedback : IDisposable
 
 	public FeedbackFrame Capture(Camera source, Shader shader, long sequence, long epoch, int width, int height)
 	{
+		return Capture(source, shader, sequence, epoch, width, height, 1);
+	}
+
+	public FeedbackFrame Capture(Camera source, Shader shader, long sequence, long epoch, int width, int height, int version)
+	{
 		FeedbackFrame frame = new FeedbackFrame
 		{
-			sequence = sequence, epoch = epoch, width = width, height = height,
+			version = version, sequence = sequence, epoch = epoch, width = width, height = height,
 		};
 		RenderTexture previous = RenderTexture.active;
 		try
@@ -84,9 +102,15 @@ public sealed class GptntFeedback : IDisposable
 				throw new InvalidOperationException("Feedback replacement shader or RGB camera unavailable");
 			foreach (float distance in source.layerCullDistances)
 				if (distance != 0) throw new InvalidOperationException("Custom camera layer culling is unsupported");
-			List<Group> groups = FindGroups(frame);
+			if (version != 1 && version != 2) throw new InvalidOperationException("Unsupported feedback version");
+			List<Group> groups = version == 1 ? FindGroups(frame) : FindAllGroups(frame);
 			if (groups.Count == 0)
 				throw new InvalidOperationException("No feedback regions discovered");
+			if (version == 2)
+				foreach (Group group in groups)
+					foreach (Renderer renderer in group.Envelope)
+						if (!HasKnownEnvelopeShader(renderer))
+							throw new InvalidOperationException("Unsupported feedback envelope shader: " + group.Region.id);
 			PrepareCamera(source, shader, width, height);
 			Renderer[] scene = UnityEngine.Object.FindObjectsOfType<Renderer>();
 			MaterialPropertyBlock black = new MaterialPropertyBlock();
@@ -143,7 +167,21 @@ public sealed class GptntFeedback : IDisposable
 				Group group = groups[index];
 				bool offscreen = group.WorldBounds.HasValue
 					&& !GeometryUtility.TestPlanesAABB(frustum, group.WorldBounds.Value);
-				Measure(group.Region, index + 1, footprint, visible, width, height, offscreen);
+				Measure(group.Region, index + 1, footprint, visible, width, height, version == 1 && offscreen);
+				if (version == 2 && group.Region.visibility == "visible")
+					group.Region.radius = 24 * Math.Max(width / 512f, height / 384f);
+			}
+			if (version == 2)
+			{
+				// A replacement pass may over-occlude transparent RGB materials. Only
+				// verified casing geometry can establish that an entire envelope is hidden.
+				feedbackDraws.Clear();
+				foreach (Group group in groups)
+					if (group.Region.visibility != "visible" && ProveInvisible(group, source, scene))
+					{
+						group.Region.visibility = "invisible";
+						group.Region.failure = null;
+					}
 			}
 			frame.complete = true;
 			foreach (FeedbackRegion region in frame.regions)
@@ -226,7 +264,14 @@ public sealed class GptntFeedback : IDisposable
 			case ComponentTypeEnum.Password: break;
 			default: throw new InvalidOperationException("Unsupported feedback module: " + frame.targetModuleType);
 		}
-		AddNamed(AddGroup(frame, groups, frame.targetModuleId + "/status", "status"), targetModule.transform, "StatusLightParent");
+		AddModuleGroups(frame, groups, targetModule, frame.targetModuleId);
+		return groups;
+	}
+
+	private static void AddModuleGroups(FeedbackFrame frame, List<Group> groups, BombComponent targetModule, string moduleId)
+	{
+		string owner = frame.version == 2 ? moduleId : null;
+		AddNamed(AddGroup(frame, groups, moduleId + "/status", "status", owner), targetModule.transform, "StatusLightParent");
 		if (targetModule.ComponentType == ComponentTypeEnum.Keypad)
 		{
 			List<Transform> buttons = new List<Transform>();
@@ -235,7 +280,7 @@ public sealed class GptntFeedback : IDisposable
 			if (buttons.Count != 4) throw new InvalidOperationException("Keypad requires four neutral LED groups");
 			for (int index = 0; index < buttons.Count; index++)
 			{
-				Group group = AddGroup(frame, groups, frame.targetModuleId + "/keypad/" + index, "keypad");
+				Group group = AddGroup(frame, groups, moduleId + "/keypad/" + index, "keypad", owner);
 				AddNamed(group, buttons[index], "LED_Off");
 				AddNamed(group, buttons[index], "LED_Correct");
 				AddNamed(group, buttons[index], "LED_Wrong");
@@ -245,8 +290,56 @@ public sealed class GptntFeedback : IDisposable
 		{
 			StageIndicatorBar[] indicators = targetModule.GetComponentsInChildren<StageIndicatorBar>(true);
 			if (indicators.Length != 1) throw new InvalidOperationException("Expected one stage indicator component");
-			AddRenderers(AddGroup(frame, groups, frame.targetModuleId + "/stage", "stage"), indicators[0].transform);
+			AddRenderers(AddGroup(frame, groups, moduleId + "/stage", "stage", owner), indicators[0].transform);
 		}
+	}
+
+	public static bool SupportsFeedbackModule(string module)
+	{
+		switch (module)
+		{
+			case "Wires": case "BigButton": case "Keypad": case "WhosOnFirst":
+			case "Memory": case "Venn": case "WireSequence": case "Maze": case "Password": return true;
+			default: return false;
+		}
+	}
+
+	private List<Group> FindAllGroups(FeedbackFrame frame)
+	{
+		TwitchBomb[] bombs = UnityEngine.Object.FindObjectsOfType<TwitchBomb>();
+		if (bombs.Length != 1) throw new InvalidOperationException("Feedback requires exactly one bomb");
+		Bomb bomb = bombs[0].Bomb;
+		frame.modules = new List<FeedbackModule>();
+		List<Group> groups = new List<Group>();
+		Selectable parent = KTInputManager.Instance.SelectableManager.GetCurrentParent();
+		BombComponent selected = parent ? parent.GetComponentInParent<BombComponent>() : null;
+		if (selected)
+		{
+			frame.selectedModuleId = ModuleId(bomb, selected);
+			frame.selectedModuleType = selected.ComponentType.ToString();
+		}
+		for (int strike = 0; strike < 2; strike++)
+		{
+			Group group = AddGroup(frame, groups, "bomb/strikes/" + strike, "strikes");
+			AddNamed(group, bomb.transform, "Strike" + strike + "_Active");
+			AddNamed(group, bomb.transform, "Strike" + strike + "_Inactive");
+			foreach (BombComponent component in bomb.BombComponents)
+				if (component.ComponentType == ComponentTypeEnum.Timer)
+					foreach (Renderer renderer in component.GetComponentsInChildren<Renderer>(true))
+						if (renderer.name == "LightGlow" && !group.Envelope.Contains(renderer)) group.Envelope.Add(renderer);
+		}
+		foreach (BombComponent component in bomb.BombComponents)
+		{
+			if (component.ComponentType == ComponentTypeEnum.Empty || component.ComponentType == ComponentTypeEnum.Timer) continue;
+			string type = component.ComponentType.ToString();
+			if (!SupportsFeedbackModule(type)) throw new InvalidOperationException("Unsupported feedback module: " + type);
+			BaseModuleState state = new BaseModuleState(component);
+			if (state.index < 0 || state.index > 5) throw new InvalidOperationException("Feedback module has no supported bomb-face anchor");
+			FeedbackModule module = new FeedbackModule { id = ModuleId(bomb, component), type = type, location = state.index + (state.onFront ? 6 : 0) };
+			frame.modules.Add(module);
+			AddModuleGroups(frame, groups, component, module.id);
+		}
+		if (frame.modules.Count == 0) throw new InvalidOperationException("Feedback inventory contains no supported modules");
 		return groups;
 	}
 
@@ -261,9 +354,9 @@ public sealed class GptntFeedback : IDisposable
 		throw new InvalidOperationException("Feedback target is not on the current bomb");
 	}
 
-	private static Group AddGroup(FeedbackFrame frame, List<Group> groups, string id, string kind)
+	private static Group AddGroup(FeedbackFrame frame, List<Group> groups, string id, string kind, string moduleId = null)
 	{
-		Group group = new Group { Region = new FeedbackRegion { id = id, kind = kind, visibility = "unavailable", shape = kind == "status" ? "circle" : "rectangle" } };
+		Group group = new Group { Region = new FeedbackRegion { moduleId = moduleId, id = id, kind = kind, visibility = "unavailable", shape = kind == "status" ? "circle" : "rectangle" } };
 		frame.regions.Add(group.Region);
 		groups.Add(group);
 		return group;
@@ -287,6 +380,7 @@ public sealed class GptntFeedback : IDisposable
 		{
 			// The glow is a transparent effect quad. The status circle covers its
 			// bloom; only physical LED meshes establish neutral geometry.
+			if (!group.Envelope.Contains(renderer)) group.Envelope.Add(renderer);
 			if (group.Region.kind == "status" && renderer.name == "LightGlow") continue;
 			if (!group.Sources.Contains(renderer)) group.Sources.Add(renderer);
 		}
@@ -344,6 +438,127 @@ public sealed class GptntFeedback : IDisposable
 		for (int submesh = 0; submesh < materialCount; submesh++)
 			feedbackDraws.DrawRenderer(source, regionMaterial, submesh);
 		return source.bounds;
+	}
+
+	private static bool HasKnownEnvelopeShader(Renderer renderer)
+	{
+		if (!(renderer is MeshRenderer) || renderer.sharedMaterials.Length == 0) return false;
+		foreach (Material sourceMaterial in renderer.sharedMaterials)
+		{
+			if (!sourceMaterial || !sourceMaterial.shader || !sourceMaterial.shader.isSupported) return false;
+			// These shipped shaders use undeformed mesh positions and LEqual depth
+			// testing. Neutral, double-sided triangles cover every possible variant.
+			switch (sourceMaterial.shader.name)
+			{
+				case "KT/Mobile/Diffuse": case "Unlit/Texture":
+				case "KT/LightGlowUnderlay20":
+				case "KT/Unlit/TransparentVertexColorUnderlay30":
+				case "KT/Transparent/Mobile Diffuse Underlay200": break;
+				default: return false;
+			}
+		}
+		return true;
+	}
+
+	private bool ProveInvisible(Group group, Camera source, Renderer[] scene)
+	{
+		if (group.Envelope.Count == 0 || GL.invertCulling) return false;
+		foreach (Renderer renderer in group.Envelope)
+			if (!HasKnownEnvelopeShader(renderer) || (source.cullingMask & (1 << renderer.gameObject.layer)) == 0) return false;
+		TwitchBomb[] bombs = UnityEngine.Object.FindObjectsOfType<TwitchBomb>();
+		if (bombs.Length != 1) return false;
+		Transform visual = bombs[0].Bomb.transform.Find("VisualTransform");
+		if (!visual) return false;
+		Transform casing = visual.Find("BombVisual"), foam = visual.Find("Foam_inserts");
+		if (!casing || !foam) return false;
+		CommandBuffer opaqueDraws = new CommandBuffer();
+		opaqueDraws.name = "Verified opaque bomb casing";
+		try
+		{
+			int occluders = 0;
+			foreach (Renderer renderer in scene)
+			{
+				if (!renderer.enabled || !renderer.gameObject.activeInHierarchy
+					|| renderer.shadowCastingMode == ShadowCastingMode.ShadowsOnly
+					|| (source.cullingMask & (1 << renderer.gameObject.layer)) == 0) continue;
+				bool knownCasing = renderer.transform == casing;
+				bool knownFoam = renderer.transform.IsChildOf(foam) && renderer.name.StartsWith("Foam_", StringComparison.Ordinal);
+				if ((!knownCasing && !knownFoam) || !(renderer is MeshRenderer) || renderer.GetComponentInParent<LODGroup>()) continue;
+				Material[] materials = renderer.sharedMaterials;
+				bool known = materials.Length != 0;
+				foreach (Material sourceMaterial in materials)
+					if (!sourceMaterial || !sourceMaterial.shader || !sourceMaterial.shader.isSupported
+						|| sourceMaterial.shader.name != "KT/Mobile/Diffuse") known = false;
+				if (!known) continue;
+				for (int submesh = 0; submesh < materials.Length; submesh++) opaqueDraws.DrawRenderer(renderer, material, submesh);
+				occluders++;
+			}
+			if (occluders == 0) return false;
+			feedbackDraws.Clear();
+			foreach (Renderer renderer in group.Envelope)
+			{
+				bool hasSnapshot = false;
+				foreach (SavedRenderer state in saved) if (state.Renderer == renderer) hasSnapshot = true;
+				if (!hasSnapshot)
+				{
+					SavedRenderer state = new SavedRenderer { Renderer = renderer, Enabled = renderer.enabled, Block = new MaterialPropertyBlock() };
+					renderer.GetPropertyBlock(state.Block);
+					saved.Add(state);
+				}
+				QueueRegionDraw(renderer, 1);
+			}
+			camera.cullingMask = 0;
+			byte[] isolated = Render();
+			bool hasFootprint = ContainsRegion(isolated);
+			// Zero raster pixels alone cannot prove an envelope offscreen: a thin
+			// or edge-on triangle may be subpixel. Require its complete world AABB out.
+			if (!hasFootprint)
+			{
+				Plane[] planes = GeometryUtility.CalculateFrustumPlanes(camera);
+				foreach (Renderer renderer in group.Envelope)
+					if (GeometryUtility.TestPlanesAABB(planes, renderer.bounds)) return false;
+				return true;
+			}
+			return !ContainsRegion(RenderWithOpaqueProof(opaqueDraws));
+		}
+		finally { feedbackDraws.Clear(); opaqueDraws.Release(); }
+	}
+
+	private static bool ContainsRegion(byte[] pixels)
+	{
+		for (int offset = 0; offset < pixels.Length; offset += 3)
+			if (pixels[offset] == 1 && pixels[offset + 1] == 0 && pixels[offset + 2] == 0) return true;
+		return false;
+	}
+
+	private byte[] RenderWithOpaqueProof(CommandBuffer opaqueDraws)
+	{
+		bool invert = GL.invertCulling;
+		CameraClearFlags clear = camera.clearFlags;
+		try
+		{
+			// Draw original front faces of verified opaque meshes once. Reversing
+			// their culling would invent occluders absent from the delivered RGB.
+			camera.RemoveCommandBuffer(CameraEvent.AfterForwardOpaque, feedbackDraws);
+			camera.AddCommandBuffer(CameraEvent.AfterForwardOpaque, opaqueDraws);
+			camera.AddCommandBuffer(CameraEvent.AfterForwardOpaque, feedbackDraws);
+			GL.invertCulling = false;
+			camera.Render();
+			camera.RemoveCommandBuffer(CameraEvent.AfterForwardOpaque, opaqueDraws);
+			camera.clearFlags = CameraClearFlags.Nothing;
+			GL.invertCulling = true;
+			camera.Render();
+		}
+		finally
+		{
+			camera.RemoveCommandBuffer(CameraEvent.AfterForwardOpaque, opaqueDraws);
+			GL.invertCulling = invert;
+			camera.clearFlags = clear;
+		}
+		RenderTexture.active = target;
+		readback.ReadPixels(new Rect(0, 0, target.width, target.height), 0, 0);
+		readback.Apply();
+		return (byte[]) readback.GetRawTextureData().Clone();
 	}
 
 	private byte[] Render()
