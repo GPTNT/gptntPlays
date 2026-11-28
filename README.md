@@ -136,6 +136,7 @@ Starts a new mission. Only valid from `Setup`.
 | `timeScale` | float | Initial `Time.timeScale`. |
 | `timeStepSize` | int | Step size for `/timestep`, in in-game milliseconds. |
 | `sessionId` | string (optional) | Tag attached to all subsequent log lines for this episode, used to correlate Unity logs with an external run id. |
+| `feedbackVersion` | int (optional) | Set to `1` to capture feedback geometry alongside this mission's RGB frames. Omit to disable geometry capture. |
 
 Example:
 
@@ -186,6 +187,71 @@ Each frame is exactly `frameWidth * frameHeight * 3` bytes; GPU row padding from
 If the segmentation render does not complete within 500 ms the response returns `408 Request Timeout` and no body is written.
 
 The segmentation mask colours all currently active interactable `Selectable`s on a dedicated render layer; pixel colour identifies which selectable a pixel belongs to.
+
+#### `GET /buffer?feedbackVersion=1`
+
+Start the mission with `/startmission?feedbackVersion=1&...` before recording begins.
+The buffer request reads geometry recorded with each frame; it does not enable capture
+or reconstruct earlier frames. Requests without `feedbackVersion` use the binary layout
+above.
+
+The opt-in response begins with eight ASCII bytes `GPTNTFB1`, an `int32` little-endian
+JSON-header length, and that many UTF-8 JSON bytes. Its binary body starts with up to
+15 buffered RGB24 frames. One fresh RGB24 image follows, then an optional RGB24
+interactable segmentation mask. Every image has `frameWidth * frameHeight * 3` bytes.
+RGB rows retain Unity's bottom-up ordering. The response contains no audio.
+
+The JSON header contains:
+
+| Field | Meaning |
+|---|---|
+| `version`, `feedbackVersion` | Both are `1`. |
+| `containsBombState` | Always `false`. |
+| `epoch` | Frame-buffer generation, incremented when the buffer is cleared. |
+| `frameWidth`, `frameHeight`, `frameByteLength`, `frameCount` | Dimensions, RGB bytes per image, and number of buffered images. |
+| `frameFeedback` | One feedback entry per buffered image, in the same order. |
+| `currentImageFeedback`, `currentImageByteLength` | Feedback and RGB byte length for the fresh image. |
+| `segmentationIncluded`, `segmentationByteLength` | Whether the mask follows the fresh image, and its byte length. |
+| `segmentationFrameSequence` | Sequence of the fresh image captured with this mask. |
+
+The fresh RGB image, its feedback geometry, and the mask are rendered on one main-thread
+call without advancing the scene. Their sequence identities match. Each feedback entry
+contains `version`, `sequence`, `epoch`, `width`, `height`, `selectedModuleId`,
+`selectedModuleType`, `targetModuleId`, `targetModuleType`, `targetModuleLocation`,
+`complete`, `failure`, and `regions`. Sequences increase across captures. Module identities use the component's
+position in the bomb's component list, so repeated modules have separate identities.
+`targetModuleLocation` uses the same face slot as `/state`: `index + (onFront ? 6 : 0)`.
+It is null when no target is retained.
+The target is the most recently focused module, retained after automatic zoom-out from
+solved Venn modules until another module is focused. Target retention resets when the
+mission starts or the buffer epoch changes.
+
+Each region contains `id`, `kind` (`status`, `strikes`, `keypad`, or `stage`),
+`visibility` (`visible`, `invisible`, or `unavailable`), `shape`, `bounds`, `center`,
+`radius`, and `failure`. Coordinates use a top-left origin after the RGB rows have been
+flipped. A visible `rectangle` uses `bounds: [left, top, right, bottom]`, with exclusive
+right and bottom edges. A visible `circle` uses `center: [x, y]` and `radius` in pixels.
+Status circles have radius `28 * max(width / 512, height / 384)` pixels, independent
+of the neutral footprint size. Rectangles enclose the neutral footprint with four
+pixels of padding at 512 by 384, scaled with resolution. These footprints cover physical
+indicators. Empirical validation is still required for light bloom beyond that padding.
+
+Capture includes both strike indicators and the retained target's status light. Keypad
+adds four button LED regions. Memory, Who's on First, and Wire Sequence add their stage
+indicator. Supported targets are Wires, BigButton, Keypad, WhosOnFirst, Memory, Venn,
+WireSequence, Maze, and Password.
+
+Footprints use all state variants' meshes, including inactive variants. An isolated
+render measures each footprint. A full-scene render with opaque, double-sided occluders
+establishes whether the entire footprint is visible. Any occluded or uncertain footprint
+is `unavailable`, including fully occluded footprints: transparent materials can hide
+the neutral rendering while showing the indicator in RGB. A region is `invisible` only
+when its neutral geometry lies wholly outside the RGB camera frustum and produces no
+pixels. Capture errors, unknown modules, missing objects, unreadable meshes, and
+unsupported renderers make the frame incomplete. Uncollected frames contain null
+feedback. Consumers must reject missing or incomplete feedback before delivering an
+observation for a feedback probe. The protocol contains geometry and visibility, without
+lit, solved, strike-count, or progress values.
 
 #### `GET /old-buffer`
 

@@ -19,6 +19,7 @@ public class Segmentation : MonoBehaviour
 	private MaterialPropertyBlock propertyBlock = null;
 	private Camera mainCam = null;
 	private Camera duplicateCam = null;
+	private Camera feedbackCamera;
 	private GameObject duplicate = null;
 	private RenderTexture renderTexture;
 	private Texture2D tex;
@@ -98,14 +99,84 @@ public class Segmentation : MonoBehaviour
 		ResetObjects();
 	}
 
-	public void Segment(GameObject[] objects)
+	// Synchronous capture for feedback observations. Preserve the scene's actual
+	// layers and property blocks so the RGB and geometry passes stay aligned.
+	public byte[] CaptureRawNow(GameObject[] objects)
 	{
-		DuplicateCamera();
+		if (objects.Length == 0) return null;
+		objects = PrepareObjects(objects);
+		Dictionary<GameObject, int> layers = new Dictionary<GameObject, int>();
+		Dictionary<Renderer, MaterialPropertyBlock> blocks = new Dictionary<Renderer, MaterialPropertyBlock>();
+		foreach (GameObject obj in objects)
+		{
+			foreach (Transform node in obj.GetComponentsInChildren<Transform>(true))
+				if (!layers.ContainsKey(node.gameObject)) layers.Add(node.gameObject, node.gameObject.layer);
+			foreach (Renderer renderer in obj.GetComponentsInChildren<Renderer>(true))
+			{
+				if (blocks.ContainsKey(renderer)) continue;
+				MaterialPropertyBlock block = new MaterialPropertyBlock();
+				renderer.GetPropertyBlock(block);
+				blocks.Add(renderer, block);
+			}
+		}
+		RenderTexture previous = RenderTexture.active;
+		propertyBlock = new MaterialPropertyBlock();
+		objectsOnSegmentationLayer = new List<GameObject>();
+		try
+		{
+			SegmentPrepared(objects);
+			if (!feedbackCamera)
+			{
+				GameObject host = new GameObject("FeedbackSegmentationCamera");
+				feedbackCamera = host.AddComponent<Camera>();
+				feedbackCamera.enabled = false;
+			}
+			feedbackCamera.CopyFrom(mainCam);
+			feedbackCamera.enabled = false;
+			feedbackCamera.transform.position = mainCam.transform.position;
+			feedbackCamera.transform.rotation = mainCam.transform.rotation;
+			feedbackCamera.cullingMask = 1 << segmentationLayer;
+			feedbackCamera.clearFlags = CameraClearFlags.Color;
+			feedbackCamera.backgroundColor = Color.black;
+			feedbackCamera.allowMSAA = false;
+			feedbackCamera.targetTexture = renderTexture;
+			feedbackCamera.SetReplacementShader(shader, "");
+			feedbackCamera.Render();
+			byte[] pixels = ConvertRenderTextureToTexture2D(renderTexture).GetRawTextureData();
+			byte[] trimmed = new byte[width * height * 3];
+			Array.Copy(pixels, trimmed, trimmed.Length);
+			return trimmed;
+		}
+		finally
+		{
+			foreach (KeyValuePair<Renderer, MaterialPropertyBlock> item in blocks)
+				if (item.Key) item.Key.SetPropertyBlock(item.Value.isEmpty ? null : item.Value);
+			foreach (KeyValuePair<GameObject, int> item in layers)
+				if (item.Key) item.Key.layer = item.Value;
+			RenderTexture.active = previous;
+		}
+	}
 
+	private void OnDestroy()
+	{
+		if (feedbackCamera) UnityEngine.Object.Destroy(feedbackCamera.gameObject);
+	}
+
+	private GameObject[] PrepareObjects(GameObject[] objects)
+	{
 		objects = tryGetVennWires(objects);
 		objects = tryGetButton(objects);
-		objects = tryGetModule(objects);
+		return tryGetModule(objects);
+	}
 
+	public void Segment(GameObject[] objects)
+	{
+		SegmentPrepared(PrepareObjects(objects));
+	}
+
+	private void SegmentPrepared(GameObject[] objects)
+	{
+		DuplicateCamera();
 		SetObjectsToSegmentationLayer(objects);
 		renderersWithChildren = GetRenderers(objects);
 
